@@ -268,6 +268,10 @@ struct Settings {
 	int iVoiceHold                  = 20;
 	int iJitterBufferSize           = 1;
 	bool bAllowLowDelay             = true;
+	/// If true, the microphone input is transmitted with two channels (stereo) instead of
+	/// being mixed down to mono. Echo cancellation and noise suppression are unavailable
+	/// in this mode.
+	bool bStereoInput               = false;
 	NoiseCancel noiseCancelMode     = NoiseCancelSpeex;
 	int iSpeexNoiseCancelStrength   = -30;
 	quint64 uiAudioInputChannelMask = 0xffffffffffffffffULL;
