@@ -95,6 +95,8 @@ const SettingsKey POSITIONAL_TRANSMIT_POSITION_KEY = { "transmit_position" };
 
 // Network
 const SettingsKey JITTER_BUFFER_SIZE_KEY            = { "jitter_buffer_size" };
+const SettingsKey LIMIT_INCOMING_AUDIO_DELAY_KEY    = { "limit_incoming_audio_delay" };
+const SettingsKey MAX_INCOMING_AUDIO_DELAY_KEY      = { "max_incoming_audio_delay" };
 const SettingsKey FRAMES_PER_PACKET_KEY             = { "frames_per_packet" };
 const SettingsKey RESTRICT_TO_TCP_KEY               = { "restrict_to_tcp" };
 const SettingsKey USE_QUALITY_OF_SERVICE_KEY        = { "use_quality_of_service" };

@@ -769,6 +769,11 @@ void AudioOutputDialog::load(const Settings &r) {
 	enablePulseAudioAttenuationOptionsFor(AudioOutputRegistrar::current);
 
 	loadSlider(qsJitter, r.iJitterBufferSize);
+	loadCheckBox(qcbLimitIncomingDelay, r.bLimitIncomingAudioDelay);
+	loadSlider(qsMaxIncomingDelay,
+			   qBound(qsMaxIncomingDelay->minimum(), r.iMaxIncomingAudioDelayMs / 100, qsMaxIncomingDelay->maximum()));
+	qsMaxIncomingDelay->setEnabled(r.bLimitIncomingAudioDelay);
+	qlMaxIncomingDelay->setEnabled(r.bLimitIncomingAudioDelay);
 	loadComboBox(qcbLoopback, r.lmLoopMode);
 	loadSlider(qsPacketDelay, static_cast< int >(r.dMaxPacketDelay));
 	loadSlider(qsPacketLoss, static_cast< int >(r.dPacketLoss * 100.0f + 0.5f));
@@ -796,6 +801,8 @@ void AudioOutputDialog::save() const {
 	s.bAttenuateLoopbacks            = qcbAttenuateLoopbacks->isChecked();
 	s.bAttenuateUsersOnPrioritySpeak = qcbAttenuateUsersOnPrioritySpeak->isChecked();
 	s.iJitterBufferSize              = qsJitter->value();
+	s.bLimitIncomingAudioDelay       = qcbLimitIncomingDelay->isChecked();
+	s.iMaxIncomingAudioDelayMs       = qsMaxIncomingDelay->value() * 100;
 	s.qsAudioOutput                  = qcbSystem->currentText();
 	s.lmLoopMode                     = static_cast< Settings::LoopMode >(qcbLoopback->currentIndex());
 	s.dMaxPacketDelay                = static_cast< float >(qsPacketDelay->value());
@@ -860,6 +867,17 @@ void AudioOutputDialog::on_qcbSystem_currentIndexChanged(int) {
 void AudioOutputDialog::on_qsJitter_valueChanged(int v) {
 	qlJitter->setText(tr("%1 ms").arg(v * 10));
 	Mumble::Accessibility::setSliderSemanticValue(qsJitter, QString("%1 %2").arg(v * 10).arg(tr("milliseconds")));
+}
+
+void AudioOutputDialog::on_qsMaxIncomingDelay_valueChanged(int v) {
+	qlMaxIncomingDelay->setText(tr("%1 ms").arg(v * 100));
+	Mumble::Accessibility::setSliderSemanticValue(qsMaxIncomingDelay,
+												  QString("%1 %2").arg(v * 100).arg(tr("milliseconds")));
+}
+
+void AudioOutputDialog::on_qcbLimitIncomingDelay_clicked(bool checked) {
+	qsMaxIncomingDelay->setEnabled(checked);
+	qlMaxIncomingDelay->setEnabled(checked);
 }
 
 void AudioOutputDialog::on_qsVolume_valueChanged(int v) {

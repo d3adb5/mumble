@@ -267,6 +267,14 @@ struct Settings {
 	/// each of which is has a size of iFrameSize (see AudioInput.h)
 	int iVoiceHold                  = 20;
 	int iJitterBufferSize           = 1;
+	/// If true, incoming audio that has been delayed by more than iMaxIncomingDelayMs
+	/// (because network jitter or system stalls made the receive-side jitter buffer
+	/// grow) is dropped in order to catch up with the live stream. Without this limit
+	/// the delay of a continuously transmitting user can grow unboundedly (#6354).
+	bool bLimitIncomingAudioDelay = true;
+	/// Maximum delay (in ms) an incoming audio stream may accumulate in the jitter
+	/// buffer before old audio is dropped. Only used if bLimitIncomingAudioDelay is set.
+	int iMaxIncomingAudioDelayMs    = 500;
 	bool bAllowLowDelay             = true;
 	/// If true, the microphone input is transmitted with two channels (stereo) instead of
 	/// being mixed down to mono. Echo cancellation and noise suppression are unavailable

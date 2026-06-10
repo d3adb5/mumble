@@ -92,6 +92,8 @@ public slots:
 	void load(const Settings &r) Q_DECL_OVERRIDE;
 	void on_qsDelay_valueChanged(int v);
 	void on_qsJitter_valueChanged(int v);
+	void on_qsMaxIncomingDelay_valueChanged(int v);
+	void on_qcbLimitIncomingDelay_clicked(bool checked);
 	void on_qsVolume_valueChanged(int v);
 	void on_qsOtherVolume_valueChanged(int v);
 	void on_qsListenerAttenuation_valueChanged(int v);

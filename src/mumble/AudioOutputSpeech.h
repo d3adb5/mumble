@@ -53,6 +53,16 @@ protected:
 	QMutex qmJitter;
 	JitterBuffer *jbJitter;
 	int iMissCount;
+	/// Span (in jitter buffer timestamp units) of the most recent packet inserted
+	/// into jbJitter. Used to estimate how much audio the buffered packets amount
+	/// to. Protected by qmJitter.
+	spx_uint32_t m_lastPacketSpan;
+
+	/// Drops packets from the front of jbJitter while the audio queued up in it
+	/// exceeds the delay limit configured in Settings::iMaxIncomingAudioDelayMs.
+	/// Does nothing if Settings::bLimitIncomingAudioDelay is disabled.
+	/// The caller must hold qmJitter.
+	void enforceIncomingDelayLimit();
 
 	OpusDecoder *opusState;
 

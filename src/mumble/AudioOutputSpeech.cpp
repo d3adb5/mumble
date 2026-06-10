@@ -129,6 +129,8 @@ AudioOutputSpeech::AudioOutputSpeech(ClientUser *user, unsigned int freq, Mumble
 	iMissCount    = 0;
 	iMissedFrames = 0;
 
+	m_lastPacketSpan = 0;
+
 	m_audioContext = Mumble::Protocol::AudioContext::INVALID;
 
 	jbJitter   = jitter_buffer_init(static_cast< int >(iFrameSize));
@@ -215,7 +217,68 @@ void AudioOutputSpeech::addFrameToBuffer(const Mumble::Protocol::AudioData &audi
 	jbp.span      = static_cast< unsigned int >(samples);
 	jbp.timestamp = static_cast< unsigned int >(iFrameSize * audioData.frameNumber);
 
+	m_lastPacketSpan = static_cast< spx_uint32_t >(jbp.span);
+
 	jitter_buffer_put(jbJitter, &jbp);
+}
+
+void AudioOutputSpeech::enforceIncomingDelayLimit() {
+	const Settings &settings = Global::get().s;
+	if (!settings.bLimitIncomingAudioDelay || m_lastPacketSpan == 0) {
+		return;
+	}
+
+	// Convert the limit into jitter buffer timestamp units: iFrameSize units make up
+	// 10ms of audio. Enforce at least one frame so that a misconfigured value can
+	// never cause every single packet to be dropped.
+	const spx_int32_t maxBacklog =
+		static_cast< spx_int32_t >(iFrameSize) * std::max(settings.iMaxIncomingAudioDelayMs / 10, 1);
+
+	// Estimate the queued audio from the number of packets the buffer holds ahead of
+	// its playback pointer. This deliberately avoids absolute timestamps: the sender
+	// resets its frame counter after long silence and the buffer re-synchronizes
+	// itself after losses, both of which make absolute bookkeeping go stale, whereas
+	// the available count is always relative to the buffer's current pointer.
+	auto backlog = [this]() {
+		spx_int32_t avail = 0;
+		jitter_buffer_ctl(jbJitter, JITTER_BUFFER_GET_AVAILABLE_COUNT, &avail);
+		return static_cast< spx_int32_t >(static_cast< spx_uint32_t >(avail) * m_lastPacketSpan);
+	};
+
+	spx_int32_t currentBacklog = backlog();
+	if (currentBacklog <= maxBacklog) {
+		return;
+	}
+
+	unsigned int droppedPackets = 0;
+	spx_uint32_t droppedAudio   = 0;
+	// When crossing a gap in the stream the pointer only advances by one frame per
+	// iteration, so bound the time spent here; catch-up continues next cycle.
+	for (int i = 0; i < 128 && currentBacklog > maxBacklog; ++i) {
+		JitterBufferPacket jbp;
+		spx_int32_t startofs = 0;
+
+		const int prevPointer = jitter_buffer_get_pointer_timestamp(jbJitter);
+		if (jitter_buffer_get(jbJitter, &jbp, static_cast< int >(iFrameSize), &startofs) == JITTER_BUFFER_OK) {
+			// With a destroy callback registered, the caller owns the returned packet.
+			// Release the audio cache slot it references without decoding the audio.
+			invalidateAudioOutputCache(jbp.data);
+			++droppedPackets;
+			droppedAudio += static_cast< spx_uint32_t >(jbp.span);
+		} else if (jitter_buffer_get_pointer_timestamp(jbJitter) == prevPointer) {
+			// The buffer did not advance its playback pointer (it wants to insert
+			// silence instead, or is resyncing after a reset). Leave the remaining
+			// catch-up to a later cycle instead of fighting it.
+			break;
+		}
+
+		currentBacklog = backlog();
+	}
+
+	if (droppedPackets > 0) {
+		qWarning("AudioOutputSpeech: Dropped %u packet(s) (%u ms of audio) to limit the incoming audio delay to %d ms",
+				 droppedPackets, droppedAudio * 10 / iFrameSize, settings.iMaxIncomingAudioDelayMs);
+	}
 }
 
 bool AudioOutputSpeech::prepareSampleBuffer(unsigned int frameCount) {
@@ -274,6 +337,10 @@ bool AudioOutputSpeech::prepareSampleBuffer(unsigned int frameCount) {
 
 			if (qlFrames.isEmpty()) {
 				QMutexLocker lock(&qmJitter);
+
+				// If late packets have made the buffered audio exceed the configured
+				// delay limit, skip ahead to catch up with the live stream (#6354).
+				enforceIncomingDelayLimit();
 
 				JitterBufferPacket jbp;
 

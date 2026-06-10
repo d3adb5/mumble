@@ -80,25 +80,27 @@
 	PROCESS(positional_audio, POSITIONAL_TRANSMIT_POSITION_KEY, bTransmitPosition)
 
 
-#define NETWORK_SETTINGS                                                     \
-	PROCESS(network, JITTER_BUFFER_SIZE_KEY, iJitterBufferSize)              \
-	PROCESS(network, FRAMES_PER_PACKET_KEY, iFramesPerPacket)                \
-	PROCESS(network, RESTRICT_TO_TCP_KEY, bTCPCompat)                        \
-	PROCESS(network, USE_QUALITY_OF_SERVICE_KEY, bQoS)                       \
-	PROCESS(network, AUTO_RECONNECT_KEY, bReconnect)                         \
-	PROCESS(network, AUTO_CONNECT_LAST_SERVER_KEY, bAutoConnect)             \
-	PROCESS(network, PROXY_TYPE_KEY, ptProxyType)                            \
-	PROCESS(network, PROXY_HOST_KEY, qsProxyHost)                            \
-	PROCESS(network, PROXY_PORT_KEY, usProxyPort)                            \
-	PROCESS(network, PROXY_USERNAME_KEY, qsProxyUsername)                    \
-	PROCESS(network, PROXY_PASSWORD_KEY, qsProxyPassword)                    \
-	PROCESS(network, MAX_IMAGE_WIDTH_KEY, iMaxImageWidth)                    \
-	PROCESS(network, MAX_IMAGE_HEIGHT_KEY, iMaxImageHeight)                  \
-	PROCESS(network, SERVICE_PREFIX_KEY, qsServicePrefix)                    \
-	PROCESS(network, MAX_IN_FLIGHT_TCP_PINGS_KEY, iMaxInFlightTCPPings)      \
-	PROCESS(network, PING_INTERVAL_KEY, iPingIntervalMsec)                   \
-	PROCESS(network, CONNECTION_TIMEOUT_KEY, iConnectionTimeoutDurationMsec) \
-	PROCESS(network, FORCE_UDP_BIND_TO_TCP_ADDRESS_KEY, bUdpForceTcpAddr)    \
+#define NETWORK_SETTINGS                                                       \
+	PROCESS(network, JITTER_BUFFER_SIZE_KEY, iJitterBufferSize)                \
+	PROCESS(network, LIMIT_INCOMING_AUDIO_DELAY_KEY, bLimitIncomingAudioDelay) \
+	PROCESS(network, MAX_INCOMING_AUDIO_DELAY_KEY, iMaxIncomingAudioDelayMs)   \
+	PROCESS(network, FRAMES_PER_PACKET_KEY, iFramesPerPacket)                  \
+	PROCESS(network, RESTRICT_TO_TCP_KEY, bTCPCompat)                          \
+	PROCESS(network, USE_QUALITY_OF_SERVICE_KEY, bQoS)                         \
+	PROCESS(network, AUTO_RECONNECT_KEY, bReconnect)                           \
+	PROCESS(network, AUTO_CONNECT_LAST_SERVER_KEY, bAutoConnect)               \
+	PROCESS(network, PROXY_TYPE_KEY, ptProxyType)                              \
+	PROCESS(network, PROXY_HOST_KEY, qsProxyHost)                              \
+	PROCESS(network, PROXY_PORT_KEY, usProxyPort)                              \
+	PROCESS(network, PROXY_USERNAME_KEY, qsProxyUsername)                      \
+	PROCESS(network, PROXY_PASSWORD_KEY, qsProxyPassword)                      \
+	PROCESS(network, MAX_IMAGE_WIDTH_KEY, iMaxImageWidth)                      \
+	PROCESS(network, MAX_IMAGE_HEIGHT_KEY, iMaxImageHeight)                    \
+	PROCESS(network, SERVICE_PREFIX_KEY, qsServicePrefix)                      \
+	PROCESS(network, MAX_IN_FLIGHT_TCP_PINGS_KEY, iMaxInFlightTCPPings)        \
+	PROCESS(network, PING_INTERVAL_KEY, iPingIntervalMsec)                     \
+	PROCESS(network, CONNECTION_TIMEOUT_KEY, iConnectionTimeoutDurationMsec)   \
+	PROCESS(network, FORCE_UDP_BIND_TO_TCP_ADDRESS_KEY, bUdpForceTcpAddr)      \
 	PROCESS(network, SSL_CIPHERS_KEY, qsSslCiphers)
 
 

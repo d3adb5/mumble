@@ -263,6 +263,57 @@
         </property>
        </widget>
       </item>
+      <item row="3" column="0">
+       <widget class="QCheckBox" name="qcbLimitIncomingDelay">
+        <property name="toolTip">
+         <string>Skip incoming audio that has been delayed for too long</string>
+        </property>
+        <property name="whatsThis">
+         <string>&lt;b&gt;This limits how much delay incoming audio may accumulate.&lt;/b&gt;&lt;br /&gt;On unstable connections (or when the system stalls), the buffer holding incoming audio can grow indefinitely while a user transmits continuously, delaying their voice by several seconds. With this option enabled, audio that is delayed by more than the configured maximum is skipped, so voices stay close to live. Disable this if you would rather hear everything that was said, no matter how late it arrives.</string>
+        </property>
+        <property name="text">
+         <string>Limit incoming delay</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="1">
+       <widget class="SemanticSlider" name="qsMaxIncomingDelay">
+        <property name="toolTip">
+         <string>Maximum delay of incoming audio</string>
+        </property>
+        <property name="whatsThis">
+         <string>&lt;b&gt;This sets the maximum delay incoming audio may accumulate before it is skipped.&lt;/b&gt;&lt;br /&gt;Lower values keep voices closer to live but drop audio sooner on connection hiccups; higher values lose less audio but tolerate a larger delay. If voices sound choppy on a bad connection, increase this value.</string>
+        </property>
+        <property name="accessibleName">
+         <string>Maximum delay of incoming audio</string>
+        </property>
+        <property name="minimum">
+         <number>1</number>
+        </property>
+        <property name="maximum">
+         <number>50</number>
+        </property>
+        <property name="pageStep">
+         <number>5</number>
+        </property>
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="2">
+       <widget class="QLabel" name="qlMaxIncomingDelay">
+        <property name="minimumSize">
+         <size>
+          <width>40</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="text">
+         <string notr="true">mid</string>
+        </property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>
@@ -871,6 +922,8 @@
   <tabstop>qsJitter</tabstop>
   <tabstop>qsVolume</tabstop>
   <tabstop>qsDelay</tabstop>
+  <tabstop>qcbLimitIncomingDelay</tabstop>
+  <tabstop>qsMaxIncomingDelay</tabstop>
   <tabstop>qsOtherVolume</tabstop>
   <tabstop>qcbAttenuateOthers</tabstop>
   <tabstop>qcbAttenuateOthersOnTalk</tabstop>
