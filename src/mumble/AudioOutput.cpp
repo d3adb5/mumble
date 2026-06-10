@@ -423,8 +423,28 @@ void AudioOutput::initializeMixer(const unsigned int *chanmasks, bool forceheadp
 				fSpeakers[3 * i + 2] /= d;
 			}
 			float *spf = &fStereoPanningFactor[2 * i];
-			spf[0]     = (1.0f - fSpeakers[i * 3 + 0]) / 2.0f;
-			spf[1]     = (1.0f + fSpeakers[i * 3 + 0]) / 2.0f;
+			if (Global::get().s.bPositionalAudio) {
+				// Blend the stereo channels onto each speaker according to the projection
+				// of the speaker's position onto the left-right axis, consistent with the
+				// spatial speaker model used for positional audio.
+				spf[0] = (1.0f - fSpeakers[i * 3 + 0]) / 2.0f;
+				spf[1] = (1.0f + fSpeakers[i * 3 + 0]) / 2.0f;
+			} else {
+				// Positional audio is disabled, so there is no spatial speaker model to be
+				// consistent with: pass stereo streams through 1:1 instead, assigning each
+				// speaker the stream channel of its side (and a mono mix to center/LFE).
+				const float x = fSpeakers[i * 3 + 0];
+				if (x < 0.0f) {
+					spf[0] = 1.0f;
+					spf[1] = 0.0f;
+				} else if (x > 0.0f) {
+					spf[0] = 0.0f;
+					spf[1] = 1.0f;
+				} else {
+					spf[0] = 0.5f;
+					spf[1] = 0.5f;
+				}
+			}
 		}
 	} else if (iChannels == 1) {
 		fStereoPanningFactor[0] = 0.5;
