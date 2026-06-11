@@ -235,6 +235,7 @@ QString ModelItem::hash() const {
 UserModel::UserModel(QObject *p) : QAbstractItemModel(p) {
 	qiTalkingOff      = QIcon(QLatin1String("skin:talking_off.svg"));
 	qiTalkingOn       = QIcon(QLatin1String("skin:talking_on.svg"));
+	updateTalkingSilentIcon();
 	qiTalkingMuted    = QIcon(QLatin1String("skin:talking_muted.svg"));
 	qiTalkingShout    = QIcon(QLatin1String("skin:talking_alt.svg"));
 	qiTalkingWhisper  = QIcon(QLatin1String("skin:talking_whisper.svg"));
@@ -268,6 +269,16 @@ UserModel::UserModel(QObject *p) : QAbstractItemModel(p) {
 	bClicked            = false;
 
 	miRoot = new ModelItem(Channel::get(Mumble::ROOT_CHANNEL_ID));
+}
+
+void UserModel::updateTalkingSilentIcon() {
+	qiTalkingSilent = QIcon();
+	if (!Global::get().s.qsTalkingSilentIcon.isEmpty()) {
+		qiTalkingSilent = QIcon(Global::get().s.qsTalkingSilentIcon);
+	}
+	if (qiTalkingSilent.availableSizes().isEmpty()) {
+		qiTalkingSilent = QIcon(QLatin1String("skin:talking_silent.svg"));
+	}
 }
 
 UserModel::~UserModel() {
@@ -448,7 +459,8 @@ QVariant UserModel::data(const QModelIndex &idx, int role) const {
 
 						switch (p->tsState) {
 							case Settings::Talking:
-								return qiTalkingOn;
+								// Hint at users that are transmitting nothing but silence
+								return p->isAudible() ? qiTalkingOn : qiTalkingSilent;
 							case Settings::MutedTalking:
 								return qiTalkingMuted;
 							case Settings::Whispering:

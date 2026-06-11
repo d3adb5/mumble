@@ -89,6 +89,33 @@
                 <enum>QLayout::SetDefaultConstraint</enum>
                </property>
                <item>
+                <widget class="QComboBox" name="qcbBuiltinPreset">
+                 <property name="toolTip">
+                  <string>Apply one of the built-in overlay layout presets</string>
+                 </property>
+                 <item>
+                  <property name="text">
+                   <string>Built-in presets...</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>Avatar and Name</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>Large square avatar</string>
+                  </property>
+                 </item>
+                 <item>
+                  <property name="text">
+                   <string>Small circle avatar</string>
+                  </property>
+                 </item>
+                </widget>
+               </item>
+               <item>
                 <widget class="QPushButton" name="qpbLoadPreset">
                  <property name="toolTip">
                   <string>Load an overlay preset from file</string>

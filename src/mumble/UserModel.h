@@ -71,6 +71,8 @@ private:
 	Q_DISABLE_COPY(UserModel)
 protected:
 	QIcon qiTalkingOn, qiTalkingMuted, qiTalkingWhisper, qiTalkingShout, qiTalkingOff;
+	/// Icon for users who are transmitting, but whose stream is entirely silent
+	QIcon qiTalkingSilent;
 	QIcon qiMutedPushToMute, qiMutedSelf, qiMutedServer, qiMutedLocal, qiIgnoredLocal, qiMutedSuppressed;
 	QIcon qiPrioritySpeaker;
 	QIcon qiRecording;
@@ -104,6 +106,8 @@ protected:
 	void removeChannelListener(ModelItem *item, ModelItem *citem = nullptr);
 
 public:
+	/// (Re)loads the silent-transmission icon from the settings
+	void updateTalkingSilentIcon();
 	UserModel(QObject *parent = 0);
 	~UserModel() Q_DECL_OVERRIDE;
 

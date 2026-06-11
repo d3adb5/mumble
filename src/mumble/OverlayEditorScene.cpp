@@ -547,6 +547,7 @@ void OverlayEditorScene::contextMenuEvent(QGraphicsSceneContextMenuEvent *e) {
 
 	QMenu *qmLayout              = qm.addMenu(tr("Layout preset"));
 	QAction *qaLayoutLargeAvatar = qmLayout->addAction(tr("Large square avatar"));
+	QAction *qaLayoutSmallCircle = qmLayout->addAction(tr("Small circle avatar"));
 	QAction *qaLayoutText        = qmLayout->addAction(tr("Avatar and Name"));
 
 	QMenu *qmTrans        = qm.addMenu(tr("User Opacity"));
@@ -814,6 +815,9 @@ void OverlayEditorScene::contextMenuEvent(QGraphicsSceneContextMenuEvent *e) {
 		resync();
 	} else if (act == qaLayoutLargeAvatar) {
 		os.setPreset(OverlaySettings::LargeSquareAvatar);
+		resync();
+	} else if (act == qaLayoutSmallCircle) {
+		os.setPreset(OverlaySettings::SmallCircleAvatar);
 		resync();
 	} else if (act == qaLayoutText) {
 		os.setPreset(OverlaySettings::AvatarAndName);

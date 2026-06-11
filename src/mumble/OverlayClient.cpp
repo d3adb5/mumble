@@ -589,7 +589,7 @@ void OverlayClient::render() {
 
 	QPainter p;
 	p.begin(&qi);
-	p.setRenderHints(p.renderHints(), false);
+	p.setRenderHints(QPainter::Antialiasing | QPainter::SmoothPixmapTransform);
 	p.setCompositionMode(QPainter::CompositionMode_SourceOver);
 	qgs.render(&p, target, dirty, Qt::IgnoreAspectRatio);
 	p.end();

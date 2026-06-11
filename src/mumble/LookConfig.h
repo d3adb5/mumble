@@ -34,6 +34,7 @@ public:
 
 public slots:
 	void accept() const Q_DECL_OVERRIDE;
+	void on_qpbSilenceIconBrowse_clicked();
 	void save() const Q_DECL_OVERRIDE;
 	void load(const Settings &r) Q_DECL_OVERRIDE;
 	void talkinguiBackgroundSet(QColor color);

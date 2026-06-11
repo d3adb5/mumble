@@ -39,6 +39,8 @@ public slots:
 	void on_qrbShout_clicked();
 
 	void on_qcbAvatar_clicked();
+	void on_qcbAvatarFrame_clicked();
+	void on_qcbAvatarRound_clicked();
 	void on_qcbUser_clicked();
 	void on_qcbChannel_clicked();
 	void on_qcbMutedDeafened_clicked();

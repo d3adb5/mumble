@@ -87,6 +87,8 @@ void OverlayEditor::reset() {
 	oes.resync();
 
 	qcbAvatar->setChecked(oes.os.bAvatar);
+	qcbAvatarFrame->setChecked(oes.os.bAvatarFrame);
+	qcbAvatarRound->setChecked(oes.os.bAvatarRound);
 	qcbUser->setChecked(oes.os.bUserName);
 	qcbChannel->setChecked(oes.os.bChannel);
 	qcbMutedDeafened->setChecked(oes.os.bMutedDeafened);
@@ -130,6 +132,15 @@ void OverlayEditor::on_qcbAvatar_clicked() {
 		oes.os.bUserName = true;
 		oes.updateUserName();
 	}
+	oes.updateAvatar();
+}
+
+void OverlayEditor::on_qcbAvatarFrame_clicked() {
+	oes.os.bAvatarFrame = qcbAvatarFrame->isChecked();
+}
+
+void OverlayEditor::on_qcbAvatarRound_clicked() {
+	oes.os.bAvatarRound = qcbAvatarRound->isChecked();
 	oes.updateAvatar();
 }
 

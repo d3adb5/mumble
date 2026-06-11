@@ -183,6 +183,8 @@
 	PROCESS(ui, HIGH_CONTRAST_MODE_KEY, bHighContrast)                           \
 	PROCESS(ui, MAX_LOG_LENGTH_KEY, iMaxLogBlocks)                               \
 	PROCESS(ui, USE_24H_CLOCK_KEY, bLog24HourClock)                              \
+	PROCESS(ui, TALKING_SILENT_ICON_KEY, qsTalkingSilentIcon)                    \
+	PROCESS(ui, SILENCE_DETECTION_HOLD_KEY, iSilenceDetectionHoldMs)             \
 	PROCESS(ui, LOG_MESSAGE_MARGINS_KEY, iChatMessageMargins)                    \
 	PROCESS(ui, DISABLE_PUBLIC_SERVER_LIST_KEY, bDisablePublicList)
 
@@ -295,6 +297,9 @@
 	PROCESS(overlay, OVERLAY_SHOW_CHANNEL_KEY, bChannel)                 \
 	PROCESS(overlay, OVERLAY_SHOW_MUTEDEAF_KEY, bMutedDeafened)          \
 	PROCESS(overlay, OVERLAY_SHOW_AVATAR_KEY, bAvatar)                   \
+	PROCESS(overlay, OVERLAY_SHOW_AVATAR_FRAME_KEY, bAvatarFrame)        \
+	PROCESS(overlay, OVERLAY_ROUND_AVATAR_KEY, bAvatarRound)             \
+	PROCESS(overlay, OVERLAY_HIDE_INAUDIBLE_KEY, bHideInaudible)         \
 	PROCESS(overlay, OVERLAY_SHOW_BOX_KEY, bBox)                         \
 	PROCESS(overlay, OVERLAY_SHOW_FPS_KEY, bFps)                         \
 	PROCESS(overlay, OVERLAY_SHOW_TIME_KEY, bTime)                       \

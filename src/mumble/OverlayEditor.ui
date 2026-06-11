@@ -133,6 +133,26 @@
        </widget>
       </item>
       <item>
+       <widget class="QCheckBox" name="qcbAvatarFrame">
+        <property name="toolTip">
+         <string>Border around the avatar in the color of the user's talk state</string>
+        </property>
+        <property name="text">
+         <string>Avatar frame</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="qcbAvatarRound">
+        <property name="toolTip">
+         <string>Display the avatar as a circle instead of a square</string>
+        </property>
+        <property name="text">
+         <string>Round avatar</string>
+        </property>
+       </widget>
+      </item>
+      <item>
        <widget class="QCheckBox" name="qcbUser">
         <property name="toolTip">
          <string>User's name</string>
@@ -193,6 +213,8 @@
   <tabstop>qrbWhisper</tabstop>
   <tabstop>qrbShout</tabstop>
   <tabstop>qcbAvatar</tabstop>
+  <tabstop>qcbAvatarFrame</tabstop>
+  <tabstop>qcbAvatarRound</tabstop>
   <tabstop>qcbUser</tabstop>
   <tabstop>qcbChannel</tabstop>
   <tabstop>qcbMutedDeafened</tabstop>

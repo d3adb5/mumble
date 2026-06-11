@@ -456,10 +456,53 @@ void OverlaySettings::setPreset(const OverlayPresets preset) {
 			bChannel       = true;
 			bMutedDeafened = true;
 			bAvatar        = true;
+			bAvatarFrame   = true;
+			bAvatarRound   = false;
 			bBox           = false;
 
 			qaUserName      = Qt::AlignCenter;
 			qaMutedDeafened = Qt::AlignLeft | Qt::AlignTop;
+			qaAvatar        = Qt::AlignCenter;
+			qaChannel       = Qt::AlignCenter;
+			break;
+		case SmallCircleAvatar:
+			uiColumns      = 1;
+			fUserName      = 0.75f;
+			fChannel       = 0.75f;
+			fMutedDeafened = 0.5f;
+			fAvatar        = 1.0f;
+
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
+			qfUserName = QFont(QLatin1String("Verdana"), 20);
+#else
+			qfUserName = QFont(QLatin1String("Arial"), 20);
+#endif
+			qfChannel = qfUserName;
+
+			fUser[Settings::Passive]      = 0.35f;
+			fUser[Settings::MutedTalking] = 0.35f;
+			fUser[Settings::Talking]      = (7.0f / 8.0f);
+			fUser[Settings::Whispering]   = (7.0f / 8.0f);
+			fUser[Settings::Shouting]     = (7.0f / 8.0f);
+
+			qrfUserName      = QRectF(-0.03125f, 0.0234375f, 0.0625f, 0.0117188f);
+			qrfChannel       = QRectF(-0.03125f, -0.046875f, 0.0625f, 0.0117188f);
+			qrfMutedDeafened = QRectF(0.0078125f, -0.03125f, 0.0234375f, 0.0234375f);
+			qrfAvatar        = QRectF(-0.03125f, -0.03125f, 0.0625f, 0.0625f);
+
+			fBoxPenWidth = (1.f / 256.0f);
+			fBoxPad      = (1.f / 256.0f);
+
+			bUserName      = false;
+			bChannel       = false;
+			bMutedDeafened = true;
+			bAvatar        = true;
+			bAvatarFrame   = true;
+			bAvatarRound   = true;
+			bBox           = false;
+
+			qaUserName      = Qt::AlignCenter;
+			qaMutedDeafened = Qt::AlignRight | Qt::AlignTop;
 			qaAvatar        = Qt::AlignCenter;
 			qaChannel       = Qt::AlignCenter;
 			break;
@@ -496,6 +539,8 @@ void OverlaySettings::setPreset(const OverlayPresets preset) {
 			bChannel       = false;
 			bMutedDeafened = true;
 			bAvatar        = true;
+			bAvatarFrame   = false;
+			bAvatarRound   = false;
 			bBox           = true;
 
 			qaUserName      = Qt::AlignLeft | Qt::AlignVCenter;

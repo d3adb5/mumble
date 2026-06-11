@@ -18,6 +18,9 @@
 #include "GlobalShortcut.h"
 
 #include <QtGui/QImageReader>
+#include <QtGui/QPainter>
+
+#include <algorithm>
 
 OverlayUser::OverlayUser(ClientUser *cu, unsigned int height, OverlaySettings *osptr)
 	: OverlayGroup(), os(osptr), uiSize(height), cuUser(cu), tsColor(Settings::Passive) {
@@ -46,6 +49,9 @@ void OverlayUser::setup() {
 
 	qgpiAvatar = new QGraphicsPixmapItem(this);
 
+	qgpiAvatarFrame = new QGraphicsPathItem(this);
+	qgpiAvatarFrame->hide();
+
 	for (int i = 0; i < 4; ++i) {
 		qgpiName[i] = new QGraphicsPixmapItem(this);
 		qgpiName[i]->hide();
@@ -64,6 +70,40 @@ template< typename T > int roundToInt(T value) {
 
 template< typename T > unsigned int roundToUInt(T value) {
 	return static_cast< unsigned int >(value + 0.5f);
+}
+
+/// Clips the given image to a circle (an ellipse for non-square images)
+static QImage roundedAvatar(const QImage &src) {
+	QImage out(src.size(), QImage::Format_ARGB32_Premultiplied);
+	out.fill(Qt::transparent);
+
+	QPainter painter(&out);
+	painter.setRenderHint(QPainter::Antialiasing);
+	painter.setRenderHint(QPainter::SmoothPixmapTransform);
+	// Filling an ellipse with the image as brush yields antialiased edges,
+	// which clipping would not
+	painter.setPen(Qt::NoPen);
+	painter.setBrush(QBrush(src));
+	painter.drawEllipse(QRectF(QPointF(0, 0), QSizeF(src.size())));
+
+	return out;
+}
+
+/// Renders a placeholder avatar showing the first letter of the user's name
+static QImage initialAvatar(const QString &name, int side, QFont font) {
+	QImage out(side, side, QImage::Format_ARGB32_Premultiplied);
+	out.fill(QColor(96, 106, 116));
+
+	QPainter painter(&out);
+	painter.setRenderHint(QPainter::Antialiasing);
+	font.setPixelSize(side * 11 / 20);
+	font.setBold(true);
+	painter.setFont(font);
+	painter.setPen(Qt::white);
+	painter.drawText(QRect(0, 0, side, side), Qt::AlignCenter,
+					 name.isEmpty() ? QString::fromLatin1("?") : QString(name.at(0).toUpper()));
+
+	return out;
 }
 
 void OverlayUser::updateLayout() {
@@ -203,12 +243,20 @@ void OverlayUser::updateUser() {
 		if (!qbaAvatar.isNull() && cuUser->qbaTexture.isEmpty()) {
 			Global::get().o->requestTexture(cuUser);
 		} else if (qbaAvatar.isNull()) {
-			QImageReader qir(QLatin1String("skin:default_avatar.svg"));
-			QSize sz = qir.size();
-			sz.scale(roundToInt(os->qrfAvatar.width() * scaleFactor), roundToInt(os->qrfAvatar.height() * scaleFactor),
-					 Qt::KeepAspectRatio);
-			qir.setScaledSize(sz);
-			img = qir.read();
+			if (os->bAvatarRound) {
+				// In the circle layout no names are shown, so display the first
+				// letter of the user's name instead of the generic avatar
+				const int side = std::min(roundToInt(os->qrfAvatar.width() * scaleFactor),
+										  roundToInt(os->qrfAvatar.height() * scaleFactor));
+				img            = initialAvatar(cuUser ? cuUser->qsName : qsName, side, os->qfUserName);
+			} else {
+				QImageReader qir(QLatin1String("skin:default_avatar.svg"));
+				QSize sz = qir.size();
+				sz.scale(roundToInt(os->qrfAvatar.width() * scaleFactor),
+						 roundToInt(os->qrfAvatar.height() * scaleFactor), Qt::KeepAspectRatio);
+				qir.setScaledSize(sz);
+				img = qir.read();
+			}
 		} else {
 			QBuffer qb(&cuUser->qbaTexture);
 			qb.open(QIODevice::ReadOnly);
@@ -219,6 +267,10 @@ void OverlayUser::updateUser() {
 					 Qt::KeepAspectRatio);
 			qir.setScaledSize(sz);
 			img = qir.read();
+		}
+
+		if (os->bAvatarRound && !img.isNull()) {
+			img = roundedAvatar(img);
 		}
 
 		qgpiAvatar->setPixmap(QPixmap::fromImage(img));
@@ -251,6 +303,10 @@ void OverlayUser::updateUser() {
 		qgpiChannel->setVisible(os->bChannel && !samechannel);
 
 		tsColor = cuUser->tsState;
+		if (os->bHideInaudible && tsColor != Settings::Passive && !cuUser->isAudible()) {
+			// The user transmits nothing but silence: display them as if not talking
+			tsColor = Settings::Passive;
+		}
 	} else {
 		qgpiChannel->setVisible(os->bChannel && (tsColor != Settings::Passive) && (tsColor != Settings::Talking));
 		qgpiMuted->setVisible(os->bChannel);
@@ -265,6 +321,29 @@ void OverlayUser::updateUser() {
 			qgpiName[i]->setVisible(false);
 
 	qgpiBox->setVisible(os->bBox);
+
+	if (os->bAvatar && os->bAvatarFrame && !qgpiAvatar->pixmap().isNull()) {
+		// Frame the avatar with a border in the talk state's color (the same color
+		// the user name is rendered in for that state)
+		const QRectF frameRect = qgpiAvatar->mapRectToParent(qgpiAvatar->boundingRect());
+		const qreal penWidth   = qMax< qreal >(1.0, frameRect.height() / 24.0);
+		const qreal radius     = frameRect.height() / 8.0;
+
+		QPainterPath framePath;
+		const QRectF outerRect = frameRect.adjusted(-penWidth / 2.0, -penWidth / 2.0, penWidth / 2.0, penWidth / 2.0);
+		if (os->bAvatarRound) {
+			framePath.addEllipse(outerRect);
+		} else {
+			framePath.addRoundedRect(outerRect, radius, radius);
+		}
+
+		qgpiAvatarFrame->setPath(framePath);
+		qgpiAvatarFrame->setPen(QPen(os->qcUserName[tsColor], penWidth));
+		qgpiAvatarFrame->setBrush(Qt::NoBrush);
+		qgpiAvatarFrame->show();
+	} else {
+		qgpiAvatarFrame->hide();
+	}
 
 	setOpacity(os->fUser[tsColor]);
 }

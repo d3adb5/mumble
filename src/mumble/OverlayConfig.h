@@ -83,6 +83,7 @@ protected slots:
 	void on_qpbFpsFont_clicked();
 	void on_qpbFpsColor_clicked();
 	void on_qpbLoadPreset_clicked();
+	void on_qcbBuiltinPreset_activated(int index);
 	void on_qpbSavePreset_clicked();
 	void resizeScene(bool force = false);
 

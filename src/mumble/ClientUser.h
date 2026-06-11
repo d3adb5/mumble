@@ -25,6 +25,10 @@ protected:
 public:
 	Settings::TalkState tsState;
 	Timer tLastTalkStateChange;
+	/// Last time the user's audio stream was audible (above the silence threshold)
+	Timer tLastAudible;
+	/// Last time a frame of the user's audio stream was received and measured
+	Timer tLastAudioReceived;
 	bool bLocalIgnore;
 	bool bLocalIgnoreTTS;
 	bool bLocalMute;
@@ -54,6 +58,14 @@ public:
 	 */
 	bool isActive();
 
+	/// Whether the user's current transmission has recently been audible, i.e.
+	/// whether they are actually heard rather than transmitting silence
+	bool isAudible();
+
+	/// Feeds the measured power (RMS) of a decoded audio frame into the
+	/// audibility tracking. Called from the audio thread.
+	void registerAudioPower(float rmsPower);
+
 	static QHash< unsigned int, ClientUser * > c_qmUsers;
 	static QReadWriteLock c_qrwlUsers;
 
@@ -73,6 +85,9 @@ public:
 
 protected:
 	static bool lessThanOverlay(const ClientUser *, const ClientUser *);
+
+	/// Last audibility state reported via talkingStateChanged()
+	bool m_lastAudibleState = false;
 public slots:
 	void setTalking(Settings::TalkState ts);
 	void setMute(bool mute);

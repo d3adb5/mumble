@@ -10,10 +10,12 @@
 #include "AudioOutput.h"
 #include "MainWindow.h"
 #include "SearchDialog.h"
+#include "UserModel.h"
 #include "Global.h"
 
 #include <QColorDialog>
 #include <QDesktopServices>
+#include <QFileDialog>
 #include <QSystemTrayIcon>
 #include <QtCore/QFileSystemWatcher>
 #include <QtCore/QStack>
@@ -257,6 +259,8 @@ void LookConfig::load(const Settings &r) {
 	loadCheckBox(qcbShowLocalListeners, r.bTalkingUI_ShowLocalListeners);
 	qsbRelFontSize->setValue(r.iTalkingUI_RelativeFontSize);
 	qsbSilentUserLifetime->setValue(r.iTalkingUI_SilentUserLifeTime);
+	qsbSilenceHold->setValue(r.iSilenceDetectionHoldMs);
+	qleSilenceIcon->setText(r.qsTalkingSilentIcon);
 	qsbChannelHierarchyDepth->setValue(r.iTalkingUI_ChannelHierarchyDepth);
 	qsbMaxNameLength->setValue(r.iTalkingUI_MaxChannelNameLength);
 	qsbPrefixCharCount->setValue(r.iTalkingUI_PrefixCharCount);
@@ -347,6 +351,8 @@ void LookConfig::save() const {
 	s.bTalkingUI_ShowLocalListeners       = qcbShowLocalListeners->isChecked();
 	s.iTalkingUI_RelativeFontSize         = qsbRelFontSize->value();
 	s.iTalkingUI_SilentUserLifeTime       = qsbSilentUserLifetime->value();
+	s.iSilenceDetectionHoldMs             = qsbSilenceHold->value();
+	s.qsTalkingSilentIcon                 = qleSilenceIcon->text();
 	s.iTalkingUI_ChannelHierarchyDepth    = qsbChannelHierarchyDepth->value();
 	s.iTalkingUI_MaxChannelNameLength     = qsbMaxNameLength->value();
 	s.iTalkingUI_PrefixCharCount          = qsbPrefixCharCount->value();
@@ -364,6 +370,17 @@ void LookConfig::save() const {
 void LookConfig::accept() const {
 	Global::get().mw->setShowDockTitleBars((Global::get().s.wlWindowLayout == Settings::LayoutCustom)
 										   && !Global::get().s.bLockLayout);
+	if (Global::get().mw->pmModel) {
+		Global::get().mw->pmModel->updateTalkingSilentIcon();
+	}
+}
+
+void LookConfig::on_qpbSilenceIconBrowse_clicked() {
+	const QString file = QFileDialog::getOpenFileName(this, tr("Choose silence indicator icon"), QString(),
+													  tr("Images (*.svg *.png *.jpg *.jpeg *.bmp)"));
+	if (!file.isEmpty()) {
+		qleSilenceIcon->setText(file);
+	}
 }
 
 StyleType LookConfig::getStyleType() const {

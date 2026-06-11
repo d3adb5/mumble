@@ -19,6 +19,8 @@ public:
 protected:
 	QGraphicsPixmapItem *qgpiMuted, *qgpiDeafened;
 	QGraphicsPixmapItem *qgpiAvatar;
+	/// Border drawn around the avatar, colored by the user's current talk state
+	QGraphicsPathItem *qgpiAvatarFrame;
 	QGraphicsPixmapItem *qgpiName[4];
 	QGraphicsPixmapItem *qgpiChannel;
 	QGraphicsPathItem *qgpiBox;

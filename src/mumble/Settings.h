@@ -105,7 +105,7 @@ struct PluginSetting {
 
 
 struct OverlaySettings {
-	enum OverlayPresets { AvatarAndName, LargeSquareAvatar };
+	enum OverlayPresets { AvatarAndName, LargeSquareAvatar, SmallCircleAvatar };
 	enum OverlayShow { Talking, Active, HomeChannel, LinkedChannels };
 	enum OverlaySort { Alphabetical, LastStateChange };
 	enum OverlayExclusionMode { LauncherFilterExclusionMode, WhitelistExclusionMode, BlacklistExclusionMode };
@@ -144,6 +144,12 @@ struct OverlaySettings {
 	bool bChannel       = false;
 	bool bMutedDeafened = true;
 	bool bAvatar        = true;
+	/// Frame the avatar with a border colored by the user's talk state
+	bool bAvatarFrame = false;
+	/// Display the avatar clipped to a circle instead of a square
+	bool bAvatarRound = false;
+	/// Treat users whose stream is entirely silent as if they were not talking
+	bool bHideInaudible = false;
 	bool bBox           = false;
 	bool bFps           = false;
 	bool bTime          = false;
@@ -387,6 +393,11 @@ struct Settings {
 
 	int iMaxLogBlocks       = 0;
 	bool bLog24HourClock    = true;
+	/// Custom icon shown for users who are transmitting silence (empty = built-in icon)
+	QString qsTalkingSilentIcon = {};
+	/// How long (in ms) a transmitting user's stream may be silent before the
+	/// silence detection considers them "not talking"
+	int iSilenceDetectionHoldMs = 1000;
 	int iChatMessageMargins = 3;
 
 	QPoint qpTalkingUI_Position              = UNSPECIFIED_POSITION;

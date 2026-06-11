@@ -443,6 +443,12 @@ bool AudioOutputSpeech::prepareSampleBuffer(unsigned int frameCount) {
 					}
 					pow = sqrtf(pow / static_cast< float >(decodedSamples)); // Average over both L and R channel.
 
+					if (!p->bLocalMute) {
+						// For locally muted users no audio is decoded, so the measured
+						// power would be garbage
+						p->registerAudioPower(pow);
+					}
+
 					if (pow >= fPowerMax) {
 						fPowerMax = pow;
 					} else {

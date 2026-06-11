@@ -819,6 +819,45 @@ void OverlayConfig::on_qpbFpsColor_clicked() {
 	}
 }
 
+void OverlayConfig::on_qcbBuiltinPreset_activated(int index) {
+	OverlaySettings preset;
+
+	switch (index) {
+		case 1:
+			preset.setPreset(OverlaySettings::AvatarAndName);
+			break;
+		case 2:
+			preset.setPreset(OverlaySettings::LargeSquareAvatar);
+			break;
+		case 3:
+			preset.setPreset(OverlaySettings::SmallCircleAvatar);
+			break;
+		default:
+			// Index 0 is the inert "Built-in presets..." placeholder
+			return;
+	}
+
+#ifdef Q_OS_WIN
+	preset.qslLaunchers        = s.os.qslLaunchers;
+	preset.qslLaunchersExclude = s.os.qslLaunchersExclude;
+
+	preset.qslWhitelist        = s.os.qslWhitelist;
+	preset.qslWhitelistExclude = s.os.qslWhitelistExclude;
+
+	preset.qslPaths        = s.os.qslPaths;
+	preset.qslPathsExclude = s.os.qslPathsExclude;
+
+	preset.qslBlacklist        = s.os.qslBlacklist;
+	preset.qslBlacklistExclude = s.os.qslBlacklistExclude;
+#endif
+	preset.bEnable = s.os.bEnable;
+	s.os           = preset;
+
+	load(s);
+
+	qcbBuiltinPreset->setCurrentIndex(0);
+}
+
 void OverlayConfig::on_qpbLoadPreset_clicked() {
 	QString fn = QFileDialog::getOpenFileName(this, tr("Load Overlay Presets"), QDir::homePath(),
 											  tr("Mumble overlay presets (*.mumblelay)"));

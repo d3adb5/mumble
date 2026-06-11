@@ -74,6 +74,7 @@
 #include <QtGui/QClipboard>
 #include <QtGui/QDesktopServices>
 #include <QtGui/QImageReader>
+#include <QtGui/QImageWriter>
 #include <QtGui/QScreen>
 #include <QtGui/QWindow>
 #include <QtWidgets/QFileDialog>
@@ -83,6 +84,7 @@
 #include <QtWidgets/QToolTip>
 #include <QtWidgets/QWhatsThis>
 
+#include "widgets/AvatarCropDialog.h"
 #include "widgets/BanDialog.h"
 #include "widgets/ResponsiveImageDialog.h"
 #include "widgets/SemanticSlider.h"
@@ -4181,15 +4183,91 @@ void MainWindow::openSelfCommentDialog() {
 	delete texm;
 }
 
+/// Encodes the given avatar image such that it fits into maxBytes (0 meaning
+/// unlimited): lossless PNG if possible, otherwise JPEG of decreasing quality.
+/// @returns the encoded image, or an empty array if it can't be made to fit
+static QByteArray encodeAvatar(const QImage &avatar, unsigned int maxBytes) {
+	QByteArray data;
+	{
+		QBuffer buffer(&data);
+		buffer.open(QIODevice::WriteOnly);
+		QImageWriter writer(&buffer, "PNG");
+		writer.write(avatar);
+	}
+	if (maxBytes == 0 || static_cast< unsigned int >(data.size()) <= maxBytes) {
+		return data;
+	}
+
+	// JPEG has no alpha channel, so flatten the image onto a solid background
+	const QImage flattened = avatar.convertToFormat(QImage::Format_RGB32);
+	for (int quality = 90; quality >= 30; quality -= 10) {
+		data.clear();
+		QBuffer buffer(&data);
+		buffer.open(QIODevice::WriteOnly);
+		QImageWriter writer(&buffer, "JPEG");
+		writer.setQuality(quality);
+		writer.write(flattened);
+
+		if (static_cast< unsigned int >(data.size()) <= maxBytes) {
+			return data;
+		}
+	}
+
+	return QByteArray();
+}
+
 void MainWindow::changeServerTexture() {
 	QPair< QByteArray, QImage > choice = openImageFile();
-	if (choice.first.isEmpty())
+	if (choice.second.isNull())
 		return;
 
-	const QImage &img = choice.second;
+	// Animated images (e.g. GIF) can't be cropped or resized without losing their
+	// animation, as they can't be re-encoded.
+	QBuffer animationProbe(&choice.first);
+	animationProbe.open(QIODevice::ReadOnly);
+	QImageReader animationReader(&animationProbe);
+	const bool isAnimated = animationReader.supportsAnimation() && animationReader.imageCount() > 1;
 
-	if ((img.height() <= 1024) && (img.width() <= 1024))
-		Global::get().sh->setUserTexture(Global::get().uiSession, choice.first);
+	if (isAnimated) {
+		const QSize size = choice.second.size();
+		if (size.width() == size.height() && size.width() <= AvatarCropWidget::AVATAR_SIZE) {
+			// Already square and small enough: upload unchanged to keep the animation
+			if (Global::get().uiImageLength > 0
+				&& static_cast< unsigned int >(choice.first.size()) > Global::get().uiImageLength) {
+				Global::get().l->log(Log::Warning, tr("The animated avatar exceeds this server's image size limit."));
+				return;
+			}
+			Global::get().sh->setUserTexture(Global::get().uiSession, choice.first);
+			return;
+		}
+
+		if (QMessageBox::question(
+				this, tr("Animated avatar"),
+				tr("Animated avatars can only keep their animation if the image is square with at most %1x%1 "
+				   "pixels. Continue and upload a cropped, non-animated avatar instead?")
+					.arg(AvatarCropWidget::AVATAR_SIZE),
+				QMessageBox::Yes | QMessageBox::No)
+			!= QMessageBox::Yes) {
+			return;
+		}
+	}
+
+	AvatarCropDialog dlg(choice.second, this);
+	if (dlg.exec() != QDialog::Accepted)
+		return;
+
+	const QImage avatar = dlg.croppedAvatar();
+	if (avatar.isNull())
+		return;
+
+	const QByteArray data = encodeAvatar(avatar, Global::get().uiImageLength);
+	if (data.isEmpty()) {
+		Global::get().l->log(Log::Warning,
+							 tr("Unable to make the avatar small enough for this server's image size limit."));
+		return;
+	}
+
+	Global::get().sh->setUserTexture(Global::get().uiSession, data);
 }
 
 void MainWindow::removeServerTexture() {

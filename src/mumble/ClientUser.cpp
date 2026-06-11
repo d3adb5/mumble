@@ -319,6 +319,44 @@ bool ClientUser::isActive() {
 	return tLastTalkStateChange.elapsed() < std::chrono::seconds(Global::get().s.os.uiActiveTime);
 }
 
+bool ClientUser::isAudible() {
+	if (tsState == Settings::Passive)
+		return false;
+
+	// Audibility is measured from received audio, which does not exist for
+	// ourselves: whether we transmit at all is the authoritative signal.
+	if (uiSession == Global::get().uiSession)
+		return true;
+
+	const std::chrono::milliseconds hold(qMax(Global::get().s.iSilenceDetectionHoldMs, 100));
+
+	// Only judge users whose audio is actually being received: without stream
+	// data to measure there is no basis to consider anyone silent.
+	if (!tLastAudioReceived.isStarted() || tLastAudioReceived.elapsed() > hold)
+		return true;
+
+	// The hold time bridges the natural pauses within speech
+	return tLastAudible.isStarted() && tLastAudible.elapsed() < hold;
+}
+
+void ClientUser::registerAudioPower(float rmsPower) {
+	// RMS values (on float samples in [-1, 1]) below this are considered silence (-60 dBFS)
+	constexpr float AUDIBLE_RMS_THRESHOLD = 0.001f;
+
+	tLastAudioReceived.restart();
+
+	if (rmsPower >= AUDIBLE_RMS_THRESHOLD) {
+		tLastAudible.restart();
+	}
+
+	const bool nowAudible = isAudible();
+	if (nowAudible != m_lastAudibleState) {
+		m_lastAudibleState = nowAudible;
+		// Reuse the talking state notification so that all views re-evaluate this user
+		emit talkingStateChanged();
+	}
+}
+
 /* From Channel.h
  */
 void Channel::addClientUser(ClientUser *p) {

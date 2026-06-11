@@ -145,6 +145,83 @@
     </widget>
    </item>
    <item row="5" column="1">
+    <widget class="QGroupBox" name="qgbSilenceDetection">
+     <property name="title">
+      <string>Silence Detection</string>
+     </property>
+     <layout class="QGridLayout" name="glSilenceDetection">
+      <item row="0" column="0">
+       <widget class="QLabel" name="qlSilenceHold">
+        <property name="toolTip">
+         <string>How long a transmitting user's stream may be silent before they are considered to not be talking.</string>
+        </property>
+        <property name="text">
+         <string>Hold time</string>
+        </property>
+        <property name="buddy">
+         <cstring>qsbSilenceHold</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QSpinBox" name="qsbSilenceHold">
+        <property name="toolTip">
+         <string>How long a transmitting user's stream may be silent before they are considered to not be talking.</string>
+        </property>
+        <property name="accessibleName">
+         <string>Silence detection hold time</string>
+        </property>
+        <property name="suffix">
+         <string> ms</string>
+        </property>
+        <property name="minimum">
+         <number>100</number>
+        </property>
+        <property name="maximum">
+         <number>10000</number>
+        </property>
+        <property name="singleStep">
+         <number>100</number>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="qlSilenceIcon">
+        <property name="toolTip">
+         <string>Custom image used to mark users who are transmitting silence. Leave empty for the built-in icon.</string>
+        </property>
+        <property name="text">
+         <string>Indicator icon</string>
+        </property>
+        <property name="buddy">
+         <cstring>qleSilenceIcon</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QLineEdit" name="qleSilenceIcon">
+        <property name="toolTip">
+         <string>Custom image used to mark users who are transmitting silence. Leave empty for the built-in icon.</string>
+        </property>
+        <property name="accessibleName">
+         <string>Silence indicator icon path</string>
+        </property>
+        <property name="clearButtonEnabled">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="2">
+       <widget class="QPushButton" name="qpbSilenceIconBrowse">
+        <property name="text">
+         <string>Browse...</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="7" column="1">
     <widget class="QGroupBox" name="qgbChannelHierarchyString">
      <property name="title">
       <string>Channel Hierarchy String</string>
@@ -1315,6 +1392,9 @@
   <tabstop>qleAbbreviationReplacement</tabstop>
   <tabstop>qbClearBackgroundColor</tabstop>
   <tabstop>qleChannelSeparator</tabstop>
+  <tabstop>qsbSilenceHold</tabstop>
+  <tabstop>qleSilenceIcon</tabstop>
+  <tabstop>qpbSilenceIconBrowse</tabstop>
   <tabstop>qbBackgroundColor</tabstop>
  </tabstops>
  <resources/>

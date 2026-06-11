@@ -57,6 +57,7 @@
     <file alias="talking_alt.svg">Default/talking_alt.svg</file>
     <file alias="talking_off.svg">Default/talking_off.svg</file>
     <file alias="talking_on.svg">Default/talking_on.svg</file>
+    <file alias="talking_silent.svg">Default/talking_silent.svg</file>
     <file alias="talking_muted.svg">Default/talking_muted.svg</file>
     <file alias="talking_whisper.svg">Default/talking_whisper.svg</file>
     <file alias="theme.ini">Default/theme.ini</file>

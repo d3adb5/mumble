@@ -105,6 +105,11 @@ void OverlayUserGroup::contextMenuEvent(QGraphicsSceneContextMenuEvent *e) {
 	if (os->bAlwaysSelf)
 		qaShowSelf->setChecked(true);
 
+	QAction *qaHideInaudible = qmShow->addAction(OverlayClient::tr("Treat silent streams as not talking"));
+	qaHideInaudible->setCheckable(true);
+	if (os->bHideInaudible)
+		qaHideInaudible->setChecked(true);
+
 	qmShow->addSeparator();
 
 	QAction *qaConfigureRecentlyActiveTime =
@@ -164,6 +169,9 @@ void OverlayUserGroup::contextMenuEvent(QGraphicsSceneContextMenuEvent *e) {
 		updateUsers();
 	} else if (act == qaShowSelf) {
 		os->bAlwaysSelf = !os->bAlwaysSelf;
+		updateUsers();
+	} else if (act == qaHideInaudible) {
+		os->bHideInaudible = !os->bHideInaudible;
 		updateUsers();
 	} else if (act == qaConfigureRecentlyActiveTime) {
 		// FIXME: This might not be the best place to configure this setting, but currently
@@ -324,6 +332,17 @@ void OverlayUserGroup::updateUsers() {
 				if (os->bAlwaysSelf && (self->tsState == Settings::Passive))
 					showusers << self;
 				break;
+		}
+
+		if (os->bHideInaudible && (os->osShow == OverlaySettings::Talking || os->osShow == OverlaySettings::Active)) {
+			// Users whose stream carries nothing but silence are not really talking
+			QMutableListIterator< ClientUser * > it(showusers);
+			while (it.hasNext()) {
+				ClientUser *cu = it.next();
+				if (cu->tsState != Settings::Passive && !cu->isAudible() && !(os->bAlwaysSelf && cu == self)) {
+					it.remove();
+				}
+			}
 		}
 
 		ClientUser::sortUsersOverlay(showusers);

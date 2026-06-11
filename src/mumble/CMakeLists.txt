@@ -319,6 +319,8 @@ set(MUMBLE_SOURCES
 	"widgets/SearchDialogTree.h"
 	"widgets/SemanticSlider.cpp"
 	"widgets/SemanticSlider.h"
+	"widgets/AvatarCropDialog.cpp"
+	"widgets/AvatarCropDialog.h"
 	"widgets/TrayIcon.cpp"
 	"widgets/TrayIcon.h"
 	"widgets/ResponsiveImageDialog.cpp"
