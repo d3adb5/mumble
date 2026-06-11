@@ -40,6 +40,7 @@ class Tokens;
 class Channel;
 class UserInformation;
 class VoiceRecorderDialog;
+class ConfigDialog;
 class PositionalAudioViewer;
 class PTTButtonWidget;
 
@@ -124,6 +125,8 @@ public:
 	Tokens *tokenEdit;
 
 	VoiceRecorderDialog *voiceRecorderDialog;
+
+	QPointer< ConfigDialog > configDialog;
 
 	MumbleProto::Reject_RejectType rtLast;
 	bool bRetryServer;

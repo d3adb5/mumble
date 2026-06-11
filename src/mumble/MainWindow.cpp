@@ -126,7 +126,9 @@ MainWindow::MainWindow(QWidget *p)
 	else
 		SvgIcon::addSvgPixmapsToIcon(qiIcon, QLatin1String("skin:mumble.svg"));
 #else
-	{ SvgIcon::addSvgPixmapsToIcon(qiIcon, QLatin1String("skin:mumble.svg")); }
+	{
+		SvgIcon::addSvgPixmapsToIcon(qiIcon, QLatin1String("skin:mumble.svg"));
+	}
 
 	// Set application icon except on MacOSX, where the window-icon
 	// shown in the title-bar usually serves as a draggable version of the
@@ -4218,7 +4220,15 @@ void MainWindow::openAudioStatsDialog() {
 }
 
 void MainWindow::openConfigDialog() {
+	if (configDialog) {
+		configDialog->show();
+		configDialog->raise();
+		configDialog->activateWindow();
+		return;
+	}
+
 	ConfigDialog *dlg = new ConfigDialog(this);
+	configDialog      = dlg;
 
 	Global::get().inConfigUI = true;
 
@@ -4229,31 +4239,34 @@ void MainWindow::openConfigDialog() {
 		}
 	});
 
-	if (dlg->exec() == QDialog::Accepted) {
+	QObject::connect(dlg, &QDialog::accepted, this, [this]() {
 		setupView(false);
 		showRaiseWindow();
 		updateTransmitModeComboBox(Global::get().s.atTransmit);
 		updateUserModel();
 		emit talkingStatusChanged();
 
-		if (Global::get().s.requireRestartToApply) {
-			if (Global::get().s.requireRestartToApply
-				&& QMessageBox::question(
-					   this, tr("Restart Mumble?"),
-					   tr("Some settings will only apply after a restart of Mumble. Restart Mumble now?"),
-					   QMessageBox::Yes | QMessageBox::No)
-					   == QMessageBox::Yes) {
-				forceQuit     = true;
-				restartOnQuit = true;
+		if (Global::get().s.requireRestartToApply
+			&& QMessageBox::question(this, tr("Restart Mumble?"),
+									 tr("Some settings will only apply after a restart of Mumble. Restart Mumble now?"),
+									 QMessageBox::Yes | QMessageBox::No)
+				   == QMessageBox::Yes) {
+			forceQuit     = true;
+			restartOnQuit = true;
 
-				close();
-			}
+			close();
 		}
-	}
+	});
 
-	Global::get().inConfigUI = false;
+	QObject::connect(dlg, &QDialog::finished, this, [dlg](int) {
+		Global::get().inConfigUI = false;
+		dlg->deleteLater();
+	});
 
-	delete dlg;
+	// Show the dialog non-modally: a modal settings window is unnecessarily
+	// restrictive and fights window managers that warp the pointer to the focused
+	// window, as the modality keeps yanking the focus back to the dialog.
+	dlg->show();
 }
 
 void MainWindow::openAudioWizardDialog() {
