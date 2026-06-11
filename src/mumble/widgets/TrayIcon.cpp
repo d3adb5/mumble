@@ -12,6 +12,11 @@
 
 #include <QApplication>
 
+#ifdef USE_DBUS
+#	include <QtDBus/QDBusInterface>
+#	include <QtDBus/QDBusMessage>
+#endif
+
 TrayIcon::TrayIcon() : QSystemTrayIcon(Global::get().mw), m_statusIcon(Global::get().mw->qiIcon) {
 	setIcon(m_statusIcon);
 
@@ -24,9 +29,10 @@ TrayIcon::TrayIcon() : QSystemTrayIcon(Global::get().mw), m_statusIcon(Global::g
 	QObject::connect(Global::get().mw, &MainWindow::disconnectedFromServer, this, &TrayIcon::on_icon_update);
 	QObject::connect(Global::get().mw, &MainWindow::windowMinimized, this, &TrayIcon::on_windowMinimized);
 	QObject::connect(Global::get().mw, &MainWindow::windowVisibilityToggled, this, &TrayIcon::on_toggleShowHide);
-	QObject::connect(
-		Global::get().l, &Log::notificationSpawned, this,
-		[this](QString title, QString body, QSystemTrayIcon::MessageIcon icon) { showMessage(title, body, icon); });
+	QObject::connect(Global::get().l, &Log::notificationSpawned, this,
+					 [this](QString title, QString body, QSystemTrayIcon::MessageIcon icon) {
+						 showNotification(title, body, icon);
+					 });
 
 	QObject::connect(Global::get().l, &Log::highlightSpawned, this, &TrayIcon::on_timer_triggered);
 	QObject::connect(Global::get().mw, &MainWindow::windowActivated, this, &TrayIcon::on_tray_unhighlight);
@@ -191,6 +197,50 @@ void TrayIcon::on_tray_unhighlight() {
 
 	m_highlightTimer->stop();
 	setIcon(m_statusIcon);
+}
+
+void TrayIcon::showNotification(const QString &title, const QString &body, QSystemTrayIcon::MessageIcon icon) {
+#ifdef USE_DBUS
+	// Deliver the notification through the freedesktop.org notification service
+	// (commonly known as "libnotify") if one is running, so that it is rendered by
+	// the user's notification daemon. QSystemTrayIcon::showMessage() only does this
+	// when the tray icon itself is backed by the StatusNotifier D-Bus protocol; on
+	// legacy (XEmbed) trays it draws an internal balloon widget instead.
+	QString iconName;
+	switch (icon) {
+		case QSystemTrayIcon::Critical:
+			iconName = QLatin1String("dialog-error");
+			break;
+		case QSystemTrayIcon::Warning:
+			iconName = QLatin1String("dialog-warning");
+			break;
+		case QSystemTrayIcon::NoIcon:
+			iconName = QLatin1String("accessories-text-editor");
+			break;
+		case QSystemTrayIcon::Information:
+			iconName = QLatin1String("dialog-information");
+			break;
+	}
+
+	QDBusInterface notificationService(QLatin1String("org.freedesktop.Notifications"),
+									   QLatin1String("/org/freedesktop/Notifications"),
+									   QLatin1String("org.freedesktop.Notifications"));
+	if (notificationService.isValid()) {
+		QVariantMap hints;
+		hints.insert(QLatin1String("desktop-entry"), QLatin1String("info.mumble.Mumble"));
+
+		const QDBusMessage response =
+			notificationService.call(QLatin1String("Notify"), QLatin1String("Mumble"), m_lastNotificationId, iconName,
+									 title, body, QStringList(), hints, -1);
+
+		if (response.type() == QDBusMessage::ReplyMessage && response.arguments().count() == 1) {
+			m_lastNotificationId = response.arguments().at(0).toUInt();
+			return;
+		}
+	}
+#endif
+
+	showMessage(title, body, icon);
 }
 
 void TrayIcon::on_timer_triggered() {
