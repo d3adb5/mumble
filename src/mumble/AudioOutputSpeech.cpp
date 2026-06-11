@@ -260,15 +260,14 @@ void AudioOutputSpeech::enforceIncomingDelayLimit() {
 
 		const int prevPointer = jitter_buffer_get_pointer_timestamp(jbJitter);
 		if (jitter_buffer_get(jbJitter, &jbp, static_cast< int >(iFrameSize), &startofs) == JITTER_BUFFER_OK) {
-			// With a destroy callback registered, the caller owns the returned packet.
-			// Release the audio cache slot it references without decoding the audio.
+			// We own the returned packet (see the destroy callback comment in
+			// prepareSampleBuffer()); release its audio cache slot without decoding it.
 			invalidateAudioOutputCache(jbp.data);
 			++droppedPackets;
 			droppedAudio += static_cast< spx_uint32_t >(jbp.span);
 		} else if (jitter_buffer_get_pointer_timestamp(jbJitter) == prevPointer) {
-			// The buffer did not advance its playback pointer (it wants to insert
-			// silence instead, or is resyncing after a reset). Leave the remaining
-			// catch-up to a later cycle instead of fighting it.
+			// The buffer refuses to advance its playback pointer (it wants to insert
+			// silence instead, or is resyncing); leave the catch-up to a later cycle.
 			break;
 		}
 

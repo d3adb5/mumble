@@ -365,9 +365,7 @@ void AudioInputDialog::updateBitrate() {
 
 	int audiorate, overhead, posrate;
 
-	// Convert the slider position to the number of 10 ms frames per packet and
-	// account for the bitrate clamp that keeps a packet within the maximum size
-	// allowed by the protocol
+	// Number of 10 ms frames per packet for the current slider position
 	const int framesPerPacket = (p == 1) ? 1 : (p - 1) * 2;
 	audiorate                 = qMin(q, ::AudioInput::maxPayloadBitrate(framesPerPacket));
 
@@ -502,10 +500,8 @@ void AudioInputDialog::on_qcbStereoInput_clicked() {
 }
 
 void AudioInputDialog::updateQualitySliderMax() {
-	// The quality cap is dictated by the maximum packet size the protocol allows:
-	// mono is capped such that even 40 ms packets fit, while stereo may go up to
-	// twice that (which still fits as long as no more than 20 ms are put into a
-	// single packet - beyond that, the client clamps the effective bitrate).
+	// Mono is capped such that even 40 ms packets fit into the maximum packet size,
+	// stereo such that 20 ms packets do (longer ones get their bitrate clamped).
 	qsQuality->setMaximum(qcbStereoInput->isChecked() ? ::AudioInput::maxPayloadBitrate(2)
 													  : ::AudioInput::maxPayloadBitrate(4));
 }
@@ -601,8 +597,7 @@ void AudioInputDialog::updateEchoEnableState() {
 	}
 
 	if (qcbStereoInput->isChecked()) {
-		// Echo cancellation only works on mono input. Keep the user's stored choice
-		// intact, but make clear that it won't be in effect while transmitting in stereo.
+		// Echo cancellation only works on mono input; gray it out without forgetting the user's choice
 		qcbEcho->setEnabled(false);
 		qcbEcho->setToolTip(QObject::tr("Echo cancellation is not available when transmitting in stereo."));
 	}

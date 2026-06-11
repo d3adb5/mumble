@@ -864,6 +864,8 @@ bool JackAudioInput::process(const jack_nframes_t frames) {
 		return false;
 	}
 
+	// Ringbuffer will not exceed capacity, just drop the frames.
+	// Since the consumer drains it fully every time, this should never be a problem.
 	if (portR) {
 		// Interleave the two channels ([LRLR...]) before handing them to the ringbuffer
 		const auto left  = reinterpret_cast< const jack_default_audio_sample_t * >(portBuffer);
@@ -875,12 +877,8 @@ bool JackAudioInput::process(const jack_nframes_t frames) {
 			interleaveBuffer[2 * i + 1] = right[i];
 		}
 
-		// Ringbuffer will not exceed capacity, just drop the frames.
-		// Since the consumer drains it fully every time, this should never be a problem.
 		jas->ringbufferWrite(buffer, n * 2 * sizeof(jack_default_audio_sample_t), interleaveBuffer.data());
 	} else {
-		// Ringbuffer will not exceed capacity, just drop the frames.
-		// Since the consumer drains it fully every time, this should never be a problem.
 		jas->ringbufferWrite(buffer, frames * sizeof(jack_default_audio_sample_t), portBuffer);
 	}
 

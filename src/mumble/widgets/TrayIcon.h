@@ -41,16 +41,15 @@ private:
 	QAction *m_hideAction    = nullptr;
 	QTimer *m_highlightTimer = nullptr;
 #ifdef USE_DBUS
-	/// ID of the last notification posted via org.freedesktop.Notifications, so a
-	/// new notification replaces the previous one instead of stacking up.
+	/// ID of the last notification posted via org.freedesktop.Notifications, so that
+	/// a new notification replaces the previous one instead of stacking up
 	quint32 m_lastNotificationId = 0;
 #endif
 
 	void updateContextMenu();
 
-	/// Shows a pop-up notification for the given message. On systems exposing the
-	/// freedesktop.org notification service it is delivered through the user's
-	/// notification daemon; otherwise it falls back to the Qt tray icon balloon.
+	/// Shows a pop-up notification, preferring the freedesktop.org notification
+	/// service over the Qt tray icon balloon
 	void showNotification(const QString &title, const QString &body, QSystemTrayIcon::MessageIcon icon);
 
 private slots:

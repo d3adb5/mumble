@@ -201,11 +201,9 @@ void TrayIcon::on_tray_unhighlight() {
 
 void TrayIcon::showNotification(const QString &title, const QString &body, QSystemTrayIcon::MessageIcon icon) {
 #ifdef USE_DBUS
-	// Deliver the notification through the freedesktop.org notification service
-	// (commonly known as "libnotify") if one is running, so that it is rendered by
-	// the user's notification daemon. QSystemTrayIcon::showMessage() only does this
-	// when the tray icon itself is backed by the StatusNotifier D-Bus protocol; on
-	// legacy (XEmbed) trays it draws an internal balloon widget instead.
+	// Deliver the notification through the user's notification daemon if one is running.
+	// QSystemTrayIcon::showMessage() only does so for StatusNotifier-based tray icons;
+	// on legacy (XEmbed) trays it draws an internal balloon widget instead.
 	QString iconName;
 	switch (icon) {
 		case QSystemTrayIcon::Critical:

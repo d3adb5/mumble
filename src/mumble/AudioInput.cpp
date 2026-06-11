@@ -255,9 +255,7 @@ AudioInput::AudioInput()
 	opus_encoder_ctl(opusState, OPUS_SET_VBR(0)); // CBR
 
 #ifdef USE_RNNOISE
-	denoiseState = rnnoise_create(nullptr);
-	// When transmitting in stereo each channel is denoised separately, which
-	// requires a second state
+	denoiseState  = rnnoise_create(nullptr);
 	denoiseStateR = (m_transmitChannels > 1) ? rnnoise_create(nullptr) : nullptr;
 #endif
 
