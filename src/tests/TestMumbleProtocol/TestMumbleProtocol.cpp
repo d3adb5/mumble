@@ -280,7 +280,7 @@ private slots:
 #else
 			buffer.resize(msg.ByteSize());
 #endif
-			msg.SerializeWithCachedSizesToArray(buffer.data());
+			QVERIFY(msg.SerializeWithCachedSizesToArray(buffer.data()) != nullptr);
 
 			QCOMPARE(snippet.size(), buffer.size());
 			QVERIFY2(std::equal(snippet.begin(), snippet.end(), buffer.begin()), "Pre-encoded snippet is incorrect");
@@ -306,7 +306,7 @@ private slots:
 
 			QVERIFY2(!snippet.empty(), "Unable to find pre-encoded snippet for volume adjustment");
 
-			msg.ParseFromArray(snippet.data(), static_cast< int >(snippet.size()));
+			QVERIFY(msg.ParseFromArray(snippet.data(), static_cast< int >(snippet.size())));
 
 			// This will perform a fuzzy-compare
 			QCOMPARE(msg.volume_adjustment(), std::pow(2.0f, static_cast< float >(currentAdjustment) / 6.0f));

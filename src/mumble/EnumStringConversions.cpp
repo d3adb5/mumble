@@ -137,7 +137,8 @@
 
 #define OVERLAY_PRESETS_VALUES                                               \
 	PROCESS(OverlaySettings::OverlayPresets, AvatarAndName, "AvatarAndName") \
-	PROCESS(OverlaySettings::OverlayPresets, LargeSquareAvatar, "LargeSquareAvatar")
+	PROCESS(OverlaySettings::OverlayPresets, LargeSquareAvatar, "LargeSquareAvatar") \
+	PROCESS(OverlaySettings::OverlayPresets, SmallCircleAvatar, "SmallCircleAvatar")
 
 #define OVERLAY_SHOW_VALUES                                           \
 	PROCESS(OverlaySettings::OverlayShow, Talking, "Talking")         \
