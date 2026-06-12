@@ -4260,14 +4260,14 @@ void MainWindow::changeServerTexture() {
 	if (avatar.isNull())
 		return;
 
-	const QByteArray data = encodeAvatar(avatar, Global::get().uiImageLength);
-	if (data.isEmpty()) {
+	const QByteArray encoded = encodeAvatar(avatar, Global::get().uiImageLength);
+	if (encoded.isEmpty()) {
 		Global::get().l->log(Log::Warning,
 							 tr("Unable to make the avatar small enough for this server's image size limit."));
 		return;
 	}
 
-	Global::get().sh->setUserTexture(Global::get().uiSession, data);
+	Global::get().sh->setUserTexture(Global::get().uiSession, encoded);
 }
 
 void MainWindow::removeServerTexture() {
