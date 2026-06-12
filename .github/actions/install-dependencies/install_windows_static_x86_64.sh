@@ -34,7 +34,21 @@ mysqld --initialize-insecure --console
 
 powershell -Command "Start-Process mysqld"
 
-# Give the MySQL daemon some time to start up
-sleep 5
+# Give the MySQL daemon some time to start up: a fixed sleep is not enough, as
+# the daemon regularly takes longer than that to accept connections.
+ready=0
+for _ in {1..30}; do
+	if mysql --user=root -e "SELECT 1" &> /dev/null \
+		|| mysql --user=root --password="root" -e "SELECT 1" &> /dev/null; then
+		ready=1
+		break
+	fi
+	sleep 2
+done
+
+if [[ "$ready" -ne 1 ]]; then
+	echo "MySQL daemon did not accept connections in time" 1>&2
+	exit 1
+fi
 
 configure_database_tables "mysql"
