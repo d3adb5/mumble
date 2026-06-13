@@ -6,6 +6,7 @@
 #include "AudioInput.h"
 
 #include "API.h"
+#include "AudioInputAmplification.h"
 #include "AudioOutput.h"
 #include "MainWindow.h"
 #include "MumbleProtocol.h"
@@ -841,10 +842,9 @@ void AudioInput::resetAudioProcessor() {
 	m_preprocessor.setAGC(true);
 	m_preprocessor.setDereverb(true);
 
-	m_preprocessor.setAGCTarget(30000);
+	m_preprocessor.setAGCTarget(static_cast< std::int32_t >(Mumble::Amplification::AGC_TARGET));
 
-	const float v = 30000.0f / static_cast< float >(Global::get().s.iMinLoudness);
-	m_preprocessor.setAGCMaxGain(static_cast< std::int32_t >(floorf(20.0f * log10f(v))));
+	m_preprocessor.setAGCMaxGain(Mumble::Amplification::gainDbForLoudness(Global::get().s.iMinLoudness));
 	m_preprocessor.setAGCDecrement(-60);
 
 	if (noiseCancel == Settings::NoiseCancelSpeex) {
@@ -1067,10 +1067,7 @@ void AudioInput::encodeAudioFrame(AudioChunk chunk) {
 	short psMono[iFrameSize];
 	short *psAnalyze = psSource;
 	if (m_transmitChannels > 1) {
-		for (int i = 0; i < iFrameSize; ++i) {
-			psMono[i] = static_cast< short >(
-				(static_cast< int >(psSource[2 * i]) + static_cast< int >(psSource[2 * i + 1])) / 2);
-		}
+		Mumble::Amplification::downmixStereoToMono(psSource, psMono, static_cast< unsigned int >(iFrameSize));
 		psAnalyze = psMono;
 	}
 
