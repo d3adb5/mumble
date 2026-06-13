@@ -321,6 +321,9 @@ void AudioStats::on_Tick_timeout() {
 	FORMAT_TO_TXT("%06.2f dB", ai->dPeakSignal);
 	qlSignalLevel->setText(txt);
 
+	FORMAT_TO_TXT("%06.2f dB", ai->dPeakProcessed);
+	qlTargetLevel->setText(txt);
+
 	const AudioPreprocessor::psd_t ps    = ai->m_preprocessor.getPSD();
 	const AudioPreprocessor::psd_t noise = ai->m_preprocessor.getNoisePSD();
 

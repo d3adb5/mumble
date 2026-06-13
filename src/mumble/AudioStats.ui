@@ -82,6 +82,26 @@
           </property>
          </widget>
         </item>
+        <item row="3" column="0">
+         <widget class="QLabel" name="qliTargetLevel">
+          <property name="text">
+           <string>Targeted level</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="1">
+         <widget class="QLabel" name="qlTargetLevel">
+          <property name="toolTip">
+           <string>Level the amplified signal is transmitted at</string>
+          </property>
+          <property name="whatsThis">
+           <string>The level Mumble is transmitting at after amplification, i.e. the amplitude your base, adaptive and maximum amplification settings are targeting. Use it as a guide while tuning those settings: when you speak it should sit comfortably below 0 dB.</string>
+          </property>
+          <property name="text">
+           <string/>
+          </property>
+         </widget>
+        </item>
        </layout>
       </widget>
      </item>

@@ -7,6 +7,7 @@
 
 #include "Accessibility.h"
 #include "AudioInput.h"
+#include "AudioInputAmplification.h"
 #include "AudioOutput.h"
 #include "AudioOutputSample.h"
 #include "AudioOutputToken.h"
@@ -20,6 +21,28 @@
 
 const QString AudioOutputDialog::name = QLatin1String("AudioOutputWidget");
 const QString AudioInputDialog::name  = QLatin1String("AudioInputWidget");
+
+// Amplification sliders run from no amplification (loudness == AGC target) to
+// the loudest floor: the slider value is the AGC target minus the loudness.
+static constexpr int AMP_SLIDER_MAX = static_cast< int >(Mumble::Amplification::AGC_TARGET) - 500;
+
+static int ampSliderFromLoudness(int loudness) {
+	return qBound(0, static_cast< int >(Mumble::Amplification::AGC_TARGET) - loudness, AMP_SLIDER_MAX);
+}
+
+static int loudnessFromAmpSlider(int value) {
+	return static_cast< int >(Mumble::Amplification::AGC_TARGET) - value;
+}
+
+// Update an amplification slider's value label (and accessibility text) with the
+// resulting amplification factor, e.g. "2.50".
+static void updateAmpLabel(QLabel *label, SemanticSlider *slider, int value) {
+	const float factor =
+		Mumble::Amplification::AGC_TARGET / static_cast< float >(loudnessFromAmpSlider(value));
+	const QString text = QString::fromLatin1("%1").arg(factor, 0, 'f', 2);
+	label->setText(text);
+	Mumble::Accessibility::setSliderSemanticValue(slider, text);
+}
 
 
 static ConfigWidget *AudioInputDialogNew(Settings &st) {
@@ -192,7 +215,18 @@ void AudioInputDialog::load(const Settings &r) {
 			break;
 	}
 
-	loadSlider(qsAmp, 20000 - r.iMinLoudness);
+	// Three coupled amplification sliders (base <= adaptive <= maximum). Reset
+	// the ranges, then load loudest-first so each slider's bounds settle
+	// consistently as the values come in.
+	const int adaptiveLoudness = Mumble::Amplification::resolveAdaptiveLoudness(r.iAdaptiveLoudness, r.iMinLoudness);
+	qsAmpBase->setRange(0, AMP_SLIDER_MAX);
+	qsAmpAdaptive->setRange(0, AMP_SLIDER_MAX);
+	qsAmpMax->setRange(0, AMP_SLIDER_MAX);
+	loadSlider(qsAmpMax, ampSliderFromLoudness(r.iMinLoudness));
+	loadSlider(qsAmpAdaptive, ampSliderFromLoudness(adaptiveLoudness));
+	loadSlider(qsAmpBase, ampSliderFromLoudness(r.iBaseLoudness));
+	loadCheckBox(qcbAdaptiveRNNoise, r.bAdaptiveAmpRNNoise);
+	loadCheckBox(qcbAmpPeak, r.bAmplificationTargetsPeak);
 
 	// Idle auto actions
 	qsbIdle->setValue(static_cast< int >(r.iIdleTime) / 60);
@@ -244,7 +278,11 @@ void AudioInputDialog::save() const {
 		s.noiseCancelMode = Settings::NoiseCancelSpeex;
 	}
 
-	s.iMinLoudness     = 18000 - qsAmp->value() + 2000;
+	s.iMinLoudness              = loudnessFromAmpSlider(qsAmpMax->value());
+	s.iAdaptiveLoudness         = loudnessFromAmpSlider(qsAmpAdaptive->value());
+	s.iBaseLoudness             = loudnessFromAmpSlider(qsAmpBase->value());
+	s.bAdaptiveAmpRNNoise       = qcbAdaptiveRNNoise->isChecked();
+	s.bAmplificationTargetsPeak = qcbAmpPeak->isChecked();
 	s.iVoiceHold       = qsTransmitHold->value();
 	s.fVADmin          = static_cast< float >(qsTransmitMin->value()) / 32767.0f;
 	s.fVADmax          = static_cast< float >(qsTransmitMax->value()) / 32767.0f;
@@ -341,12 +379,23 @@ void AudioInputDialog::on_qsSpeexNoiseSupStrength_valueChanged(int v) {
 	qlSpeexNoiseSupStrength->setPalette(pal);
 }
 
-void AudioInputDialog::on_qsAmp_valueChanged(int v) {
-	v       = 18000 - v + 2000;
-	float d = 20000.0f / static_cast< float >(v);
-	qlAmp->setText(QString::fromLatin1("%1").arg(d, 0, 'f', 2));
+void AudioInputDialog::on_qsAmpBase_valueChanged(int v) {
+	// The base level can never exceed the adaptive level.
+	qsAmpAdaptive->setMinimum(v);
+	updateAmpLabel(qlAmpBase, qsAmpBase, v);
+}
 
-	Mumble::Accessibility::setSliderSemanticValue(qsAmp, QString("%1").arg(d, 0, 'f', 2));
+void AudioInputDialog::on_qsAmpAdaptive_valueChanged(int v) {
+	// The adaptive level always stays between the base and maximum levels.
+	qsAmpBase->setMaximum(v);
+	qsAmpMax->setMinimum(v);
+	updateAmpLabel(qlAmpAdaptive, qsAmpAdaptive, v);
+}
+
+void AudioInputDialog::on_qsAmpMax_valueChanged(int v) {
+	// The maximum level can never drop below the adaptive level.
+	qsAmpAdaptive->setMaximum(v);
+	updateAmpLabel(qlAmpMax, qsAmpMax, v);
 }
 
 void AudioInputDialog::on_qsTransmitMin_valueChanged() {

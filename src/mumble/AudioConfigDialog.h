@@ -56,7 +56,9 @@ public slots:
 	void on_qsTransmitHold_valueChanged(int v);
 	void on_qsFrames_valueChanged(int v);
 	void on_qsQuality_valueChanged(int v);
-	void on_qsAmp_valueChanged(int v);
+	void on_qsAmpBase_valueChanged(int v);
+	void on_qsAmpAdaptive_valueChanged(int v);
+	void on_qsAmpMax_valueChanged(int v);
 	void on_qsDoublePush_valueChanged(int v);
 	void on_qsPTTHold_valueChanged(int v);
 	void on_qsTransmitMin_valueChanged();
