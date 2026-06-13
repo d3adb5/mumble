@@ -66,8 +66,7 @@ public slots:
 	void on_qcbSystem_currentIndexChanged(int);
 	void on_Tick_timeout();
 	void on_qcbIdleAction_currentIndexChanged(int v);
-	void on_qrbNoiseSupSpeex_toggled(bool checked);
-	void on_qrbNoiseSupBoth_toggled(bool checked);
+	void on_qcbNoiseSup_currentIndexChanged(int index);
 };
 
 class AudioOutputDialog : public ConfigWidget, public Ui::AudioOutput {
