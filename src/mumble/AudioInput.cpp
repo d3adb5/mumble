@@ -42,6 +42,11 @@ static short clampFloatSample(float v) {
 }
 #endif
 
+/// Per-frame step (frames are 10 ms) by which the smoothed amplification speech
+/// state eases towards 0 (noise) or 1 (speech). 0.03 spans the full noise<->
+/// speech transition in roughly a third of a second.
+static constexpr float AMP_SPEECHINESS_STEP = 0.03f;
+
 void Resynchronizer::addMic(short *mic) {
 	bool drop = false;
 	{
@@ -292,11 +297,12 @@ AudioInput::AudioInput()
 	dPeakSignal = dPeakSpeaker = dPeakMic = dPeakCleanMic = dPeakProcessed = 0.0;
 
 	fAmplificationFactor = 1.0f;
-	fAmpSpeechiness      = 1.0f;
 
-	// Start at full speechiness so the first frames may use the maximum gain.
-	m_lastSpeechiness = 1.0f;
-	m_rnnVAD          = 0.0f;
+	// Start as speech so the first frames may use the maximum gain; the smoothed
+	// state then eases down if the input turns out to be noise.
+	m_ampSpeech     = true;
+	fAmpSpeechiness = 1.0f;
+	m_rnnVAD        = 0.0f;
 
 	if (Global::get().uiSession) {
 		setMaxBandwidth(Global::get().iMaxBandwidth);
@@ -1081,21 +1087,19 @@ void AudioInput::encodeAudioFrame(AudioChunk chunk) {
 		psAnalyze = psMono;
 	}
 
-	// Set this frame's gain ceiling before the AGC runs. While the input is
-	// noise the gain is capped at the adaptive level, while it is speech it may
-	// reach the maximum; in between the two are interpolated by the speech
-	// probability. The current frame's probability is only known after the
-	// preprocessor has run, so the previous frame's is used. With the default
-	// settings the adaptive level follows the maximum and the ceiling is simply
-	// the maximum, matching Mumble's historic behavior.
-	{
-		const int maxGainDb        = Mumble::Amplification::gainDbForLoudness(Global::get().s.iMinLoudness);
-		const int adaptiveLoudness = Mumble::Amplification::resolveAdaptiveLoudness(Global::get().s.iAdaptiveLoudness,
-																					 Global::get().s.iMinLoudness);
-		const int adaptiveGainDb   = Mumble::Amplification::gainDbForLoudness(adaptiveLoudness);
-		m_preprocessor.setAGCMaxGain(static_cast< std::int32_t >(Mumble::Amplification::gainCeilingDb(
-			static_cast< float >(adaptiveGainDb), static_cast< float >(maxGainDb), m_lastSpeechiness)));
-	}
+	// Amplification levels in fractional dB, and this frame's ceiling interpolated
+	// between the adaptive (noise) and maximum (speech) levels by the smoothed
+	// speech state. The ceiling has to be set before the AGC runs, so it uses the
+	// previous frame's smoothing. Speex's max gain is integer, so round the
+	// ceiling up here and enforce the exact (fractional) value after the run. With
+	// the default settings the adaptive level follows the maximum, so the ceiling
+	// is simply the maximum, matching Mumble's historic behavior.
+	const float maxDb = Mumble::Amplification::gainDbForLoudnessF(Global::get().s.iMinLoudness);
+	const int adaptiveLoudness =
+		Mumble::Amplification::resolveAdaptiveLoudness(Global::get().s.iAdaptiveLoudness, Global::get().s.iMinLoudness);
+	const float adaptiveDb = Mumble::Amplification::gainDbForLoudnessF(adaptiveLoudness);
+	const float ceilingDb  = Mumble::Amplification::gainCeilingDb(adaptiveDb, maxDb, fAmpSpeechiness);
+	m_preprocessor.setAGCMaxGain(static_cast< std::int32_t >(std::ceil(ceilingDb)));
 
 	m_preprocessor.run(*psAnalyze);
 
@@ -1105,14 +1109,15 @@ void AudioInput::encodeAudioFrame(AudioChunk chunk) {
 	float micLevel = sqrtf(sum / static_cast< float >(iFrameSize));
 	dPeakSignal    = qMax(20.0f * log10f(micLevel / 32768.0f), -96.0f);
 
-	// Amplify the transmitted signal. The AGC only gained the mono analysis
-	// copy, so in stereo both channels still need the gain; in mono that copy is
-	// the transmitted signal and was already gained in place, so only the base
-	// floor's surplus (if any) is added. The same factor is applied to every
-	// channel to keep the stereo image balanced. See AudioInputAmplification.h.
-	const int baseGainDb    = Mumble::Amplification::gainDbForLoudness(Global::get().s.iBaseLoudness);
+	// Amplify the transmitted signal. The AGC only gained the mono analysis copy,
+	// so in stereo both channels still need the gain; in mono that copy is the
+	// transmitted signal and was already gained (up to the rounded-up ceiling) in
+	// place, so only the difference to the precise effective gain is applied (it
+	// may trim the gain back down to the exact fractional ceiling). The same
+	// factor is used for every channel to keep the stereo image balanced.
+	const float baseDb      = Mumble::Amplification::gainDbForLoudnessF(Global::get().s.iBaseLoudness);
 	const float agcGainDb   = static_cast< float >(m_preprocessor.getAGCGain());
-	const float effectiveDb = Mumble::Amplification::effectiveGainDb(agcGainDb, static_cast< float >(baseGainDb));
+	const float effectiveDb = Mumble::Amplification::effectiveGainDb(agcGainDb, baseDb, ceilingDb);
 	const float applyDb     = (m_transmitChannels > 1) ? effectiveDb : (effectiveDb - agcGainDb);
 	Mumble::Amplification::applyGain(psSource, frameSamples, Mumble::Amplification::dbToLinear(applyDb));
 
@@ -1145,17 +1150,22 @@ void AudioInput::encodeAudioFrame(AudioChunk chunk) {
 
 	fSpeechProb = static_cast< float >(m_preprocessor.getSpeechProb()) / 100.0f;
 
-	// Remember how speech-like this frame was, to set the next frame's adaptive
-	// amplification ceiling. RNNoise's estimate is preferred when configured and
-	// available, otherwise Speex's speech probability is used.
-	m_lastSpeechiness = fSpeechProb;
+	// Classify this frame as speech or noise for the adaptive amplification,
+	// reusing the voice-activity SNR thresholds with hysteresis (RNNoise's
+	// estimate is used instead when configured and active). Then ease the smoothed
+	// speech state towards the result so the next frame's ceiling moves gradually
+	// between the adaptive and maximum levels rather than jumping.
+	float ampLevel = fSpeechProb;
 #ifdef USE_RNNOISE
 	if (Global::get().s.bAdaptiveAmpRNNoise
 		&& (noiseCancel == Settings::NoiseCancelRNN || noiseCancel == Settings::NoiseCancelBoth)) {
-		m_lastSpeechiness = m_rnnVAD;
+		ampLevel = m_rnnVAD;
 	}
 #endif
-	fAmpSpeechiness = m_lastSpeechiness;
+	m_ampSpeech = Mumble::Amplification::classifySpeech(ampLevel, Global::get().s.fVADmin, Global::get().s.fVADmax,
+														m_ampSpeech);
+	fAmpSpeechiness =
+		Mumble::Amplification::approach(fAmpSpeechiness, m_ampSpeech ? 1.0f : 0.0f, AMP_SPEECHINESS_STEP);
 
 	// clean microphone level: peak of filtered signal attenuated by AGC gain
 	dPeakCleanMic = qMax(dPeakSignal - static_cast< float >(gainValue), -96.0f);

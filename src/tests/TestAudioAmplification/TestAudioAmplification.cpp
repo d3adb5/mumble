@@ -21,10 +21,13 @@ private slots:
 	void gainForLoudness_data();
 	void gainForLoudness();
 	void gainForLoudness_monotonic();
+	void gainForLoudnessPrecise();
 	void linearFromDb();
 	void adaptiveSentinel();
 	void ceilingInterpolation();
-	void baseFloor();
+	void baseFloorAndCeiling();
+	void speechClassification();
+	void rampApproach();
 	void gainScalesAndClamps();
 	void gainKeepsStereoBalance();
 	void peakLimiter();
@@ -87,15 +90,46 @@ void TestAudioAmplification::ceilingInterpolation() {
 	QCOMPARE(gainCeilingDb(10.0f, 30.0f, 5.0f), 30.0f);
 }
 
-void TestAudioAmplification::baseFloor() {
+void TestAudioAmplification::baseFloorAndCeiling() {
+	// base floor 10, ceiling 30.
 	// The base floor lifts quiet input up to itself...
-	QCOMPARE(effectiveGainDb(3.0f, 10.0f), 10.0f);
-	// ...but leaves a louder AGC gain untouched.
-	QCOMPARE(effectiveGainDb(20.0f, 10.0f), 20.0f);
-	// A zero base is a no-op.
-	QCOMPARE(effectiveGainDb(5.0f, 0.0f), 5.0f);
+	QCOMPARE(effectiveGainDb(3.0f, 10.0f, 30.0f), 10.0f);
+	// ...but leaves a louder AGC gain untouched (still under the ceiling).
+	QCOMPARE(effectiveGainDb(20.0f, 10.0f, 30.0f), 20.0f);
+	// The ceiling caps the gain precisely, even at a fractional value.
+	QCOMPARE(effectiveGainDb(40.0f, 10.0f, 25.5f), 25.5f);
+	// A zero base is a no-op for a positive AGC gain.
+	QCOMPARE(effectiveGainDb(5.0f, 0.0f, 30.0f), 5.0f);
 	// The base floor must not fight an attenuation of an already-loud signal.
-	QCOMPARE(effectiveGainDb(-4.0f, 6.0f), -4.0f);
+	QCOMPARE(effectiveGainDb(-4.0f, 6.0f, 30.0f), -4.0f);
+}
+
+void TestAudioAmplification::gainForLoudnessPrecise() {
+	// The precise variant does not round, so the configured factor is hit
+	// exactly: a 1.9x adaptive level is 20*log10(1.9) dB, not its floored value.
+	const float loudness = Mumble::Amplification::AGC_TARGET / 1.9f;
+	const float expected = 20.0f * std::log10(1.9f);
+	QVERIFY(std::abs(gainDbForLoudnessF(static_cast< int >(loudness + 0.5f)) - expected) < 0.01f);
+	// At the target there is no gain.
+	QCOMPARE(gainDbForLoudnessF(static_cast< int >(Mumble::Amplification::AGC_TARGET)), 0.0f);
+}
+
+void TestAudioAmplification::speechClassification() {
+	// Hysteresis between the lower and upper thresholds: speech latches on above
+	// the upper threshold and off at or below the lower one, holding in between.
+	QCOMPARE(classifySpeech(0.99f, 0.8f, 0.98f, false), true);  // rose above upper
+	QCOMPARE(classifySpeech(0.90f, 0.8f, 0.98f, true), true);   // between, was speech
+	QCOMPARE(classifySpeech(0.90f, 0.8f, 0.98f, false), false); // between, was noise
+	QCOMPARE(classifySpeech(0.80f, 0.8f, 0.98f, true), false);  // dropped to lower
+	QCOMPARE(classifySpeech(0.50f, 0.8f, 0.98f, true), false);  // well below lower
+}
+
+void TestAudioAmplification::rampApproach() {
+	// Moves towards the target by at most the step, never overshooting.
+	QCOMPARE(approach(0.0f, 1.0f, 0.03f), 0.03f);
+	QCOMPARE(approach(1.0f, 0.0f, 0.03f), 0.97f);
+	QVERIFY(qFuzzyCompare(approach(0.99f, 1.0f, 0.03f), 1.0f)); // clamped, no overshoot
+	QCOMPARE(approach(0.5f, 0.5f, 0.03f), 0.5f);                // already there
 }
 
 void TestAudioAmplification::gainScalesAndClamps() {

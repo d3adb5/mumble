@@ -276,10 +276,10 @@ protected:
 	volatile bool bPreviousVoice;
 	volatile bool previousPTT;
 
-	/// Speech probability ([0, 1]) of the previous frame. The adaptive
-	/// amplification ceiling for a frame has to be set before the preprocessor
-	/// runs, so it is based on the previous frame's classification.
-	float m_lastSpeechiness;
+	/// Whether the input is currently classified as speech, with hysteresis on
+	/// the voice-activity SNR thresholds. Selects which amplification ceiling the
+	/// smoothed state (fAmpSpeechiness) eases towards.
+	bool m_ampSpeech;
 	/// RNNoise voice activity estimate ([0, 1]) of the last processed frame.
 	/// Only meaningful while RNNoise is the active noise canceller.
 	float m_rnnVAD;

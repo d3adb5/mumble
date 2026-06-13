@@ -30,6 +30,14 @@ namespace Amplification {
 		return static_cast< int >(std::floor(20.0f * std::log10(AGC_TARGET / static_cast< float >(loudness))));
 	}
 
+	/// Like gainDbForLoudness but without the rounding, for precise gain math.
+	/// The rounded variant is what Speex's integer max-gain expects; this one is
+	/// used to enforce the configured levels exactly.
+	inline float gainDbForLoudnessF(int loudness) {
+		loudness = std::clamp(loudness, 1, static_cast< int >(AGC_TARGET));
+		return 20.0f * std::log10(AGC_TARGET / static_cast< float >(loudness));
+	}
+
 	/// Linear factor for a gain given in dB.
 	inline float dbToLinear(float db) { return std::pow(10.0f, db / 20.0f); }
 
@@ -48,12 +56,41 @@ namespace Amplification {
 		return adaptiveDb + (maxDb - adaptiveDb) * speechiness;
 	}
 
-	/// Effective gain (dB) to apply given what the AGC computed (\p agcGainDb)
-	/// and the base floor (\p baseDb). The base floor only ever raises the
+	/// Effective gain (dB) to apply: what the AGC computed (\p agcGainDb), raised
+	/// to at least the base floor (\p baseDb) and capped at the ceiling
+	/// (\p ceilingDb). Because the ceiling is enforced here as a precise
+	/// (fractional) value, the configured levels are hit exactly even though the
+	/// AGC's own max gain is integer. The base floor only ever raises the
 	/// amplification of quiet input; it never undoes an attenuation the AGC
 	/// applies to keep an already-loud signal from clipping.
-	inline float effectiveGainDb(float agcGainDb, float baseDb) {
-		return agcGainDb < 0.0f ? agcGainDb : std::max(agcGainDb, baseDb);
+	inline float effectiveGainDb(float agcGainDb, float baseDb, float ceilingDb) {
+		if (agcGainDb < 0.0f) {
+			return agcGainDb;
+		}
+		return std::min(std::max(agcGainDb, baseDb), ceilingDb);
+	}
+
+	/// Speech/noise classification with hysteresis, mirroring Mumble's SNR voice
+	/// activity detection: it becomes speech once \p level rises above
+	/// \p maxThreshold and noise once it falls to or below \p minThreshold,
+	/// holding the previous state in between. The adaptive amplification reacts
+	/// to the same thresholds as voice activity, so "noise" means exactly what it
+	/// means for transmission.
+	inline bool classifySpeech(float level, float minThreshold, float maxThreshold, bool wasSpeech) {
+		if (level > maxThreshold) {
+			return true;
+		}
+		if (level <= minThreshold) {
+			return false;
+		}
+		return wasSpeech;
+	}
+
+	/// Move \p current toward \p target by at most \p step. Used to ease the
+	/// amplification ceiling between the noise and speech levels so it never
+	/// jumps abruptly.
+	inline float approach(float current, float target, float step) {
+		return current + std::clamp(target - current, -step, step);
 	}
 
 	/// Multiply \p count interleaved samples in place by \p factor, clamping to
