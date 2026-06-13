@@ -291,6 +291,9 @@ AudioInput::AudioInput()
 	iBitrate    = 0;
 	dPeakSignal = dPeakSpeaker = dPeakMic = dPeakCleanMic = dPeakProcessed = 0.0;
 
+	fAmplificationFactor = 1.0f;
+	fAmpSpeechiness      = 1.0f;
+
 	// Start at full speechiness so the first frames may use the maximum gain.
 	m_lastSpeechiness = 1.0f;
 	m_rnnVAD          = 0.0f;
@@ -1113,6 +1116,9 @@ void AudioInput::encodeAudioFrame(AudioChunk chunk) {
 	const float applyDb     = (m_transmitChannels > 1) ? effectiveDb : (effectiveDb - agcGainDb);
 	Mumble::Amplification::applyGain(psSource, frameSamples, Mumble::Amplification::dbToLinear(applyDb));
 
+	// Expose the applied amplification (linear factor) for the settings preview.
+	fAmplificationFactor = Mumble::Amplification::dbToLinear(effectiveDb);
+
 	if (Global::get().s.bAmplificationTargetsPeak) {
 		// Pull amplified peaks back below the target so that they do not clip.
 		Mumble::Amplification::applyGain(
@@ -1149,6 +1155,7 @@ void AudioInput::encodeAudioFrame(AudioChunk chunk) {
 		m_lastSpeechiness = m_rnnVAD;
 	}
 #endif
+	fAmpSpeechiness = m_lastSpeechiness;
 
 	// clean microphone level: peak of filtered signal attenuated by AGC gain
 	dPeakCleanMic = qMax(dPeakSignal - static_cast< float >(gainValue), -96.0f);

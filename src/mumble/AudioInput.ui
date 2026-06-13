@@ -664,159 +664,76 @@
      </property>
      <layout class="QGridLayout">
       <item row="0" column="0">
-       <widget class="QLabel" name="qliAmpBase">
+       <widget class="QLabel" name="qliAmp">
         <property name="text">
-         <string>Base Amplification</string>
+         <string>Amplification</string>
         </property>
         <property name="buddy">
-         <cstring>qsAmpBase</cstring>
+         <cstring>qsAmp</cstring>
         </property>
        </widget>
       </item>
-      <item row="0" column="1">
-       <widget class="SemanticSlider" name="qsAmpBase">
+      <item row="0" column="1" colspan="2">
+       <widget class="MultiSlider" name="qsAmp" native="true">
         <property name="toolTip">
-         <string>Amplification the input always gets, even while it is silent</string>
+         <string>Base, adaptive (silence-aware) and maximum input amplification</string>
         </property>
         <property name="whatsThis">
-         <string>&lt;b&gt;Base amplification of input.&lt;/b&gt;&lt;br /&gt;The input is always amplified by at least this much. Leave it at 1.0 (the leftmost position) for no guaranteed amplification.&lt;br /&gt;The base level can never exceed the adaptive or maximum levels.</string>
+         <string>&lt;b&gt;Input amplification.&lt;/b&gt;&lt;br /&gt;Three handles on one bar, always ordered &lt;i&gt;Base&lt;/i&gt; &amp;le; &lt;i&gt;Adaptive&lt;/i&gt; &amp;le; &lt;i&gt;Max&lt;/i&gt;:&lt;br /&gt;&amp;bull; &lt;b&gt;Base&lt;/b&gt;: the input is always amplified by at least this much (leftmost = 1.0, no guaranteed amplification).&lt;br /&gt;&amp;bull; &lt;b&gt;Adaptive&lt;/b&gt;: the most the input is amplified while it is classified as background noise, so noise is not boosted as hard as speech. Set it equal to Max to disable the silence-aware cap.&lt;br /&gt;&amp;bull; &lt;b&gt;Max&lt;/b&gt;: the most your speech is amplified.&lt;br /&gt;The handles cannot cross, so the ordering is always preserved.</string>
         </property>
         <property name="accessibleName">
-         <string>Base amplification</string>
+         <string>Input amplification</string>
         </property>
         <property name="accessibleDescription">
-         <string>The input is always amplified by at least this much</string>
-        </property>
-        <property name="maximum">
-         <number>29500</number>
-        </property>
-        <property name="singleStep">
-         <number>500</number>
-        </property>
-        <property name="pageStep">
-         <number>2000</number>
-        </property>
-        <property name="orientation">
-         <enum>Qt::Horizontal</enum>
-        </property>
-       </widget>
-      </item>
-      <item row="0" column="2">
-       <widget class="QLabel" name="qlAmpBase">
-        <property name="minimumSize">
-         <size>
-          <width>30</width>
-          <height>0</height>
-         </size>
-        </property>
-        <property name="text">
-         <string/>
+         <string>Base, adaptive and maximum amplification levels</string>
         </property>
        </widget>
       </item>
       <item row="1" column="0">
-       <widget class="QLabel" name="qliAmpAdaptive">
+       <widget class="QLabel" name="qliAmpLive">
         <property name="text">
-         <string>Adaptive Amplification</string>
-        </property>
-        <property name="buddy">
-         <cstring>qsAmpAdaptive</cstring>
+         <string>Currently</string>
         </property>
        </widget>
       </item>
-      <item row="1" column="1">
-       <widget class="SemanticSlider" name="qsAmpAdaptive">
-        <property name="toolTip">
-         <string>Maximum amplification while the input is classified as noise</string>
-        </property>
-        <property name="whatsThis">
-         <string>&lt;b&gt;Adaptive (silence-aware) amplification of input.&lt;/b&gt;&lt;br /&gt;While the input is classified as background noise rather than speech, it is amplified by at most this much, so that noise is not boosted as hard as your voice.&lt;br /&gt;Set it equal to the maximum to disable the silence-aware cap. The adaptive level always stays between the base and maximum levels.</string>
-        </property>
-        <property name="accessibleName">
-         <string>Adaptive amplification</string>
-        </property>
-        <property name="accessibleDescription">
-         <string>Noise is amplified by at most this amount</string>
-        </property>
-        <property name="maximum">
-         <number>29500</number>
-        </property>
-        <property name="singleStep">
-         <number>500</number>
-        </property>
-        <property name="pageStep">
-         <number>2000</number>
-        </property>
-        <property name="orientation">
-         <enum>Qt::Horizontal</enum>
-        </property>
-       </widget>
+      <item row="1" column="1" colspan="2">
+       <layout class="QHBoxLayout" name="qhblAmpLive">
+        <item>
+         <widget class="QLabel" name="qlAmpCurrent">
+          <property name="toolTip">
+           <string>Amplification being applied to your input right now</string>
+          </property>
+          <property name="text">
+           <string/>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="qlAmpDetect">
+          <property name="toolTip">
+           <string>Whether the input is currently detected as speech or noise. While it is noise, amplification is capped at the adaptive level.</string>
+          </property>
+          <property name="text">
+           <string/>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="qhsAmpLive">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
       </item>
-      <item row="1" column="2">
-       <widget class="QLabel" name="qlAmpAdaptive">
-        <property name="minimumSize">
-         <size>
-          <width>30</width>
-          <height>0</height>
-         </size>
-        </property>
-        <property name="text">
-         <string/>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="0">
-       <widget class="QLabel" name="qliAmpMax">
-        <property name="text">
-         <string>Max. Amplification</string>
-        </property>
-        <property name="buddy">
-         <cstring>qsAmpMax</cstring>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="1">
-       <widget class="SemanticSlider" name="qsAmpMax">
-        <property name="toolTip">
-         <string>Maximum amplification of input sound</string>
-        </property>
-        <property name="whatsThis">
-         <string>&lt;b&gt;Maximum amplification of input.&lt;/b&gt;&lt;br /&gt;Mumble normalizes the input volume before compressing, and this sets how much it's allowed to amplify speech.&lt;br /&gt;The actual level is continually updated based on your current speech pattern, but it will never go above the level specified here.&lt;br /&gt;If the &lt;i&gt;Microphone loudness&lt;/i&gt; level of the audio statistics hover around 100%, you probably want to set this to 2.0 or so, but if, like most people, you are unable to reach 100%, set this to something much higher.&lt;br /&gt;Ideally, set it so &lt;i&gt;Microphone Loudness * Amplification Factor &gt;= 100&lt;/i&gt;, even when you're speaking really soft.&lt;br /&gt;&lt;br /&gt;Note that there is no harm in setting this to maximum, but Mumble will start picking up other conversations if you leave it to auto-tune to that level.</string>
-        </property>
-        <property name="accessibleName">
-         <string>Maximum amplification</string>
-        </property>
-        <property name="accessibleDescription">
-         <string>Speech is dynamically amplified by at most this amount</string>
-        </property>
-        <property name="maximum">
-         <number>29500</number>
-        </property>
-        <property name="singleStep">
-         <number>500</number>
-        </property>
-        <property name="pageStep">
-         <number>2000</number>
-        </property>
-        <property name="orientation">
-         <enum>Qt::Horizontal</enum>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="2">
-       <widget class="QLabel" name="qlAmpMax">
-        <property name="minimumSize">
-         <size>
-          <width>30</width>
-          <height>0</height>
-         </size>
-        </property>
-        <property name="text">
-         <string/>
-        </property>
-       </widget>
-      </item>
-      <item row="3" column="0" colspan="3">
+      <item row="2" column="0" colspan="3">
        <layout class="QHBoxLayout" name="qhblAmpOptions">
         <item>
          <widget class="QCheckBox" name="qcbAdaptiveRNNoise">
@@ -846,7 +763,7 @@
         </item>
        </layout>
       </item>
-      <item row="4" column="0">
+      <item row="3" column="0">
        <widget class="QLabel" name="qliEcho">
         <property name="toolTip">
          <string/>
@@ -859,7 +776,7 @@
         </property>
        </widget>
       </item>
-      <item row="5" column="0" colspan="3">
+      <item row="4" column="0" colspan="3">
        <widget class="QGroupBox" name="groupBox">
         <property name="accessibleName">
          <string>Noise suppression</string>
@@ -982,7 +899,7 @@
         </layout>
        </widget>
       </item>
-      <item row="4" column="1" colspan="2">
+      <item row="3" column="1" colspan="2">
        <widget class="MUComboBox" name="qcbEcho">
         <property name="toolTip">
          <string/>
@@ -1312,6 +1229,12 @@
    <extends>QSlider</extends>
    <header>widgets/SemanticSlider.h</header>
   </customwidget>
+  <customwidget>
+   <class>MultiSlider</class>
+   <extends>QWidget</extends>
+   <header>widgets/MultiSlider.h</header>
+   <container>0</container>
+  </customwidget>
  </customwidgets>
  <tabstops>
   <tabstop>qcbSystem</tabstop>
@@ -1330,9 +1253,7 @@
   <tabstop>qsFrames</tabstop>
   <tabstop>qcbAllowLowDelay</tabstop>
   <tabstop>qcbStereoInput</tabstop>
-  <tabstop>qsAmpBase</tabstop>
-  <tabstop>qsAmpAdaptive</tabstop>
-  <tabstop>qsAmpMax</tabstop>
+  <tabstop>qsAmp</tabstop>
   <tabstop>qcbAdaptiveRNNoise</tabstop>
   <tabstop>qcbAmpPeak</tabstop>
   <tabstop>qcbEcho</tabstop>

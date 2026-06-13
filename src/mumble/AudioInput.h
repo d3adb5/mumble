@@ -326,6 +326,11 @@ public:
 	/// Level (dBFS) of the transmitted signal after amplification, i.e. the
 	/// amplitude Mumble is currently targeting. Drives the amplification preview.
 	float dPeakProcessed;
+	/// Amplification factor currently applied to the input (linear, 1.0 = none).
+	float fAmplificationFactor;
+	/// Speechiness ([0, 1]) driving the adaptive amplification ceiling. Low means
+	/// the input is noise (gain capped at the adaptive level), high means speech.
+	float fAmpSpeechiness;
 	float fSpeechProb;
 
 	static int getNetworkBandwidth(int bitrate, int frames);

@@ -15,6 +15,7 @@
 #include "Utils.h"
 #include "Global.h"
 
+#include <QColor>
 #include <QSignalBlocker>
 
 #include <cstdint>
@@ -22,8 +23,8 @@
 const QString AudioOutputDialog::name = QLatin1String("AudioOutputWidget");
 const QString AudioInputDialog::name  = QLatin1String("AudioInputWidget");
 
-// Amplification sliders run from no amplification (loudness == AGC target) to
-// the loudest floor: the slider value is the AGC target minus the loudness.
+// The amplification slider runs from no amplification (loudness == AGC target)
+// to the loudest floor: the slider value is the AGC target minus the loudness.
 static constexpr int AMP_SLIDER_MAX = static_cast< int >(Mumble::Amplification::AGC_TARGET) - 500;
 
 static int ampSliderFromLoudness(int loudness) {
@@ -34,14 +35,29 @@ static int loudnessFromAmpSlider(int value) {
 	return static_cast< int >(Mumble::Amplification::AGC_TARGET) - value;
 }
 
-// Update an amplification slider's value label (and accessibility text) with the
-// resulting amplification factor, e.g. "2.50".
-static void updateAmpLabel(QLabel *label, SemanticSlider *slider, int value) {
-	const float factor =
-		Mumble::Amplification::AGC_TARGET / static_cast< float >(loudnessFromAmpSlider(value));
-	const QString text = QString::fromLatin1("%1").arg(factor, 0, 'f', 2);
-	label->setText(text);
-	Mumble::Accessibility::setSliderSemanticValue(slider, text);
+// Amplification factor (linear gain) for a slider value, e.g. 2.50.
+static float ampFactorFromSlider(int value) {
+	return Mumble::Amplification::AGC_TARGET / static_cast< float >(loudnessFromAmpSlider(value));
+}
+
+// Slider value matching a given linear gain factor, for the live indicator.
+static int ampSliderFromFactor(float factor) {
+	factor = qMax(factor, 1.0f);
+	return qBound(0, static_cast< int >(Mumble::Amplification::AGC_TARGET * (1.0f - 1.0f / factor) + 0.5f),
+				  AMP_SLIDER_MAX);
+}
+
+// The multiplication sign used to present amplification factors, e.g. "2.50x".
+static const QChar AMP_TIMES = QChar(static_cast< char16_t >(0x00D7));
+
+// Formats a linear amplification factor, e.g. "2.50x".
+static QString ampFactorText(float factor) {
+	return QString::number(static_cast< double >(factor), 'f', 2) + AMP_TIMES;
+}
+
+// Formats a slider value as its amplification factor.
+static QString ampFactorTextFromSlider(int value) {
+	return ampFactorText(ampFactorFromSlider(value));
 }
 
 
@@ -91,6 +107,12 @@ AudioInputDialog::AudioInputDialog(Settings &st) : ConfigWidget(st) {
 	abSpeech->qcBelow  = Qt::red;
 	abSpeech->qcInside = Qt::yellow;
 	abSpeech->qcAbove  = Qt::green;
+
+	// One bar, three handles for the base, adaptive and maximum amplification.
+	qsAmp->setRange(0, AMP_SLIDER_MAX);
+	qsAmp->setSingleStep(500);
+	qsAmp->setCaptions({ tr("Base"), tr("Adaptive"), tr("Max") });
+	qsAmp->setValueFormatter(ampFactorTextFromSlider);
 
 	qcbDevice->view()->setTextElideMode(Qt::ElideRight);
 
@@ -215,16 +237,11 @@ void AudioInputDialog::load(const Settings &r) {
 			break;
 	}
 
-	// Three coupled amplification sliders (base <= adaptive <= maximum). Reset
-	// the ranges, then load loudest-first so each slider's bounds settle
-	// consistently as the values come in.
+	// The three amplification handles, ordered base <= adaptive <= maximum (the
+	// widget keeps them from crossing).
 	const int adaptiveLoudness = Mumble::Amplification::resolveAdaptiveLoudness(r.iAdaptiveLoudness, r.iMinLoudness);
-	qsAmpBase->setRange(0, AMP_SLIDER_MAX);
-	qsAmpAdaptive->setRange(0, AMP_SLIDER_MAX);
-	qsAmpMax->setRange(0, AMP_SLIDER_MAX);
-	loadSlider(qsAmpMax, ampSliderFromLoudness(r.iMinLoudness));
-	loadSlider(qsAmpAdaptive, ampSliderFromLoudness(adaptiveLoudness));
-	loadSlider(qsAmpBase, ampSliderFromLoudness(r.iBaseLoudness));
+	qsAmp->setValues({ ampSliderFromLoudness(r.iBaseLoudness), ampSliderFromLoudness(adaptiveLoudness),
+					   ampSliderFromLoudness(r.iMinLoudness) });
 	loadCheckBox(qcbAdaptiveRNNoise, r.bAdaptiveAmpRNNoise);
 	loadCheckBox(qcbAmpPeak, r.bAmplificationTargetsPeak);
 
@@ -278,9 +295,9 @@ void AudioInputDialog::save() const {
 		s.noiseCancelMode = Settings::NoiseCancelSpeex;
 	}
 
-	s.iMinLoudness              = loudnessFromAmpSlider(qsAmpMax->value());
-	s.iAdaptiveLoudness         = loudnessFromAmpSlider(qsAmpAdaptive->value());
-	s.iBaseLoudness             = loudnessFromAmpSlider(qsAmpBase->value());
+	s.iBaseLoudness             = loudnessFromAmpSlider(qsAmp->value(0));
+	s.iAdaptiveLoudness         = loudnessFromAmpSlider(qsAmp->value(1));
+	s.iMinLoudness              = loudnessFromAmpSlider(qsAmp->value(2));
 	s.bAdaptiveAmpRNNoise       = qcbAdaptiveRNNoise->isChecked();
 	s.bAmplificationTargetsPeak = qcbAmpPeak->isChecked();
 	s.iVoiceHold       = qsTransmitHold->value();
@@ -377,25 +394,6 @@ void AudioInputDialog::on_qsSpeexNoiseSupStrength_valueChanged(int v) {
 													  QString("-%1 %2").arg(v).arg(tr("decibels")));
 	}
 	qlSpeexNoiseSupStrength->setPalette(pal);
-}
-
-void AudioInputDialog::on_qsAmpBase_valueChanged(int v) {
-	// The base level can never exceed the adaptive level.
-	qsAmpAdaptive->setMinimum(v);
-	updateAmpLabel(qlAmpBase, qsAmpBase, v);
-}
-
-void AudioInputDialog::on_qsAmpAdaptive_valueChanged(int v) {
-	// The adaptive level always stays between the base and maximum levels.
-	qsAmpBase->setMaximum(v);
-	qsAmpMax->setMinimum(v);
-	updateAmpLabel(qlAmpAdaptive, qsAmpAdaptive, v);
-}
-
-void AudioInputDialog::on_qsAmpMax_valueChanged(int v) {
-	// The maximum level can never drop below the adaptive level.
-	qsAmpAdaptive->setMaximum(v);
-	updateAmpLabel(qlAmpMax, qsAmpMax, v);
 }
 
 void AudioInputDialog::on_qsTransmitMin_valueChanged() {
@@ -673,6 +671,16 @@ void AudioInputDialog::on_Tick_timeout() {
 		abSpeech->iValue = static_cast< int >(ai->fSpeechProb * 32767.0f + 0.5f);
 	}
 	abSpeech->update();
+
+	// Live amplification: the factor currently applied, marked on the slider, and
+	// whether the input is detected as speech or noise (noise caps gain at the
+	// adaptive level).
+	const bool speech           = ai->fAmpSpeechiness >= 0.5f;
+	const QColor indicatorColor = speech ? QColor(0x22, 0xaa, 0x22) : QColor(0xcc, 0x88, 0x00);
+	qlAmpCurrent->setText(ampFactorText(ai->fAmplificationFactor));
+	qlAmpDetect->setText(QStringLiteral("<b style=\"color:%1\">%2</b>")
+							 .arg(indicatorColor.name(), speech ? tr("speech") : tr("noise")));
+	qsAmp->setIndicator(ampSliderFromFactor(ai->fAmplificationFactor), true, indicatorColor);
 }
 
 
