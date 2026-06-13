@@ -268,7 +268,27 @@ struct Settings {
 	/// backend.
 	QString qsTTSLanguage = {};
 	int iQuality          = 40000;
+	/// Loudness that the maximum amplification targets: a signal sitting at this
+	/// level is gained up to the AGC target. Smaller values allow more gain.
 	int iMinLoudness      = 1000;
+	/// Loudness that the adaptive (silence-aware) amplification ceiling targets.
+	/// While the input is classified as noise the gain is capped here instead of
+	/// at iMinLoudness, so background noise is not amplified as hard as speech.
+	/// A non-positive value follows iMinLoudness, i.e. no extra capping (the
+	/// default, matching Mumble's historic behavior). Kept >= iMinLoudness.
+	int iAdaptiveLoudness = 0;
+	/// Loudness that the base amplification floor targets. The input is always
+	/// amplified by at least this much. The default (the AGC target) means a
+	/// 0 dB floor, i.e. no base amplification. Kept <= the adaptive and maximum
+	/// levels.
+	int iBaseLoudness = 30000;
+	/// Drive the adaptive amplification ceiling from RNNoise's voice activity
+	/// estimate rather than Speex's speech probability. Falls back to the latter
+	/// when RNNoise is not the active noise canceller.
+	bool bAdaptiveAmpRNNoise = false;
+	/// Amplify towards the signal peak (keeping peaks from clipping) instead of
+	/// towards the average level.
+	bool bAmplificationTargetsPeak = false;
 	/// Actual mic hold time is (iVoiceHold / 100) seconds, where iVoiceHold is specified in 'frames',
 	/// each of which is has a size of iFrameSize (see AudioInput.h)
 	int iVoiceHold                  = 20;

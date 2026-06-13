@@ -276,6 +276,14 @@ protected:
 	volatile bool bPreviousVoice;
 	volatile bool previousPTT;
 
+	/// Speech probability ([0, 1]) of the previous frame. The adaptive
+	/// amplification ceiling for a frame has to be set before the preprocessor
+	/// runs, so it is based on the previous frame's classification.
+	float m_lastSpeechiness;
+	/// RNNoise voice activity estimate ([0, 1]) of the last processed frame.
+	/// Only meaningful while RNNoise is the active noise canceller.
+	float m_rnnVAD;
+
 	int iFrameCounter;
 	int iSilentFrames;
 	int iHoldFrames;
@@ -315,6 +323,9 @@ public:
 
 	int iBitrate;
 	float dPeakSpeaker, dPeakSignal, dMaxMic, dPeakMic, dPeakCleanMic;
+	/// Level (dBFS) of the transmitted signal after amplification, i.e. the
+	/// amplitude Mumble is currently targeting. Drives the amplification preview.
+	float dPeakProcessed;
 	float fSpeechProb;
 
 	static int getNetworkBandwidth(int bitrate, int frames);

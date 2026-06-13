@@ -289,7 +289,11 @@ AudioInput::AudioInput()
 	pfMicInput = pfEchoInput = nullptr;
 
 	iBitrate    = 0;
-	dPeakSignal = dPeakSpeaker = dPeakMic = dPeakCleanMic = 0.0;
+	dPeakSignal = dPeakSpeaker = dPeakMic = dPeakCleanMic = dPeakProcessed = 0.0;
+
+	// Start at full speechiness so the first frames may use the maximum gain.
+	m_lastSpeechiness = 1.0f;
+	m_rnnVAD          = 0.0f;
 
 	if (Global::get().uiSession) {
 		setMaxBandwidth(Global::get().iMaxBandwidth);
@@ -1034,7 +1038,9 @@ void AudioInput::encodeAudioFrame(AudioChunk chunk) {
 				denoiseFrames[i] = psSource[i];
 			}
 
-			rnnoise_process_frame(denoiseState, denoiseFrames, denoiseFrames);
+			// The return value is RNNoise's voice activity estimate, kept around
+			// in case it drives the adaptive amplification ceiling.
+			m_rnnVAD = rnnoise_process_frame(denoiseState, denoiseFrames, denoiseFrames);
 
 			for (unsigned int i = 0; i < 480; i++) {
 				psSource[i] = clampFloatSample(denoiseFrames[i]);
@@ -1049,8 +1055,9 @@ void AudioInput::encodeAudioFrame(AudioChunk chunk) {
 				denoiseFramesR[i] = psSource[2 * i + 1];
 			}
 
-			rnnoise_process_frame(denoiseState, denoiseFramesL, denoiseFramesL);
-			rnnoise_process_frame(denoiseStateR, denoiseFramesR, denoiseFramesR);
+			const float vadL = rnnoise_process_frame(denoiseState, denoiseFramesL, denoiseFramesL);
+			const float vadR = rnnoise_process_frame(denoiseStateR, denoiseFramesR, denoiseFramesR);
+			m_rnnVAD         = 0.5f * (vadL + vadR);
 
 			for (unsigned int i = 0; i < 480; i++) {
 				psSource[2 * i]     = clampFloatSample(denoiseFramesL[i]);
@@ -1071,6 +1078,22 @@ void AudioInput::encodeAudioFrame(AudioChunk chunk) {
 		psAnalyze = psMono;
 	}
 
+	// Set this frame's gain ceiling before the AGC runs. While the input is
+	// noise the gain is capped at the adaptive level, while it is speech it may
+	// reach the maximum; in between the two are interpolated by the speech
+	// probability. The current frame's probability is only known after the
+	// preprocessor has run, so the previous frame's is used. With the default
+	// settings the adaptive level follows the maximum and the ceiling is simply
+	// the maximum, matching Mumble's historic behavior.
+	{
+		const int maxGainDb        = Mumble::Amplification::gainDbForLoudness(Global::get().s.iMinLoudness);
+		const int adaptiveLoudness = Mumble::Amplification::resolveAdaptiveLoudness(Global::get().s.iAdaptiveLoudness,
+																					 Global::get().s.iMinLoudness);
+		const int adaptiveGainDb   = Mumble::Amplification::gainDbForLoudness(adaptiveLoudness);
+		m_preprocessor.setAGCMaxGain(static_cast< std::int32_t >(Mumble::Amplification::gainCeilingDb(
+			static_cast< float >(adaptiveGainDb), static_cast< float >(maxGainDb), m_lastSpeechiness)));
+	}
+
 	m_preprocessor.run(*psAnalyze);
 
 	sum = 1.0f;
@@ -1079,15 +1102,29 @@ void AudioInput::encodeAudioFrame(AudioChunk chunk) {
 	float micLevel = sqrtf(sum / static_cast< float >(iFrameSize));
 	dPeakSignal    = qMax(20.0f * log10f(micLevel / 32768.0f), -96.0f);
 
-	// The Speex AGC only amplifies the mono analysis copy. In mono that copy is
-	// the transmitted signal, but in stereo the transmitted channels are left
-	// untouched, so apply the very same gain to both of them here. Using one
-	// gain for both channels keeps the stereo image balanced.
-	if (m_transmitChannels > 1) {
-		const float agcGain =
-			Mumble::Amplification::dbToLinear(static_cast< float >(m_preprocessor.getAGCGain()));
-		Mumble::Amplification::applyGain(psSource, frameSamples, agcGain);
+	// Amplify the transmitted signal. The AGC only gained the mono analysis
+	// copy, so in stereo both channels still need the gain; in mono that copy is
+	// the transmitted signal and was already gained in place, so only the base
+	// floor's surplus (if any) is added. The same factor is applied to every
+	// channel to keep the stereo image balanced. See AudioInputAmplification.h.
+	const int baseGainDb    = Mumble::Amplification::gainDbForLoudness(Global::get().s.iBaseLoudness);
+	const float agcGainDb   = static_cast< float >(m_preprocessor.getAGCGain());
+	const float effectiveDb = Mumble::Amplification::effectiveGainDb(agcGainDb, static_cast< float >(baseGainDb));
+	const float applyDb     = (m_transmitChannels > 1) ? effectiveDb : (effectiveDb - agcGainDb);
+	Mumble::Amplification::applyGain(psSource, frameSamples, Mumble::Amplification::dbToLinear(applyDb));
+
+	if (Global::get().s.bAmplificationTargetsPeak) {
+		// Pull amplified peaks back below the target so that they do not clip.
+		Mumble::Amplification::applyGain(
+			psSource, frameSamples,
+			Mumble::Amplification::peakLimitFactor(psSource, frameSamples, Mumble::Amplification::AGC_TARGET));
 	}
+
+	// Level the transmitted signal now sits at: the amplitude being targeted.
+	float outSum = 1.0f;
+	for (unsigned int i = 0; i < frameSamples; i++)
+		outSum += static_cast< float >(psSource[i]) * static_cast< float >(psSource[i]);
+	dPeakProcessed = qMax(20.0f * log10f(sqrtf(outSum / static_cast< float >(frameSamples)) / 32768.0f), -96.0f);
 
 	if (bDebugDumpInput) {
 		outMic.write(reinterpret_cast< const char * >(chunk.mic),
@@ -1101,6 +1138,17 @@ void AudioInput::encodeAudioFrame(AudioChunk chunk) {
 	}
 
 	fSpeechProb = static_cast< float >(m_preprocessor.getSpeechProb()) / 100.0f;
+
+	// Remember how speech-like this frame was, to set the next frame's adaptive
+	// amplification ceiling. RNNoise's estimate is preferred when configured and
+	// available, otherwise Speex's speech probability is used.
+	m_lastSpeechiness = fSpeechProb;
+#ifdef USE_RNNOISE
+	if (Global::get().s.bAdaptiveAmpRNNoise
+		&& (noiseCancel == Settings::NoiseCancelRNN || noiseCancel == Settings::NoiseCancelBoth)) {
+		m_lastSpeechiness = m_rnnVAD;
+	}
+#endif
 
 	// clean microphone level: peak of filtered signal attenuated by AGC gain
 	dPeakCleanMic = qMax(dPeakSignal - static_cast< float >(gainValue), -96.0f);

@@ -34,6 +34,10 @@
 	PROCESS(audio, MUTE_CUE_POPUP_SHOWN, muteCueShown)                                      \
 	PROCESS(audio, AUDIO_QUALITY_KEY, iQuality)                                             \
 	PROCESS(audio, LOUDNESS_KEY, iMinLoudness)                                              \
+	PROCESS(audio, ADAPTIVE_LOUDNESS_KEY, iAdaptiveLoudness)                                \
+	PROCESS(audio, BASE_LOUDNESS_KEY, iBaseLoudness)                                        \
+	PROCESS(audio, ADAPTIVE_AMPLIFICATION_RNNOISE_KEY, bAdaptiveAmpRNNoise)                 \
+	PROCESS(audio, AMPLIFICATION_TARGETS_PEAK_KEY, bAmplificationTargetsPeak)               \
 	PROCESS(audio, VOLUME_KEY, fVolume)                                                     \
 	PROCESS(audio, EXTERNAL_APPLICATIONS_VOLUME_KEY, fOtherVolume)                          \
 	PROCESS(audio, LISTENER_ATTENUATION_FACTOR_KEY, listenerAttenuationFactor)              \
