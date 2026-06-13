@@ -1079,6 +1079,16 @@ void AudioInput::encodeAudioFrame(AudioChunk chunk) {
 	float micLevel = sqrtf(sum / static_cast< float >(iFrameSize));
 	dPeakSignal    = qMax(20.0f * log10f(micLevel / 32768.0f), -96.0f);
 
+	// The Speex AGC only amplifies the mono analysis copy. In mono that copy is
+	// the transmitted signal, but in stereo the transmitted channels are left
+	// untouched, so apply the very same gain to both of them here. Using one
+	// gain for both channels keeps the stereo image balanced.
+	if (m_transmitChannels > 1) {
+		const float agcGain =
+			Mumble::Amplification::dbToLinear(static_cast< float >(m_preprocessor.getAGCGain()));
+		Mumble::Amplification::applyGain(psSource, frameSamples, agcGain);
+	}
+
 	if (bDebugDumpInput) {
 		outMic.write(reinterpret_cast< const char * >(chunk.mic),
 					 static_cast< std::streamsize >(frameSamples * sizeof(short)));
