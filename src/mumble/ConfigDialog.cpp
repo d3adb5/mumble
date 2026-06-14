@@ -7,6 +7,7 @@
 
 #include "AudioInput.h"
 #include "AudioOutput.h"
+#include "widgets/ConfigProfileBar.h"
 #include "widgets/EventFilters.h"
 #include "Global.h"
 
@@ -15,11 +16,33 @@
 #include <QtGui/QScreen>
 #include <QtWidgets/QMessageBox>
 #include <QtWidgets/QPushButton>
+#include <QtWidgets/QVBoxLayout>
 
 
 // init static member fields
 QMutex ConfigDialog::s_existingWidgetsMutex;
 QHash< QString, ConfigWidget * > ConfigDialog::s_existingWidgets;
+
+// Resolve the ConfigWidget backing a page shown in the stack, unwrapping both
+// the optional QScrollArea and the optional profile-bar container.
+static ConfigWidget *configWidgetForPage(QWidget *page) {
+	if (!page) {
+		return nullptr;
+	}
+	if (ConfigWidget *cw = qobject_cast< ConfigWidget * >(page)) {
+		return cw;
+	}
+	if (QScrollArea *qsa = qobject_cast< QScrollArea * >(page)) {
+		page = qsa->widget();
+	}
+	if (!page) {
+		return nullptr;
+	}
+	if (ConfigWidget *cw = qobject_cast< ConfigWidget * >(page)) {
+		return cw;
+	}
+	return page->findChild< ConfigWidget * >();
+}
 
 ConfigDialog::ConfigDialog(QWidget *p) : QDialog(p) {
 	setupUi(this);
@@ -99,9 +122,22 @@ void ConfigDialog::addPage(ConfigWidget *cw, unsigned int idx) {
 		}
 	}
 
-	QSize ms = cw->minimumSizeHint();
-	cw->resize(ms);
-	cw->setMinimumSize(ms);
+	// Pages that support settings profiles get a profile bar above their content.
+	// The bar and the page are wrapped in a container so the page's own layout is
+	// left untouched, whatever its type.
+	QWidget *content = cw;
+	if (!cw->profileCategory().isEmpty()) {
+		QWidget *container        = new QWidget();
+		QVBoxLayout *containerLay = new QVBoxLayout(container);
+		containerLay->setContentsMargins(0, 0, 0, 0);
+		containerLay->addWidget(new ConfigProfileBar(cw, cw->profileCategory()));
+		containerLay->addWidget(cw);
+		content = container;
+	}
+
+	QSize ms = content->minimumSizeHint();
+	content->resize(ms);
+	content->setMinimumSize(ms);
 
 	ms.rwidth() += 128;
 	ms.rheight() += 192;
@@ -109,13 +145,13 @@ void ConfigDialog::addPage(ConfigWidget *cw, unsigned int idx) {
 		QScrollArea *qsa = new QScrollArea();
 		qsa->setFrameShape(QFrame::NoFrame);
 		qsa->setWidgetResizable(true);
-		qsa->setWidget(cw);
+		qsa->setWidget(content);
 		qsa->setFocusPolicy(Qt::NoFocus);
 		qhPages.insert(cw, qsa);
 		qswPages->addWidget(qsa);
 	} else {
-		qhPages.insert(cw, cw);
-		qswPages->addWidget(cw);
+		qhPages.insert(cw, content);
+		qswPages->addWidget(content);
 	}
 	qmWidgets.insert(idx, cw);
 	cw->load(Global::get().s);
@@ -139,12 +175,7 @@ ConfigWidget *ConfigDialog::getConfigWidget(const QString &name) {
 }
 
 void ConfigDialog::on_pageButtonBox_clicked(QAbstractButton *b) {
-	ConfigWidget *conf = qobject_cast< ConfigWidget * >(qswPages->currentWidget());
-	if (!conf) {
-		QScrollArea *qsa = qobject_cast< QScrollArea * >(qswPages->currentWidget());
-		if (qsa)
-			conf = qobject_cast< ConfigWidget * >(qsa->widget());
-	}
+	ConfigWidget *conf = configWidgetForPage(qswPages->currentWidget());
 	if (!conf)
 		return;
 	switch (pageButtonBox->standardButton(b)) {
@@ -217,16 +248,14 @@ void ConfigDialog::updateTabOrder() {
 
 	QWidget *contentFocusWidget = qswPages;
 
-	ConfigWidget *page;
-	QScrollArea *qsa = qobject_cast< QScrollArea * >(qswPages->currentWidget());
-	if (qsa) {
-		page = qobject_cast< ConfigWidget * >(qsa->widget());
-	} else {
-		page = qobject_cast< ConfigWidget * >(qswPages->currentWidget());
+	// Focus the page content (the profile-bar container when present, otherwise
+	// the ConfigWidget itself) so tabbing flows through the whole page.
+	QWidget *content = qswPages->currentWidget();
+	if (QScrollArea *qsa = qobject_cast< QScrollArea * >(content)) {
+		content = qsa->widget();
 	}
-
-	if (page) {
-		contentFocusWidget = page;
+	if (content) {
+		contentFocusWidget = content;
 	}
 
 	setTabOrder(cancelButton, okButton);

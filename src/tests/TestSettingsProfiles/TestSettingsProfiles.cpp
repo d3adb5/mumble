@@ -10,8 +10,8 @@
 #include "JSONSerialization.h"
 #include "Settings.h"
 
-/// Tests for input settings profiles: capturing the input subset of the
-/// settings under a name and restoring it, leaving everything else untouched.
+/// Tests for settings profiles: capturing a category's subset of the settings
+/// under a name and restoring it, leaving everything else untouched.
 class TestSettingsProfiles : public QObject {
 	Q_OBJECT
 private slots:
@@ -20,6 +20,8 @@ private slots:
 	void applyMissingIsNoop();
 	void removeProfile();
 	void survivesSerialization();
+	void multipleCategories();
+	void outputExcludesDevice();
 };
 
 void TestSettingsProfiles::saveAndApply() {
@@ -86,6 +88,52 @@ void TestSettingsProfiles::survivesSerialization() {
 	t.iMinLoudness = 2222;
 	t.applySettingsProfile(QStringLiteral("input"), QStringLiteral("Persisted"));
 	QCOMPARE(t.iMinLoudness, 1111);
+}
+
+void TestSettingsProfiles::multipleCategories() {
+	Settings s;
+	s.fVolume      = 0.25f;   // output
+	s.bReconnect   = false;   // network
+	s.bLockLayout  = true;    // look
+	s.iMinLoudness = 1234;    // input
+	s.saveSettingsProfile(QStringLiteral("output"), QStringLiteral("O"));
+	s.saveSettingsProfile(QStringLiteral("network"), QStringLiteral("N"));
+	s.saveSettingsProfile(QStringLiteral("look"), QStringLiteral("L"));
+
+	// Mutate every captured field.
+	s.fVolume      = 0.75f;
+	s.bReconnect   = true;
+	s.bLockLayout  = false;
+	s.iMinLoudness = 9999;
+
+	// Each profile restores only its own category, leaving the others untouched.
+	s.applySettingsProfile(QStringLiteral("output"), QStringLiteral("O"));
+	QCOMPARE(s.fVolume, 0.25f);
+	QCOMPARE(s.bReconnect, true);
+	QCOMPARE(s.bLockLayout, false);
+	QCOMPARE(s.iMinLoudness, 9999);
+
+	s.applySettingsProfile(QStringLiteral("network"), QStringLiteral("N"));
+	QCOMPARE(s.bReconnect, false);
+	QCOMPARE(s.bLockLayout, false);
+
+	s.applySettingsProfile(QStringLiteral("look"), QStringLiteral("L"));
+	QCOMPARE(s.bLockLayout, true);
+	QCOMPARE(s.iMinLoudness, 9999);
+}
+
+void TestSettingsProfiles::outputExcludesDevice() {
+	Settings s;
+	s.fVolume       = 0.25f;
+	s.qsAudioOutput = QStringLiteral("OutA");  // output system/device -> not captured
+	s.saveSettingsProfile(QStringLiteral("output"), QStringLiteral("P"));
+
+	s.fVolume       = 0.75f;
+	s.qsAudioOutput = QStringLiteral("OutB");
+	s.applySettingsProfile(QStringLiteral("output"), QStringLiteral("P"));
+
+	QCOMPARE(s.fVolume, 0.25f);                            // restored from the profile
+	QCOMPARE(s.qsAudioOutput, QStringLiteral("OutB"));     // untouched (device excluded)
 }
 
 QTEST_MAIN(TestSettingsProfiles)

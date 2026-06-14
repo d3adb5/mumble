@@ -33,6 +33,9 @@ public:
 	virtual QString title() const          = 0;
 	virtual const QString &getName() const = 0;
 	virtual QIcon icon() const;
+	/// The settings-profile category for this page, e.g. "output". An empty
+	/// string (the default) means the page has no profile bar.
+	virtual QString profileCategory() const { return QString(); }
 public slots:
 	virtual void accept() const;
 	virtual void save() const            = 0;

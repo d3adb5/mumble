@@ -94,6 +94,7 @@ public:
 	QString title() const Q_DECL_OVERRIDE;
 	const QString &getName() const Q_DECL_OVERRIDE;
 	QIcon icon() const Q_DECL_OVERRIDE;
+	QString profileCategory() const Q_DECL_OVERRIDE { return QLatin1String("output"); }
 	/// @returns The name of the currently selected audio output interface
 	QString getCurrentlySelectedOutputInterfaceName() const;
 public slots:

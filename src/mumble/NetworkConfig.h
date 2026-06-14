@@ -24,6 +24,7 @@ public:
 	virtual QString title() const Q_DECL_OVERRIDE;
 	virtual const QString &getName() const Q_DECL_OVERRIDE;
 	virtual QIcon icon() const Q_DECL_OVERRIDE;
+	QString profileCategory() const Q_DECL_OVERRIDE { return QLatin1String("network"); }
 	static void SetupProxy();
 	static bool TcpModeEnabled();
 public slots:

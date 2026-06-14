@@ -300,6 +300,8 @@ set(MUMBLE_SOURCES
 	"widgets/ClickableLabel.h"
 	"widgets/CompletablePage.cpp"
 	"widgets/CompletablePage.h"
+	"widgets/ConfigProfileBar.cpp"
+	"widgets/ConfigProfileBar.h"
 	"widgets/EventFilters.cpp"
 	"widgets/EventFilters.h"
 	"widgets/FailedConnectionDialog.cpp"

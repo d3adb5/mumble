@@ -241,11 +241,20 @@ void from_json(const nlohmann::json &j, Settings &settings) {
 #endif
 }
 
-// Build the JSON subset of settings captured by an "input" profile.
-static nlohmann::json extractInputSettings(const Settings &settings) {
+// Build the JSON subset of settings captured by a profile for a given category.
+// Returns an empty object for unknown categories.
+static nlohmann::json extractProfileSettings(const QString &category, const Settings &settings) {
 	nlohmann::json j;
 #define PROCESS(category, key, variable) save(j, #category, SettingsKeys::key, settings.variable);
-	PROCESS_ALL_INPUT_SETTINGS
+	if (category == QLatin1String("input")) {
+		PROCESS_ALL_INPUT_SETTINGS
+	} else if (category == QLatin1String("output")) {
+		PROCESS_ALL_OUTPUT_SETTINGS
+	} else if (category == QLatin1String("network")) {
+		PROCESS_ALL_NETWORK_SETTINGS
+	} else if (category == QLatin1String("look")) {
+		PROCESS_ALL_LOOK_SETTINGS
+	}
 #undef PROCESS
 	return j;
 }
@@ -278,12 +287,9 @@ void Settings::saveSettingsProfile(const QString &category, const QString &name)
 		return;
 	}
 
-	nlohmann::json subset;
-	if (category == QLatin1String("input")) {
-		subset = extractInputSettings(*this);
-	} else {
-		// Only input profiles are supported so far; the storage is generic so
-		// other categories can be added later.
+	const nlohmann::json subset = extractProfileSettings(category, *this);
+	if (subset.empty()) {
+		// Unknown category, or one with nothing to capture: nothing to store.
 		return;
 	}
 

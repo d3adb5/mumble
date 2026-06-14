@@ -448,4 +448,98 @@
 	PROCESS(network, FRAMES_PER_PACKET_KEY, iFramesPerPacket)
 
 
+// The subset of settings captured by an "output" settings profile. The output
+// system and device selection are deliberately excluded so profiles stay
+// portable between machines (the loopback test settings are not persisted).
+#define PROCESS_ALL_OUTPUT_SETTINGS                                                       \
+	PROCESS(audio, OUTPUT_DELAY_KEY, iOutputDelay)                                        \
+	PROCESS(audio, VOLUME_KEY, fVolume)                                                   \
+	PROCESS(audio, EXTERNAL_APPLICATIONS_VOLUME_KEY, fOtherVolume)                        \
+	PROCESS(audio, LISTENER_ATTENUATION_FACTOR_KEY, listenerAttenuationFactor)            \
+	PROCESS(audio, ALWAYS_ATTENUATE_LISTENERS_KEY, alwaysAttenuateListeners)              \
+	PROCESS(audio, ATTENUATE_EXTERNAL_APPLICATIONS_ON_TALK_KEY, bAttenuateOthersOnTalk)   \
+	PROCESS(audio, ATTENUATE_EXTERNAL_APPLICATIONS_KEY, bAttenuateOthers)                 \
+	PROCESS(audio, ATTENUATE_ONLY_SAME_OUTPUT_KEY, bOnlyAttenuateSameOutput)              \
+	PROCESS(audio, ATTENUATE_LOOPBACK_KEY, bAttenuateLoopbacks)                           \
+	PROCESS(audio, ATTENUATE_USERS_ON_PRIORITY_SPEAKER_KEY, bAttenuateUsersOnPrioritySpeak) \
+	PROCESS(network, JITTER_BUFFER_SIZE_KEY, iJitterBufferSize)                           \
+	PROCESS(network, LIMIT_INCOMING_AUDIO_DELAY_KEY, bLimitIncomingAudioDelay)            \
+	PROCESS(network, MAX_INCOMING_AUDIO_DELAY_KEY, iMaxIncomingAudioDelayMs)              \
+	PROCESS(positional_audio, ENABLE_POSITIONAL_AUDIO_KEY, bPositionalAudio)              \
+	PROCESS(positional_audio, POSITIONAL_MIN_DISTANCE_KEY, fAudioMinDistance)             \
+	PROCESS(positional_audio, POSITIONAL_MAX_DISTANCE_KEY, fAudioMaxDistance)             \
+	PROCESS(positional_audio, POSITIONAL_MIN_VOLUME_KEY, fAudioMaxDistVolume)             \
+	PROCESS(positional_audio, POSITIONAL_BLOOM_KEY, fAudioBloom)                          \
+	PROCESS(positional_audio, POSITIONAL_HEADPHONE_MODE_KEY, bPositionalHeadphone)
+
+
+// The subset of settings captured by a "network" settings profile, matching the
+// controls on the Network configuration page.
+#define PROCESS_ALL_NETWORK_SETTINGS                                  \
+	PROCESS(network, RESTRICT_TO_TCP_KEY, bTCPCompat)                 \
+	PROCESS(network, USE_QUALITY_OF_SERVICE_KEY, bQoS)               \
+	PROCESS(network, AUTO_RECONNECT_KEY, bReconnect)                 \
+	PROCESS(network, AUTO_CONNECT_LAST_SERVER_KEY, bAutoConnect)     \
+	PROCESS(ui, DISABLE_PUBLIC_SERVER_LIST_KEY, bDisablePublicList)  \
+	PROCESS(privacy, HIDE_OS_FROM_SERVER_KEY, bHideOS)              \
+	PROCESS(network, PROXY_TYPE_KEY, ptProxyType)                   \
+	PROCESS(network, PROXY_HOST_KEY, qsProxyHost)                   \
+	PROCESS(network, PROXY_PORT_KEY, usProxyPort)                   \
+	PROCESS(network, PROXY_USERNAME_KEY, qsProxyUsername)           \
+	PROCESS(network, PROXY_PASSWORD_KEY, qsProxyPassword)           \
+	PROCESS(update, CHECK_FOR_UPDATES_KEY, bUpdateCheck)            \
+	PROCESS(update, CHECK_FOR_PLUGIN_UPDATES_KEY, bPluginCheck)     \
+	PROCESS(update, AUTO_UPDATE_PLUGINS_KEY, bPluginAutoUpdate)     \
+	PROCESS(ui, SEND_USAGE_STATISTICS_KEY, bUsage)
+
+
+// The subset of settings captured by a "look" settings profile, matching the
+// controls on the User Interface configuration page. Window geometry and state
+// are deliberately excluded so profiles stay portable between machines.
+#define PROCESS_ALL_LOOK_SETTINGS                                                                 \
+	PROCESS(ui, LANGUAGE_KEY, qsLanguage)                                                          \
+	PROCESS(ui, THEME_KEY, themeName)                                                              \
+	PROCESS(ui, THEME_STYLE_KEY, themeStyleName)                                                   \
+	PROCESS(ui, THEME_DARK_KEY, themeDarkName)                                                     \
+	PROCESS(ui, THEME_DARK_STYLE_KEY, themeDarkStyleName)                                          \
+	PROCESS(ui, THEME_METHOD_KEY, styleType)                                                       \
+	PROCESS(ui, WINDOW_LAYOUT_KEY, wlWindowLayout)                                                 \
+	PROCESS(ui, CHANNEL_EXPANSION_MODE_KEY, ceExpand)                                              \
+	PROCESS(ui, CHANNEL_DRAG_MODE_KEY, ceChannelDrag)                                              \
+	PROCESS(ui, USER_DRAG_MODE_KEY, ceUserDrag)                                                    \
+	PROCESS(ui, DISPLAY_USERS_BEFORE_CHANNELS, bUserTop)                                           \
+	PROCESS(ui, ALWAYS_ON_TOP_KEY, aotbAlwaysOnTop)                                                \
+	PROCESS(ui, QUIT_BEHAVIOR_KEY, quitBehavior)                                                   \
+	PROCESS(ui, SHOW_DEVELOPER_MENU_KEY, bEnableDeveloperMenu)                                     \
+	PROCESS(ui, LOCK_LAYOUT_KEY, bLockLayout)                                                      \
+	PROCESS(ui, HIDE_IN_TRAY_KEY, bHideInTray)                                                     \
+	PROCESS(ui, DISPLAY_TALKING_STATE_IN_TRAY_KEY, bStateInTray)                                   \
+	PROCESS(ui, DISPLAY_USER_COUNT_KEY, bShowUserCount)                                            \
+	PROCESS(ui, DISPLAY_VOLUME_ADJUSTMENTS_KEY, bShowVolumeAdjustments)                            \
+	PROCESS(ui, DISPLAY_NICKNAMES_ONLY_KEY, bShowNicknamesOnly)                                    \
+	PROCESS(ui, CONTEXT_MENU_ENTRIES_IN_MENU_BAR_KEY, bShowContextMenuInMenuBar)                   \
+	PROCESS(ui, DISPLAY_TRANSMIT_MODE_COMBOBOX_KEY, bShowTransmitModeComboBox)                     \
+	PROCESS(ui, HIGH_CONTRAST_MODE_KEY, bHighContrast)                                             \
+	PROCESS(ui, SELECTED_ITEM_AS_CHATBAR_TARGET_KEY, bChatBarUseSelection)                         \
+	PROCESS(ui, FILTER_HIDES_EMPTY_CHANNEL_KEY, bFilterHidesEmptyChannels)                         \
+	PROCESS(ui, TALKING_SILENT_ICON_KEY, qsTalkingSilentIcon)                                      \
+	PROCESS(ui, SILENCE_DETECTION_HOLD_KEY, iSilenceDetectionHoldMs)                               \
+	PROCESS(talkingui, TALKINGUI_USERS_ALWAYS_VISIBLE_KEY, talkingUI_UsersAlwaysVisible)           \
+	PROCESS(talkingui, TALKINGUI_LOCAL_USER_STAYS_VISIBLE_KEY, bTalkingUI_LocalUserStaysVisible)   \
+	PROCESS(talkingui, TALKINGUI_ABBREVIATE_CHANNEL_NAMES_KEY, bTalkingUI_AbbreviateChannelNames)  \
+	PROCESS(talkingui, TALKINGUI_ABBREVIATE_CURRENT_CHANNEL_KEY, bTalkingUI_AbbreviateCurrentChannel) \
+	PROCESS(talkingui, TALKINGUI_DISPLAY_LOCAL_LISTENERS_KEY, bTalkingUI_ShowLocalListeners)       \
+	PROCESS(talkingui, TALKINGUI_RELATIVE_FONT_SIZE_KEY, iTalkingUI_RelativeFontSize)              \
+	PROCESS(talkingui, TALKINGUI_SILENT_USER_LIFETIME_KEY, iTalkingUI_SilentUserLifeTime)          \
+	PROCESS(talkingui, TALKINGUI_CHANNEL_HIERARCHY_DEPTH_KEY, iTalkingUI_ChannelHierarchyDepth)    \
+	PROCESS(talkingui, TALKINGUI_MAX_CHANNEL_NAME_LENGTH_KEY, iTalkingUI_MaxChannelNameLength)     \
+	PROCESS(talkingui, TALKINGUI_NAME_PREFIX_COUNT_KEY, iTalkingUI_PrefixCharCount)                \
+	PROCESS(talkingui, TALKINGUI_NAME_POSTFIX_COUNT_KEY, iTalkingUI_PostfixCharCount)              \
+	PROCESS(talkingui, TALKINGUI_ABBREVIATION_REPLACEMENT_KEY, qsTalkingUI_AbbreviationReplacement) \
+	PROCESS(talkingui, TALKINGUI_BACKGROUND_COLOR_KEY, talkingUI_BackgroundColor)                  \
+	PROCESS(channel_hierarchy, CHANNEL_NAME_SEPARATOR_KEY, qsHierarchyChannelSeparator)            \
+	PROCESS(search, SEARCH_USER_ACTION_KEY, searchUserAction)                                      \
+	PROCESS(search, SEARCH_CHANNEL_ACTION_KEY, searchChannelAction)
+
+
 #endif // MUMBLE_MUMBLE_SETTINGS_MACROS_H_
