@@ -676,10 +676,16 @@
       <item row="0" column="1">
        <widget class="MultiSlider" name="qsAmp" native="true">
         <property name="sizePolicy">
-         <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+         <sizepolicy hsizetype="Expanding" vsizetype="Minimum">
           <horstretch>1</horstretch>
           <verstretch>0</verstretch>
          </sizepolicy>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>56</height>
+         </size>
         </property>
         <property name="toolTip">
          <string>Base, adaptive (silence-aware) and maximum input amplification</string>
@@ -725,7 +731,142 @@
         </item>
        </layout>
       </item>
-      <item row="2" column="0" colspan="3">
+      <item row="1" column="0">
+       <widget class="QLabel" name="qliAmpThreshold">
+        <property name="text">
+         <string>Detection</string>
+        </property>
+        <property name="buddy">
+         <cstring>qsAmpThreshold</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="MultiSlider" name="qsAmpThreshold" native="true">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Expanding" vsizetype="Minimum">
+          <horstretch>1</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>56</height>
+         </size>
+        </property>
+        <property name="toolTip">
+         <string>Speech-detection thresholds for the adaptive amplification</string>
+        </property>
+        <property name="whatsThis">
+         <string>&lt;b&gt;Adaptive amplification thresholds.&lt;/b&gt;&lt;br /&gt;The input becomes speech once its speech probability rises above the upper handle, and noise once it falls to the lower handle, with hysteresis in between. These are separate from the voice activity thresholds; use &lt;i&gt;From VAD&lt;/i&gt; to copy those.</string>
+        </property>
+        <property name="accessibleName">
+         <string>Amplification detection thresholds</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="2">
+       <widget class="QPushButton" name="qpbAmpInheritVAD">
+        <property name="toolTip">
+         <string>Copy the lower and upper thresholds from the voice activity settings</string>
+        </property>
+        <property name="text">
+         <string>From VAD</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="qliAmpRise">
+        <property name="text">
+         <string>Transition up</string>
+        </property>
+        <property name="buddy">
+         <cstring>qsAmpRise</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="SemanticSlider" name="qsAmpRise">
+        <property name="toolTip">
+         <string>Time the amplification takes to ease up towards the maximum when speech starts</string>
+        </property>
+        <property name="accessibleName">
+         <string>Amplification rise time</string>
+        </property>
+        <property name="maximum">
+         <number>2000</number>
+        </property>
+        <property name="singleStep">
+         <number>50</number>
+        </property>
+        <property name="pageStep">
+         <number>250</number>
+        </property>
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="2">
+       <widget class="QLabel" name="qlAmpRise">
+        <property name="minimumSize">
+         <size>
+          <width>40</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="text">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="0">
+       <widget class="QLabel" name="qliAmpFall">
+        <property name="text">
+         <string>Transition down</string>
+        </property>
+        <property name="buddy">
+         <cstring>qsAmpFall</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="1">
+       <widget class="SemanticSlider" name="qsAmpFall">
+        <property name="toolTip">
+         <string>Time the amplification takes to ease down towards the adaptive level when speech stops</string>
+        </property>
+        <property name="accessibleName">
+         <string>Amplification fall time</string>
+        </property>
+        <property name="maximum">
+         <number>2000</number>
+        </property>
+        <property name="singleStep">
+         <number>50</number>
+        </property>
+        <property name="pageStep">
+         <number>250</number>
+        </property>
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="2">
+       <widget class="QLabel" name="qlAmpFall">
+        <property name="minimumSize">
+         <size>
+          <width>40</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="text">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item row="5" column="0" colspan="3">
        <layout class="QHBoxLayout" name="qhblAmpOptions">
         <item>
          <widget class="QCheckBox" name="qcbAdaptiveRNNoise">
@@ -755,7 +896,7 @@
         </item>
        </layout>
       </item>
-      <item row="1" column="0" colspan="3">
+      <item row="4" column="0" colspan="3">
        <layout class="QHBoxLayout" name="qhblEchoNoise">
         <item>
          <widget class="QLabel" name="qliEcho">
@@ -814,7 +955,7 @@
         </item>
        </layout>
       </item>
-      <item row="3" column="0">
+      <item row="6" column="0">
        <widget class="QLabel" name="qlSpeexNoiseSup">
         <property name="toolTip">
          <string>This controls the amount by which Speex will suppress noise.</string>
@@ -827,7 +968,7 @@
         </property>
        </widget>
       </item>
-      <item row="3" column="1">
+      <item row="6" column="1">
        <widget class="SemanticSlider" name="qsSpeexNoiseSupStrength">
         <property name="toolTip">
          <string>This controls the amount by which Speex will suppress noise.</string>
@@ -852,7 +993,7 @@
         </property>
        </widget>
       </item>
-      <item row="3" column="2">
+      <item row="6" column="2">
        <widget class="QLabel" name="qlSpeexNoiseSupStrength">
         <property name="sizePolicy">
          <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
@@ -1216,6 +1357,10 @@
   <tabstop>qcbAllowLowDelay</tabstop>
   <tabstop>qcbStereoInput</tabstop>
   <tabstop>qsAmp</tabstop>
+  <tabstop>qsAmpThreshold</tabstop>
+  <tabstop>qpbAmpInheritVAD</tabstop>
+  <tabstop>qsAmpRise</tabstop>
+  <tabstop>qsAmpFall</tabstop>
   <tabstop>qcbAdaptiveRNNoise</tabstop>
   <tabstop>qcbAmpPeak</tabstop>
   <tabstop>qcbEcho</tabstop>

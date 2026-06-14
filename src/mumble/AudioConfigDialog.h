@@ -61,6 +61,9 @@ public slots:
 	void on_qsTransmitMin_valueChanged();
 	void on_qsTransmitMax_valueChanged();
 	void on_qsSpeexNoiseSupStrength_valueChanged(int v);
+	void on_qsAmpRise_valueChanged(int v);
+	void on_qsAmpFall_valueChanged(int v);
+	void on_qpbAmpInheritVAD_clicked();
 	void on_qcbTransmit_currentIndexChanged(int v);
 	void on_qcbStereoInput_clicked();
 	void on_qcbSystem_currentIndexChanged(int);

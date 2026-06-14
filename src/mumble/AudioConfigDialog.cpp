@@ -60,6 +60,14 @@ static QString ampFactorTextFromSlider(int value) {
 	return ampFactorText(ampFactorFromSlider(value));
 }
 
+// Amplification detection thresholds use the same 0-32767 scale as the voice
+// activity sliders; show each handle as a percentage, e.g. "80%".
+static constexpr int AMP_THRESHOLD_MAX = 32767;
+
+static QString ampThresholdText(int value) {
+	return QStringLiteral("%1%").arg((value * 100 + AMP_THRESHOLD_MAX / 2) / AMP_THRESHOLD_MAX);
+}
+
 
 static ConfigWidget *AudioInputDialogNew(Settings &st) {
 	return new AudioInputDialog(st);
@@ -120,6 +128,13 @@ AudioInputDialog::AudioInputDialog(Settings &st) : ConfigWidget(st) {
 	qsAmp->setSingleStep(500);
 	qsAmp->setCaptions({ tr("Base"), tr("Adaptive"), tr("Max") });
 	qsAmp->setValueFormatter(ampFactorTextFromSlider);
+
+	// Two coupled handles (lower/upper) for the adaptive amplification thresholds.
+	qsAmpThreshold->setHandleCount(2);
+	qsAmpThreshold->setRange(0, AMP_THRESHOLD_MAX);
+	qsAmpThreshold->setSingleStep(AMP_THRESHOLD_MAX / 100);
+	qsAmpThreshold->setCaptions({ tr("Min"), tr("Max") });
+	qsAmpThreshold->setValueFormatter(ampThresholdText);
 
 	qcbDevice->view()->setTextElideMode(Qt::ElideRight);
 
@@ -215,6 +230,11 @@ void AudioInputDialog::load(const Settings &r) {
 	loadCheckBox(qcbAdaptiveRNNoise, r.bAdaptiveAmpRNNoise);
 	loadCheckBox(qcbAmpPeak, r.bAmplificationTargetsPeak);
 
+	qsAmpThreshold->setValues({ static_cast< int >(r.fAmpVADmin * AMP_THRESHOLD_MAX + 0.5f),
+								static_cast< int >(r.fAmpVADmax * AMP_THRESHOLD_MAX + 0.5f) });
+	loadSlider(qsAmpRise, r.iAmplificationRiseMs);
+	loadSlider(qsAmpFall, r.iAmplificationFallMs);
+
 	// Idle auto actions
 	qsbIdle->setValue(static_cast< int >(r.iIdleTime) / 60);
 	loadComboBox(qcbIdleAction, r.iaeIdleAction);
@@ -262,6 +282,10 @@ void AudioInputDialog::save() const {
 	s.iMinLoudness              = loudnessFromAmpSlider(qsAmp->value(2));
 	s.bAdaptiveAmpRNNoise       = qcbAdaptiveRNNoise->isChecked();
 	s.bAmplificationTargetsPeak = qcbAmpPeak->isChecked();
+	s.fAmpVADmin                = static_cast< float >(qsAmpThreshold->value(0)) / AMP_THRESHOLD_MAX;
+	s.fAmpVADmax                = static_cast< float >(qsAmpThreshold->value(1)) / AMP_THRESHOLD_MAX;
+	s.iAmplificationRiseMs      = qsAmpRise->value();
+	s.iAmplificationFallMs      = qsAmpFall->value();
 	s.iVoiceHold       = qsTransmitHold->value();
 	s.fVADmin          = static_cast< float >(qsTransmitMin->value()) / 32767.0f;
 	s.fVADmax          = static_cast< float >(qsTransmitMax->value()) / 32767.0f;
@@ -356,6 +380,21 @@ void AudioInputDialog::on_qsSpeexNoiseSupStrength_valueChanged(int v) {
 													  QString("-%1 %2").arg(v).arg(tr("decibels")));
 	}
 	qlSpeexNoiseSupStrength->setPalette(pal);
+}
+
+void AudioInputDialog::on_qsAmpRise_valueChanged(int v) {
+	qlAmpRise->setText(tr("%1 ms").arg(v));
+	Mumble::Accessibility::setSliderSemanticValue(qsAmpRise, QString("%1 %2").arg(v).arg(tr("milliseconds")));
+}
+
+void AudioInputDialog::on_qsAmpFall_valueChanged(int v) {
+	qlAmpFall->setText(tr("%1 ms").arg(v));
+	Mumble::Accessibility::setSliderSemanticValue(qsAmpFall, QString("%1 %2").arg(v).arg(tr("milliseconds")));
+}
+
+void AudioInputDialog::on_qpbAmpInheritVAD_clicked() {
+	// Copy the current voice-activity thresholds into the amplification ones.
+	qsAmpThreshold->setValues({ qsTransmitMin->value(), qsTransmitMax->value() });
 }
 
 void AudioInputDialog::on_qsTransmitMin_valueChanged() {
@@ -643,6 +682,9 @@ void AudioInputDialog::on_Tick_timeout() {
 	qlAmpDetect->setText(QStringLiteral("<b style=\"color:%1\">%2</b>")
 							 .arg(indicatorColor.name(), speech ? tr("speech") : tr("noise")));
 	qsAmp->setIndicator(ampSliderFromFactor(ai->fAmplificationFactor), true, indicatorColor);
+
+	// Show the live detector level against the amplification thresholds.
+	qsAmpThreshold->setIndicator(static_cast< int >(ai->fAmpLevel * AMP_THRESHOLD_MAX), true, indicatorColor);
 }
 
 
