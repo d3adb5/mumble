@@ -38,6 +38,10 @@
 	PROCESS(audio, BASE_LOUDNESS_KEY, iBaseLoudness)                                        \
 	PROCESS(audio, ADAPTIVE_AMPLIFICATION_RNNOISE_KEY, bAdaptiveAmpRNNoise)                 \
 	PROCESS(audio, AMPLIFICATION_TARGETS_PEAK_KEY, bAmplificationTargetsPeak)               \
+	PROCESS(audio, AMPLIFICATION_RISE_MS_KEY, iAmplificationRiseMs)                         \
+	PROCESS(audio, AMPLIFICATION_FALL_MS_KEY, iAmplificationFallMs)                         \
+	PROCESS(audio, AMPLIFICATION_VAD_MIN_KEY, fAmpVADmin)                                   \
+	PROCESS(audio, AMPLIFICATION_VAD_MAX_KEY, fAmpVADmax)                                   \
 	PROCESS(audio, VOLUME_KEY, fVolume)                                                     \
 	PROCESS(audio, EXTERNAL_APPLICATIONS_VOLUME_KEY, fOtherVolume)                          \
 	PROCESS(audio, LISTENER_ATTENUATION_FACTOR_KEY, listenerAttenuationFactor)              \

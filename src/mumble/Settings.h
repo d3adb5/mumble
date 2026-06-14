@@ -289,6 +289,18 @@ struct Settings {
 	/// Amplify towards the signal peak (keeping peaks from clipping) instead of
 	/// towards the average level.
 	bool bAmplificationTargetsPeak = false;
+	/// Time (ms) over which the amplification ceiling eases up towards the maximum
+	/// when speech is detected, and back down towards the adaptive level when it
+	/// is not. Separate so the descent can be made slower than the rise. 0 is
+	/// instant.
+	int iAmplificationRiseMs = 333;
+	int iAmplificationFallMs = 333;
+	/// Speech-detection thresholds (0-1) for the adaptive amplification, mirroring
+	/// fVADmin/fVADmax but configurable separately from voice activity. The input
+	/// counts as speech above the upper threshold and as noise at or below the
+	/// lower one, with hysteresis in between.
+	float fAmpVADmin = 0.80f;
+	float fAmpVADmax = 0.98f;
 	/// Actual mic hold time is (iVoiceHold / 100) seconds, where iVoiceHold is specified in 'frames',
 	/// each of which is has a size of iFrameSize (see AudioInput.h)
 	int iVoiceHold                  = 20;

@@ -331,6 +331,10 @@ public:
 	/// Speechiness ([0, 1]) driving the adaptive amplification ceiling. Low means
 	/// the input is noise (gain capped at the adaptive level), high means speech.
 	float fAmpSpeechiness;
+	/// The detector level ([0, 1]) the noise/speech classification compares to the
+	/// amplification thresholds (Speex speech probability, or RNNoise's estimate).
+	/// Exposed so the settings preview can show it against the threshold slider.
+	float fAmpLevel;
 	float fSpeechProb;
 
 	static int getNetworkBandwidth(int bitrate, int frames);

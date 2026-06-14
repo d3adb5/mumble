@@ -42,10 +42,10 @@ static short clampFloatSample(float v) {
 }
 #endif
 
-/// Per-frame step (frames are 10 ms) by which the smoothed amplification speech
-/// state eases towards 0 (noise) or 1 (speech). 0.03 spans the full noise<->
-/// speech transition in roughly a third of a second.
-static constexpr float AMP_SPEECHINESS_STEP = 0.03f;
+/// Duration of one processed frame, in milliseconds (the frame is
+/// SAMPLE_RATE / 100 samples). Used to turn the configured amplification
+/// rise/fall times into a per-frame smoothing step.
+static constexpr float FRAME_MS = 1000.0f * (SAMPLE_RATE / 100) / SAMPLE_RATE;
 
 void Resynchronizer::addMic(short *mic) {
 	bool drop = false;
@@ -302,6 +302,7 @@ AudioInput::AudioInput()
 	// state then eases down if the input turns out to be noise.
 	m_ampSpeech     = true;
 	fAmpSpeechiness = 1.0f;
+	fAmpLevel       = 0.0f;
 	m_rnnVAD        = 0.0f;
 
 	if (Global::get().uiSession) {
@@ -1151,10 +1152,11 @@ void AudioInput::encodeAudioFrame(AudioChunk chunk) {
 	fSpeechProb = static_cast< float >(m_preprocessor.getSpeechProb()) / 100.0f;
 
 	// Classify this frame as speech or noise for the adaptive amplification,
-	// reusing the voice-activity SNR thresholds with hysteresis (RNNoise's
-	// estimate is used instead when configured and active). Then ease the smoothed
-	// speech state towards the result so the next frame's ceiling moves gradually
-	// between the adaptive and maximum levels rather than jumping.
+	// using its own SNR thresholds with hysteresis (RNNoise's estimate is used
+	// instead when configured and active). Then ease the smoothed speech state
+	// towards the result so the next frame's ceiling moves gradually between the
+	// adaptive and maximum levels rather than jumping. The rise (towards speech)
+	// and fall (towards noise) can take different times.
 	float ampLevel = fSpeechProb;
 #ifdef USE_RNNOISE
 	if (Global::get().s.bAdaptiveAmpRNNoise
@@ -1162,10 +1164,17 @@ void AudioInput::encodeAudioFrame(AudioChunk chunk) {
 		ampLevel = m_rnnVAD;
 	}
 #endif
-	m_ampSpeech = Mumble::Amplification::classifySpeech(ampLevel, Global::get().s.fVADmin, Global::get().s.fVADmax,
-														m_ampSpeech);
-	fAmpSpeechiness =
-		Mumble::Amplification::approach(fAmpSpeechiness, m_ampSpeech ? 1.0f : 0.0f, AMP_SPEECHINESS_STEP);
+	fAmpLevel   = ampLevel;
+	m_ampSpeech =
+		Mumble::Amplification::classifySpeech(ampLevel, Global::get().s.fAmpVADmin, Global::get().s.fAmpVADmax,
+											  m_ampSpeech);
+
+	const float ampTarget = m_ampSpeech ? 1.0f : 0.0f;
+	const int rampMs = (ampTarget > fAmpSpeechiness) ? Global::get().s.iAmplificationRiseMs
+													 : Global::get().s.iAmplificationFallMs;
+	// Each frame is FRAME_MS; cover the whole 0..1 transition over rampMs.
+	const float ampStep = (rampMs > 0) ? (FRAME_MS / static_cast< float >(rampMs)) : 1.0f;
+	fAmpSpeechiness     = Mumble::Amplification::approach(fAmpSpeechiness, ampTarget, ampStep);
 
 	// clean microphone level: peak of filtered signal attenuated by AGC gain
 	dPeakCleanMic = qMax(dPeakSignal - static_cast< float >(gainValue), -96.0f);
