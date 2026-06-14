@@ -16,7 +16,6 @@
 #include "Global.h"
 
 #include <QColor>
-#include <QInputDialog>
 #include <QSignalBlocker>
 
 #include <cstdint>
@@ -242,7 +241,6 @@ void AudioInputDialog::load(const Settings &r) {
 	loadCheckBox(qcbUndoIdleAction, r.bUndoIdleActionUponActivity);
 
 	updateEchoEnableState();
-	reloadInputProfiles(QString());
 }
 
 void AudioInputDialog::verifyMicrophonePermission() {
@@ -397,71 +395,6 @@ void AudioInputDialog::on_qsAmpFall_valueChanged(int v) {
 void AudioInputDialog::on_qpbAmpInheritVAD_clicked() {
 	// Copy the current voice-activity thresholds into the amplification ones.
 	qsAmpThreshold->setValues({ qsTransmitMin->value(), qsTransmitMax->value() });
-}
-
-void AudioInputDialog::reloadInputProfiles(const QString &selected) {
-	const QSignalBlocker blocker(qcbInputProfile);
-	qcbInputProfile->clear();
-	qcbInputProfile->addItem(tr("(load a profile…)"));
-	for (const QString &pname : s.settingsProfileNames(QStringLiteral("input"))) {
-		qcbInputProfile->addItem(pname);
-	}
-	const int idx = selected.isEmpty() ? 0 : qcbInputProfile->findText(selected);
-	qcbInputProfile->setCurrentIndex(idx < 0 ? 0 : idx);
-	const bool hasSelection = qcbInputProfile->currentIndex() > 0;
-	qpbInputProfileSave->setEnabled(hasSelection);
-	qpbInputProfileDelete->setEnabled(hasSelection);
-}
-
-void AudioInputDialog::on_qcbInputProfile_currentIndexChanged(int index) {
-	if (index <= 0) {
-		qpbInputProfileSave->setEnabled(false);
-		qpbInputProfileDelete->setEnabled(false);
-		return;
-	}
-
-	// Load the profile into the working settings and refresh the controls. It
-	// is committed to the running configuration when the user clicks OK/Apply.
-	const QString pname = qcbInputProfile->currentText();
-	s.applySettingsProfile(QStringLiteral("input"), pname);
-	load(s);
-	reloadInputProfiles(pname);
-}
-
-void AudioInputDialog::on_qpbInputProfileSave_clicked() {
-	if (qcbInputProfile->currentIndex() <= 0) {
-		return;
-	}
-
-	// Update the selected profile in place with the current control values; no
-	// need to apply them first.
-	const QString pname = qcbInputProfile->currentText();
-	save();
-	s.saveSettingsProfile(QStringLiteral("input"), pname);
-	reloadInputProfiles(pname);
-}
-
-void AudioInputDialog::on_qpbInputProfileSaveAs_clicked() {
-	bool ok            = false;
-	const QString pname = QInputDialog::getText(this, tr("Save Input Profile"), tr("Profile name:"),
-											   QLineEdit::Normal, QString(), &ok)
-							 .trimmed();
-	if (!ok || pname.isEmpty()) {
-		return;
-	}
-
-	// Capture the current control values, then snapshot them into the profile.
-	save();
-	s.saveSettingsProfile(QStringLiteral("input"), pname);
-	reloadInputProfiles(pname);
-}
-
-void AudioInputDialog::on_qpbInputProfileDelete_clicked() {
-	if (qcbInputProfile->currentIndex() <= 0) {
-		return;
-	}
-	s.removeSettingsProfile(QStringLiteral("input"), qcbInputProfile->currentText());
-	reloadInputProfiles(QString());
 }
 
 void AudioInputDialog::on_qsTransmitMin_valueChanged() {

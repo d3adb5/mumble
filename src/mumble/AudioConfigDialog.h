@@ -27,10 +27,6 @@ protected:
 
 	void showSpeexNoiseSuppressionSlider(bool show);
 
-	/// Repopulate the input-profile combo box from the working settings,
-	/// optionally selecting \p selected (empty selects the placeholder).
-	void reloadInputProfiles(const QString &selected);
-
 public:
 	/// The unique name of this ConfigWidget
 	static const QString name;
@@ -38,6 +34,7 @@ public:
 	QString title() const Q_DECL_OVERRIDE;
 	const QString &getName() const Q_DECL_OVERRIDE;
 	QIcon icon() const Q_DECL_OVERRIDE;
+	QString profileCategory() const Q_DECL_OVERRIDE { return QLatin1String("input"); }
 
 public slots:
 	void save() const Q_DECL_OVERRIDE;
@@ -68,10 +65,6 @@ public slots:
 	void on_qsAmpRise_valueChanged(int v);
 	void on_qsAmpFall_valueChanged(int v);
 	void on_qpbAmpInheritVAD_clicked();
-	void on_qcbInputProfile_currentIndexChanged(int index);
-	void on_qpbInputProfileSave_clicked();
-	void on_qpbInputProfileSaveAs_clicked();
-	void on_qpbInputProfileDelete_clicked();
 	void on_qcbTransmit_currentIndexChanged(int v);
 	void on_qcbStereoInput_clicked();
 	void on_qcbSystem_currentIndexChanged(int);
