@@ -43,6 +43,16 @@
       </widget>
      </item>
      <item>
+      <widget class="QPushButton" name="qpbInputProfileSave">
+       <property name="toolTip">
+        <string>Update the selected profile with the current input settings</string>
+       </property>
+       <property name="text">
+        <string>Save</string>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QPushButton" name="qpbInputProfileSaveAs">
        <property name="toolTip">
         <string>Save the current input settings as a new profile</string>
@@ -1391,6 +1401,7 @@
  </customwidgets>
  <tabstops>
   <tabstop>qcbInputProfile</tabstop>
+  <tabstop>qpbInputProfileSave</tabstop>
   <tabstop>qpbInputProfileSaveAs</tabstop>
   <tabstop>qpbInputProfileDelete</tabstop>
   <tabstop>qcbSystem</tabstop>

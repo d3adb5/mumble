@@ -408,11 +408,14 @@ void AudioInputDialog::reloadInputProfiles(const QString &selected) {
 	}
 	const int idx = selected.isEmpty() ? 0 : qcbInputProfile->findText(selected);
 	qcbInputProfile->setCurrentIndex(idx < 0 ? 0 : idx);
-	qpbInputProfileDelete->setEnabled(qcbInputProfile->currentIndex() > 0);
+	const bool hasSelection = qcbInputProfile->currentIndex() > 0;
+	qpbInputProfileSave->setEnabled(hasSelection);
+	qpbInputProfileDelete->setEnabled(hasSelection);
 }
 
 void AudioInputDialog::on_qcbInputProfile_currentIndexChanged(int index) {
 	if (index <= 0) {
+		qpbInputProfileSave->setEnabled(false);
 		qpbInputProfileDelete->setEnabled(false);
 		return;
 	}
@@ -422,6 +425,19 @@ void AudioInputDialog::on_qcbInputProfile_currentIndexChanged(int index) {
 	const QString pname = qcbInputProfile->currentText();
 	s.applySettingsProfile(QStringLiteral("input"), pname);
 	load(s);
+	reloadInputProfiles(pname);
+}
+
+void AudioInputDialog::on_qpbInputProfileSave_clicked() {
+	if (qcbInputProfile->currentIndex() <= 0) {
+		return;
+	}
+
+	// Update the selected profile in place with the current control values; no
+	// need to apply them first.
+	const QString pname = qcbInputProfile->currentText();
+	save();
+	s.saveSettingsProfile(QStringLiteral("input"), pname);
 	reloadInputProfiles(pname);
 }
 

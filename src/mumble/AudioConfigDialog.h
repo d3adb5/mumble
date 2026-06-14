@@ -69,6 +69,7 @@ public slots:
 	void on_qsAmpFall_valueChanged(int v);
 	void on_qpbAmpInheritVAD_clicked();
 	void on_qcbInputProfile_currentIndexChanged(int index);
+	void on_qpbInputProfileSave_clicked();
 	void on_qpbInputProfileSaveAs_clicked();
 	void on_qpbInputProfileDelete_clicked();
 	void on_qcbTransmit_currentIndexChanged(int v);
