@@ -79,7 +79,10 @@ private:
 	int grooveLeft() const;
 	int grooveRight() const;
 	int grooveY() const;
+	// Handles (and the live indicator fill) are rectangles spanning 2 * HANDLE_RADIUS
+	// in height; HANDLE_WIDTH is their (narrower) width.
 	static constexpr int HANDLE_RADIUS = 6;
+	static constexpr int HANDLE_WIDTH  = 8;
 };
 
 #endif

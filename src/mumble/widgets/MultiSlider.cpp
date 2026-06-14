@@ -141,6 +141,21 @@ void MultiSlider::paintEvent(QPaintEvent *) {
 	const int y         = grooveY();
 	const bool enabled  = isEnabled();
 
+	// Live indicator (e.g. the amplification currently applied), drawn first as a
+	// translucent rectangular fill running from the left up to the current value,
+	// so it reads as the bar being filled rather than a single line. It sits below
+	// the groove and the handles in the Z-order.
+	if (m_indicatorActive) {
+		const int ix = valueToX(m_indicatorValue);
+		if (ix > left) {
+			QColor fill = m_indicatorColor;
+			fill.setAlphaF(enabled ? 0.30f : 0.18f);
+			p.setPen(Qt::NoPen);
+			p.setBrush(fill);
+			p.drawRoundedRect(QRect(left, y - HANDLE_RADIUS, ix - left, 2 * HANDLE_RADIUS), 2, 2);
+		}
+	}
+
 	// Groove: a faint full-width track with the configured span (up to the last
 	// handle) filled in the highlight colour.
 	const QRect groove(left, y - 2, right - left, 4);
@@ -158,13 +173,6 @@ void MultiSlider::paintEvent(QPaintEvent *) {
 		p.drawRoundedRect(filled, 2, 2);
 	}
 
-	// Live indicator (e.g. the amplification currently applied).
-	if (m_indicatorActive) {
-		const int ix = valueToX(m_indicatorValue);
-		p.setPen(QPen(m_indicatorColor, 2));
-		p.drawLine(ix, y - HANDLE_RADIUS - 2, ix, y + HANDLE_RADIUS + 2);
-	}
-
 	const int labelTop  = 0;
 	const int labelBase = y + HANDLE_RADIUS + 2;
 	const int labelH    = fontMetrics().height();
@@ -179,7 +187,7 @@ void MultiSlider::paintEvent(QPaintEvent *) {
 		}
 		p.setPen(QPen(pal.color(QPalette::Dark), 1));
 		p.setBrush(handleColor);
-		p.drawEllipse(QPoint(x, y), HANDLE_RADIUS, HANDLE_RADIUS);
+		p.drawRoundedRect(QRect(x - HANDLE_WIDTH / 2, y - HANDLE_RADIUS, HANDLE_WIDTH, 2 * HANDLE_RADIUS), 2, 2);
 
 		// Value above, caption below, both centred on the handle and kept inside
 		// the widget.
