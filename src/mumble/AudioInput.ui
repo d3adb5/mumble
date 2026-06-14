@@ -15,6 +15,56 @@
   </property>
   <layout class="QVBoxLayout">
    <item>
+    <layout class="QHBoxLayout" name="qhblInputProfile">
+     <item>
+      <widget class="QLabel" name="qliInputProfile">
+       <property name="text">
+        <string>Input profile</string>
+       </property>
+       <property name="buddy">
+        <cstring>qcbInputProfile</cstring>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="MUComboBox" name="qcbInputProfile">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+         <horstretch>1</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="toolTip">
+        <string>Load a saved input settings profile (takes effect when you click OK or Apply)</string>
+       </property>
+       <property name="whatsThis">
+        <string>&lt;b&gt;Input settings profiles.&lt;/b&gt;&lt;br /&gt;A profile captures the input-related settings (amplification, voice activity, noise suppression, transmission and encoding) but not the selected device, so it stays portable between machines. Selecting one loads it into the controls below; it takes effect when you click OK or Apply.</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="qpbInputProfileSaveAs">
+       <property name="toolTip">
+        <string>Save the current input settings as a new profile</string>
+       </property>
+       <property name="text">
+        <string>Save As...</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="qpbInputProfileDelete">
+       <property name="toolTip">
+        <string>Delete the selected profile</string>
+       </property>
+       <property name="text">
+        <string>Delete</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
     <widget class="QGroupBox" name="qgbInterfaces">
      <property name="title">
       <string>Interface</string>
@@ -1340,6 +1390,9 @@
   </customwidget>
  </customwidgets>
  <tabstops>
+  <tabstop>qcbInputProfile</tabstop>
+  <tabstop>qpbInputProfileSaveAs</tabstop>
+  <tabstop>qpbInputProfileDelete</tabstop>
   <tabstop>qcbSystem</tabstop>
   <tabstop>qcbDevice</tabstop>
   <tabstop>qcbExclusive</tabstop>
