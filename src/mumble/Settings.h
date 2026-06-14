@@ -630,6 +630,14 @@ struct Settings {
 	/// A flag used in order to determine whether or not to offer loading the setting's backup file instead
 	bool mumbleQuitNormally = false;
 
+	/// Stored settings profiles, of the form
+	/// { "<category>": { "<name>": { ...captured settings subset... } } }. Kept as
+	/// a raw JSON string so this header need not pull in the full nlohmann/json
+	/// header (it only forward-declares it); it is written as proper nested JSON
+	/// in the settings file and managed through the settingsProfile* helpers. Not
+	/// part of operator== / the round-trip test, as it is serialized manually.
+	QString m_settingsProfilesJson = {};
+
 	bool doEcho() const;
 	bool doPositionalAudio() const;
 
@@ -644,6 +652,16 @@ struct Settings {
 	void legacyLoad(const QString &path = {});
 
 	void migratePluginSettings(const MigratedPath &path);
+
+	/// Names of the stored profiles for a category (e.g. "input").
+	QStringList settingsProfileNames(const QString &category) const;
+	/// Capture the current settings belonging to \p category into a profile.
+	void saveSettingsProfile(const QString &category, const QString &name);
+	/// Apply a stored profile onto these settings, leaving everything outside the
+	/// profile's captured subset untouched. Does nothing if it does not exist.
+	void applySettingsProfile(const QString &category, const QString &name);
+	/// Remove a stored profile.
+	void removeSettingsProfile(const QString &category, const QString &name);
 
 private:
 	void verifySettingsKeys() const;

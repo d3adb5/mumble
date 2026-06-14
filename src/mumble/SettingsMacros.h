@@ -413,5 +413,39 @@
 	OVERLAY_SETTINGS                                             \
 	INTERMEDIATE_OPERATION
 
+// The subset of settings captured by an "input" settings profile. Device
+// selection (system, device, exclusive mode, channel mask) is deliberately
+// excluded so profiles stay portable between machines.
+#define PROCESS_ALL_INPUT_SETTINGS                                          \
+	PROCESS(audio, TRANSMIT_MODE_KEY, atTransmit)                           \
+	PROCESS(audio, DOUBLE_PUSH_DELAY_KEY, uiDoublePush)                     \
+	PROCESS(audio, PTT_HOLD_KEY, pttHold)                                   \
+	PROCESS(audio, TRANSMIT_CUE_WHEN_PTT_KEY, audioCueEnabledPTT)           \
+	PROCESS(audio, TRANSMIT_CUE_WHEN_VAD_KEY, audioCueEnabledVAD)           \
+	PROCESS(audio, TRANSMIT_CUE_START_KEY, qsTxAudioCueOn)                  \
+	PROCESS(audio, TRANSMIT_CUE_STOP_KEY, qsTxAudioCueOff)                  \
+	PROCESS(audio, PLAY_MUTE_CUE_KEY, bTxMuteCue)                           \
+	PROCESS(audio, MUTE_CUE_KEY, qsTxMuteCue)                               \
+	PROCESS(audio, AUDIO_QUALITY_KEY, iQuality)                            \
+	PROCESS(audio, LOUDNESS_KEY, iMinLoudness)                             \
+	PROCESS(audio, ADAPTIVE_LOUDNESS_KEY, iAdaptiveLoudness)              \
+	PROCESS(audio, BASE_LOUDNESS_KEY, iBaseLoudness)                      \
+	PROCESS(audio, ADAPTIVE_AMPLIFICATION_RNNOISE_KEY, bAdaptiveAmpRNNoise) \
+	PROCESS(audio, AMPLIFICATION_TARGETS_PEAK_KEY, bAmplificationTargetsPeak) \
+	PROCESS(audio, AMPLIFICATION_RISE_MS_KEY, iAmplificationRiseMs)       \
+	PROCESS(audio, AMPLIFICATION_FALL_MS_KEY, iAmplificationFallMs)       \
+	PROCESS(audio, AMPLIFICATION_VAD_MIN_KEY, fAmpVADmin)                 \
+	PROCESS(audio, AMPLIFICATION_VAD_MAX_KEY, fAmpVADmax)                 \
+	PROCESS(audio, VAD_MODE_KEY, vsVAD)                                    \
+	PROCESS(audio, VAD_MIN_KEY, fVADmin)                                   \
+	PROCESS(audio, VAD_MAX_KEY, fVADmax)                                   \
+	PROCESS(audio, NOISE_CANCEL_MODE_KEY, noiseCancelMode)               \
+	PROCESS(audio, SPEEX_NOISE_CANCEL_STRENGTH_KEY, iSpeexNoiseCancelStrength) \
+	PROCESS(audio, ALLOW_LOW_DELAY_MODE_KEY, bAllowLowDelay)              \
+	PROCESS(audio, STEREO_INPUT_KEY, bStereoInput)                        \
+	PROCESS(audio, VOICE_HOLD_KEY, iVoiceHold)                            \
+	PROCESS(audio, ECHO_CANCEL_MODE_KEY, echoOption)                      \
+	PROCESS(network, FRAMES_PER_PACKET_KEY, iFramesPerPacket)
+
 
 #endif // MUMBLE_MUMBLE_SETTINGS_MACROS_H_

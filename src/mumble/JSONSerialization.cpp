@@ -139,6 +139,16 @@ void to_json(nlohmann::json &j, const Settings &settings) {
 		j["overlay"] = settings.os;
 	}
 
+	// Settings profiles are kept in memory as a JSON string; write them out as
+	// proper nested JSON rather than an escaped string.
+	if (!settings.m_settingsProfilesJson.isEmpty()) {
+		const nlohmann::json profiles =
+			nlohmann::json::parse(settings.m_settingsProfilesJson.toStdString(), nullptr, false);
+		if (profiles.is_object() && !profiles.empty()) {
+			j["profiles"] = profiles;
+		}
+	}
+
 	j[SettingsKeys::CERTIFICATE_KEY] = CertWizard::exportCert(settings.kpCertificate);
 
 	// Save whether Mumble has quit regularly (in contrast to having crashed). This flag is set right before saving the
@@ -209,6 +219,12 @@ void from_json(const nlohmann::json &j, Settings &settings) {
 		settings.os = json.at("overlay");
 	}
 
+	// Only overwrite the stored profiles when they are present, so applying a
+	// profile (a partial settings subset) does not wipe the profile store.
+	if (json.contains("profiles")) {
+		settings.m_settingsProfilesJson = QString::fromStdString(json.at("profiles").dump());
+	}
+
 	if (json.contains(static_cast< const char * >(SettingsKeys::CERTIFICATE_KEY))) {
 		settings.kpCertificate = CertWizard::importCert(json.at(SettingsKeys::CERTIFICATE_KEY));
 	}
@@ -223,6 +239,86 @@ void from_json(const nlohmann::json &j, Settings &settings) {
 		settings.noiseCancelMode = Settings::NoiseCancelSpeex;
 	}
 #endif
+}
+
+// Build the JSON subset of settings captured by an "input" profile.
+static nlohmann::json extractInputSettings(const Settings &settings) {
+	nlohmann::json j;
+#define PROCESS(category, key, variable) save(j, #category, SettingsKeys::key, settings.variable);
+	PROCESS_ALL_INPUT_SETTINGS
+#undef PROCESS
+	return j;
+}
+
+// Parse the profile store, returning an empty object when absent or invalid.
+static nlohmann::json parseProfileStore(const QString &profilesJson) {
+	if (profilesJson.isEmpty()) {
+		return nlohmann::json::object();
+	}
+	const nlohmann::json parsed = nlohmann::json::parse(profilesJson.toStdString(), nullptr, false);
+	return parsed.is_object() ? parsed : nlohmann::json::object();
+}
+
+QStringList Settings::settingsProfileNames(const QString &category) const {
+	const nlohmann::json store = parseProfileStore(m_settingsProfilesJson);
+	const std::string cat      = category.toStdString();
+
+	QStringList names;
+	if (store.contains(cat)) {
+		for (auto it = store.at(cat).begin(); it != store.at(cat).end(); ++it) {
+			names << QString::fromStdString(it.key());
+		}
+	}
+	names.sort(Qt::CaseInsensitive);
+	return names;
+}
+
+void Settings::saveSettingsProfile(const QString &category, const QString &name) {
+	if (name.isEmpty()) {
+		return;
+	}
+
+	nlohmann::json subset;
+	if (category == QLatin1String("input")) {
+		subset = extractInputSettings(*this);
+	} else {
+		// Only input profiles are supported so far; the storage is generic so
+		// other categories can be added later.
+		return;
+	}
+
+	nlohmann::json store                              = parseProfileStore(m_settingsProfilesJson);
+	store[category.toStdString()][name.toStdString()] = subset;
+	m_settingsProfilesJson                            = QString::fromStdString(store.dump());
+}
+
+void Settings::applySettingsProfile(const QString &category, const QString &name) {
+	const nlohmann::json store = parseProfileStore(m_settingsProfilesJson);
+	const std::string cat      = category.toStdString();
+	const std::string nm       = name.toStdString();
+	if (!store.contains(cat) || !store.at(cat).contains(nm)) {
+		return;
+	}
+
+	// from_json requires a version and must not clear the profile store. The
+	// captured subset carries neither, so inject the current version and let the
+	// partial load leave every setting outside the subset (and the profiles
+	// themselves) untouched.
+	nlohmann::json subset                        = store.at(cat).at(nm);
+	subset[SettingsKeys::SETTINGS_VERSION_KEY]   = 1;
+	from_json(subset, *this);
+}
+
+void Settings::removeSettingsProfile(const QString &category, const QString &name) {
+	nlohmann::json store  = parseProfileStore(m_settingsProfilesJson);
+	const std::string cat = category.toStdString();
+	if (store.contains(cat)) {
+		store.at(cat).erase(name.toStdString());
+		if (store.at(cat).empty()) {
+			store.erase(cat);
+		}
+	}
+	m_settingsProfilesJson = QString::fromStdString(store.dump());
 }
 
 void to_json(nlohmann::json &j, const OverlaySettings &settings) {
