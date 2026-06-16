@@ -33,6 +33,9 @@ public:
 ASIOAudioInputRegistrar::ASIOAudioInputRegistrar() : AudioInputRegistrar(QLatin1String("ASIO")) {
 	echoOptions.push_back(EchoCancelOptionID::SPEEX_MIXED);
 	echoOptions.push_back(EchoCancelOptionID::SPEEX_MULTICHANNEL);
+#ifdef USE_WEBRTC_AUDIO_PROCESSING
+	echoOptions.push_back(EchoCancelOptionID::WEBRTC_AEC3);
+#endif
 }
 
 AudioInput *ASIOAudioInputRegistrar::create() {
@@ -51,7 +54,12 @@ void ASIOAudioInputRegistrar::setDeviceChoice(const QVariant &, Settings &) {
 }
 
 bool ASIOAudioInputRegistrar::canEcho(EchoCancelOptionID echoOption, const QString &) const {
-	return (echoOption == EchoCancelOptionID::SPEEX_MIXED || echoOption == EchoCancelOptionID::SPEEX_MULTICHANNEL);
+	bool supported = (echoOption == EchoCancelOptionID::SPEEX_MIXED)
+					 || (echoOption == EchoCancelOptionID::SPEEX_MULTICHANNEL);
+#ifdef USE_WEBRTC_AUDIO_PROCESSING
+	supported = supported || (echoOption == EchoCancelOptionID::WEBRTC_AEC3);
+#endif
+	return supported;
 }
 
 static ConfigWidget *ASIOConfigDialogNew(Settings &st) {

@@ -1015,6 +1015,48 @@
         </property>
        </widget>
       </item>
+      <item row="7" column="0">
+       <widget class="QLabel" name="qlWebRTCNoiseLevel">
+        <property name="toolTip">
+         <string>How aggressively the WebRTC noise suppressor attenuates background noise.</string>
+        </property>
+        <property name="text">
+         <string>WebRTC suppression level</string>
+        </property>
+        <property name="buddy">
+         <cstring>qcbWebRTCNoiseLevel</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="7" column="1">
+       <widget class="MUComboBox" name="qcbWebRTCNoiseLevel">
+        <property name="toolTip">
+         <string>How aggressively the WebRTC noise suppressor attenuates background noise.</string>
+        </property>
+        <property name="whatsThis">
+         <string>&lt;b&gt;WebRTC noise suppression level.&lt;/b&gt;&lt;br /&gt;Higher levels remove more noise, but may introduce more distortion of the speech signal.</string>
+        </property>
+        <property name="accessibleName">
+         <string>WebRTC noise suppression level</string>
+        </property>
+       </widget>
+      </item>
+      <item row="8" column="0" colspan="2">
+       <widget class="QCheckBox" name="qcbWebRTCGainControl">
+        <property name="toolTip">
+         <string>Apply WebRTC's adaptive digital gain control after echo cancellation and noise suppression.</string>
+        </property>
+        <property name="whatsThis">
+         <string>&lt;b&gt;WebRTC adaptive gain control.&lt;/b&gt;&lt;br /&gt;When enabled, the WebRTC audio processor automatically adjusts the loudness of the captured signal. Leave this disabled to rely on Mumble's own amplification instead.</string>
+        </property>
+        <property name="accessibleName">
+         <string>WebRTC adaptive gain control</string>
+        </property>
+        <property name="text">
+         <string>WebRTC adaptive gain control</string>
+        </property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>

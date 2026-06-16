@@ -142,6 +142,8 @@ def getDefaultValueForType(dataType):
         return "Settings::Deafen"
     elif dataType in ["NoiseCancel"]:
         return "Settings::NoiseCancelOff"
+    elif dataType in ["WebRTCNoiseLevel"]:
+        return "Settings::WebRTCNoiseVeryHigh"
     elif dataType in ["EchoCancelOptionID"]:
         return "EchoCancelOptionID::SPEEX_MULTICHANNEL"
     elif dataType in ["QuitBehavior"]:

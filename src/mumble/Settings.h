@@ -203,7 +203,8 @@ struct Settings {
 	enum ServerShow { ShowPopulated, ShowReachable, ShowAll };
 	enum TalkState { Passive, Talking, Whispering, Shouting, MutedTalking };
 	enum IdleAction { Nothing, Deafen, Mute };
-	enum NoiseCancel { NoiseCancelOff, NoiseCancelSpeex, NoiseCancelRNN, NoiseCancelBoth };
+	enum NoiseCancel { NoiseCancelOff, NoiseCancelSpeex, NoiseCancelRNN, NoiseCancelBoth, NoiseCancelWebRTC };
+	enum WebRTCNoiseLevel { WebRTCNoiseLow, WebRTCNoiseModerate, WebRTCNoiseHigh, WebRTCNoiseVeryHigh };
 	enum MessageLog {
 		LogNone         = 0x00,
 		LogConsole      = 0x01,
@@ -318,6 +319,11 @@ struct Settings {
 	bool bStereoInput               = false;
 	NoiseCancel noiseCancelMode     = NoiseCancelSpeex;
 	int iSpeexNoiseCancelStrength   = -30;
+	/// Aggressiveness of the WebRTC noise suppressor (when noiseCancelMode is NoiseCancelWebRTC).
+	WebRTCNoiseLevel webrtcNoiseLevel = WebRTCNoiseHigh;
+	/// Whether to enable WebRTC's adaptive digital gain controller alongside its echo
+	/// cancellation / noise suppression.
+	bool bWebRTCGainControl = false;
 	quint64 uiAudioInputChannelMask = 0xffffffffffffffffULL;
 
 	// Idle auto actions

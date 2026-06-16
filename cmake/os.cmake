@@ -39,7 +39,11 @@ if(WIN32)
 	)
 else()
 	if(${CMAKE_SYSTEM_NAME} STREQUAL "FreeBSD")
-		include_directories("/usr/local/include")
+		# Mark this as a SYSTEM include so it does not take precedence (via plain
+		# "-I") over targets that bring their own bundled copy of a library which
+		# also exists under the system prefix (e.g. the bundled Abseil vs. the one
+		# installed by the system protobuf).
+		include_directories(SYSTEM "/usr/local/include")
 		link_directories("/usr/local/lib")
 	endif()
 

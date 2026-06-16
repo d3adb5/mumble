@@ -118,6 +118,14 @@ AudioInputDialog::AudioInputDialog(Settings &st) : ConfigWidget(st) {
 	qcbNoiseSup->addItem(QStringLiteral("RNNoise"), static_cast< int >(Settings::NoiseCancelRNN));
 	qcbNoiseSup->addItem(tr("Both"), static_cast< int >(Settings::NoiseCancelBoth));
 #endif
+#ifdef USE_WEBRTC_AUDIO_PROCESSING
+	qcbNoiseSup->addItem(QStringLiteral("WebRTC"), static_cast< int >(Settings::NoiseCancelWebRTC));
+
+	qcbWebRTCNoiseLevel->addItem(tr("Low"), static_cast< int >(Settings::WebRTCNoiseLow));
+	qcbWebRTCNoiseLevel->addItem(tr("Moderate"), static_cast< int >(Settings::WebRTCNoiseModerate));
+	qcbWebRTCNoiseLevel->addItem(tr("High"), static_cast< int >(Settings::WebRTCNoiseHigh));
+	qcbWebRTCNoiseLevel->addItem(tr("Very high"), static_cast< int >(Settings::WebRTCNoiseVeryHigh));
+#endif
 
 	abSpeech->qcBelow  = Qt::red;
 	abSpeech->qcInside = Qt::yellow;
@@ -222,6 +230,11 @@ void AudioInputDialog::load(const Settings &r) {
 	}
 	loadComboBox(qcbNoiseSup, noiseIndex);
 
+#ifdef USE_WEBRTC_AUDIO_PROCESSING
+	loadComboBox(qcbWebRTCNoiseLevel, qcbWebRTCNoiseLevel->findData(static_cast< int >(r.webrtcNoiseLevel)));
+	loadCheckBox(qcbWebRTCGainControl, r.bWebRTCGainControl);
+#endif
+
 	// The three amplification handles, ordered base <= adaptive <= maximum (the
 	// widget keeps them from crossing).
 	const int adaptiveLoudness = Mumble::Amplification::resolveAdaptiveLoudness(r.iAdaptiveLoudness, r.iMinLoudness);
@@ -276,6 +289,11 @@ void AudioInputDialog::save() const {
 	s.iSpeexNoiseCancelStrength = (qsSpeexNoiseSupStrength->value() == 14) ? 0 : -qsSpeexNoiseSupStrength->value();
 
 	s.noiseCancelMode = static_cast< Settings::NoiseCancel >(qcbNoiseSup->currentData().toInt());
+
+#ifdef USE_WEBRTC_AUDIO_PROCESSING
+	s.webrtcNoiseLevel   = static_cast< Settings::WebRTCNoiseLevel >(qcbWebRTCNoiseLevel->currentData().toInt());
+	s.bWebRTCGainControl = qcbWebRTCGainControl->isChecked();
+#endif
 
 	s.iBaseLoudness             = loudnessFromAmpSlider(qsAmp->value(0));
 	s.iAdaptiveLoudness         = loudnessFromAmpSlider(qsAmp->value(1));
@@ -649,6 +667,8 @@ void AudioInputDialog::updateEchoEnableState() {
 		qcbEcho->setEnabled(false);
 		qcbEcho->setToolTip(QObject::tr("Echo cancellation is not available when transmitting in stereo."));
 	}
+
+	updateWebRTCControls();
 }
 
 void AudioInputDialog::showSpeexNoiseSuppressionSlider(bool show) {
@@ -702,6 +722,28 @@ void AudioInputDialog::on_qcbIdleAction_currentIndexChanged(int v) {
 void AudioInputDialog::on_qcbNoiseSup_currentIndexChanged(int) {
 	const auto mode = static_cast< Settings::NoiseCancel >(qcbNoiseSup->currentData().toInt());
 	showSpeexNoiseSuppressionSlider(mode == Settings::NoiseCancelSpeex || mode == Settings::NoiseCancelBoth);
+	updateWebRTCControls();
+}
+
+void AudioInputDialog::updateWebRTCControls() {
+#ifdef USE_WEBRTC_AUDIO_PROCESSING
+	const auto noiseMode = static_cast< Settings::NoiseCancel >(qcbNoiseSup->currentData().toInt());
+	const bool webrtcNoise = (noiseMode == Settings::NoiseCancelWebRTC);
+	const bool webrtcEcho =
+		qcbEcho->isEnabled()
+		&& (static_cast< EchoCancelOptionID >(qcbEcho->currentData().toInt()) == EchoCancelOptionID::WEBRTC_AEC3);
+
+	// The noise suppression level only applies to the WebRTC noise suppressor,
+	// while the adaptive gain controller is shared by echo cancellation and
+	// noise suppression - show it whenever the WebRTC processor is in use.
+	qlWebRTCNoiseLevel->setVisible(webrtcNoise);
+	qcbWebRTCNoiseLevel->setVisible(webrtcNoise);
+	qcbWebRTCGainControl->setVisible(webrtcNoise || webrtcEcho);
+#else
+	qlWebRTCNoiseLevel->setVisible(false);
+	qcbWebRTCNoiseLevel->setVisible(false);
+	qcbWebRTCGainControl->setVisible(false);
+#endif
 }
 
 void AudioOutputDialog::enablePulseAudioAttenuationOptionsFor(const QString &outputName) {

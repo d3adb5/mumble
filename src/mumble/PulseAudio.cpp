@@ -920,6 +920,9 @@ void PulseAudioSystem::contextCallback(pa_context *c) {
 PulseAudioInputRegistrar::PulseAudioInputRegistrar() : AudioInputRegistrar(QLatin1String("PulseAudio"), 10) {
 	echoOptions.push_back(EchoCancelOptionID::SPEEX_MIXED);
 	echoOptions.push_back(EchoCancelOptionID::SPEEX_MULTICHANNEL);
+#ifdef USE_WEBRTC_AUDIO_PROCESSING
+	echoOptions.push_back(EchoCancelOptionID::WEBRTC_AEC3);
+#endif
 }
 
 AudioInput *PulseAudioInputRegistrar::create() {
@@ -948,8 +951,12 @@ void PulseAudioInputRegistrar::setDeviceChoice(const QVariant &choice, Settings 
 }
 
 bool PulseAudioInputRegistrar::canEcho(EchoCancelOptionID echoOption, const QString &osys) const {
-	return (echoOption == EchoCancelOptionID::SPEEX_MIXED || echoOption == EchoCancelOptionID::SPEEX_MULTICHANNEL)
-		   && (osys == name);
+	bool supported = (echoOption == EchoCancelOptionID::SPEEX_MIXED)
+					 || (echoOption == EchoCancelOptionID::SPEEX_MULTICHANNEL);
+#ifdef USE_WEBRTC_AUDIO_PROCESSING
+	supported = supported || (echoOption == EchoCancelOptionID::WEBRTC_AEC3);
+#endif
+	return supported && (osys == name);
 }
 
 PulseAudioOutputRegistrar::PulseAudioOutputRegistrar() : AudioOutputRegistrar(QLatin1String("PulseAudio"), 10) {

@@ -27,6 +27,10 @@ protected:
 
 	void showSpeexNoiseSuppressionSlider(bool show);
 
+	/// Show or hide the WebRTC tweakables (noise suppression level and adaptive
+	/// gain control) depending on the currently selected noise/echo options.
+	void updateWebRTCControls();
+
 public:
 	/// The unique name of this ConfigWidget
 	static const QString name;

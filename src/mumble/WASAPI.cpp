@@ -121,6 +121,9 @@ void WASAPIInit::destroy() {
 WASAPIInputRegistrar::WASAPIInputRegistrar() : AudioInputRegistrar(QLatin1String("WASAPI"), 10) {
 	echoOptions.push_back(EchoCancelOptionID::SPEEX_MIXED);
 	echoOptions.push_back(EchoCancelOptionID::SPEEX_MULTICHANNEL);
+#ifdef USE_WEBRTC_AUDIO_PROCESSING
+	echoOptions.push_back(EchoCancelOptionID::WEBRTC_AEC3);
+#endif
 }
 
 bool WASAPIInputRegistrar::isMicrophoneAccessDeniedByOS() {
@@ -225,8 +228,12 @@ void WASAPIInputRegistrar::setDeviceChoice(const QVariant &choice, Settings &s) 
 }
 
 bool WASAPIInputRegistrar::canEcho(EchoCancelOptionID echoOptionIDs, const QString &outputSystem) const {
-	return (echoOptionIDs == EchoCancelOptionID::SPEEX_MIXED || echoOptionIDs == EchoCancelOptionID::SPEEX_MULTICHANNEL)
-		   && (outputSystem == name);
+	bool supported = (echoOptionIDs == EchoCancelOptionID::SPEEX_MIXED)
+					 || (echoOptionIDs == EchoCancelOptionID::SPEEX_MULTICHANNEL);
+#ifdef USE_WEBRTC_AUDIO_PROCESSING
+	supported = supported || (echoOptionIDs == EchoCancelOptionID::WEBRTC_AEC3);
+#endif
+	return supported && (outputSystem == name);
 }
 
 bool WASAPIInputRegistrar::canExclusive() const {
