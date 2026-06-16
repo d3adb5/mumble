@@ -37,3 +37,9 @@
 [submodule "3rdparty/CLI11"]
 	path = 3rdparty/CLI11
 	url = https://github.com/CLIUtils/CLI11.git
+[submodule "3rdparty/webrtc-audio-processing-src"]
+	path = 3rdparty/webrtc-audio-processing-src
+	url = https://gitlab.freedesktop.org/pulseaudio/webrtc-audio-processing.git
+[submodule "3rdparty/abseil-cpp"]
+	path = 3rdparty/abseil-cpp
+	url = https://github.com/abseil/abseil-cpp.git

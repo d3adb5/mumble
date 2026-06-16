@@ -29,6 +29,10 @@
 #include "Settings.h"
 #include "Timer.h"
 
+#ifdef USE_WEBRTC_AUDIO_PROCESSING
+#	include "WebRTCAudioProcessing.h"
+#endif
+
 class AudioInput;
 struct OpusEncoder;
 struct DenoiseState;
@@ -194,6 +198,11 @@ private:
 	DenoiseState *denoiseState;
 	/// Denoiser state for the right channel, only allocated when transmitting in stereo
 	DenoiseState *denoiseStateR;
+#endif
+#ifdef USE_WEBRTC_AUDIO_PROCESSING
+	/// WebRTC audio processor providing AEC3 echo cancellation and/or noise
+	/// suppression. Only allocated (mono) when one of those is selected.
+	std::unique_ptr< WebRTCAudioProcessor > m_webrtc;
 #endif
 	bool selectCodec();
 	void selectNoiseCancel();

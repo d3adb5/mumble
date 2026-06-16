@@ -23,6 +23,7 @@ option(bundle-qt-translations "Bundle Qt's translations as well" ${static})
 option(bundled-speex "Build the included version of Speex instead of looking for one on the system." ON)
 option(rnnoise "Use RNNoise for machine learning noise reduction." ON)
 option(bundled-rnnoise "Build the included version of RNNoise instead of looking for one on the system." ${rnnoise})
+option(webrtc-audio-processing "Use the WebRTC audio processing library (AEC3 echo cancellation and noise suppression)." ON)
 
 option(manual-plugin "Include the built-in \"manual\" positional audio plugin." ON)
 
@@ -793,6 +794,30 @@ if(rnnoise)
 
 		target_link_libraries(mumble_client_object_lib PRIVATE ${rnnoise_LIBRARIES})
 	endif()
+endif()
+
+if(webrtc-audio-processing)
+	add_subdirectory("${3RDPARTY_DIR}/webrtc-audio-processing-build" "${CMAKE_CURRENT_BINARY_DIR}/webrtc-audio-processing" EXCLUDE_FROM_ALL)
+
+	# Disable all warnings that the WebRTC and Abseil code may emit (Mumble builds
+	# with -Werror). Both the webrtc-apm and the bundled webrtc-absl targets are
+	# defined in the webrtc-audio-processing-build directory.
+	disable_warnings_for_all_targets_in("${3RDPARTY_DIR}/webrtc-audio-processing-build")
+
+	# Compile the (PIMPL) wrapper in its own static library so that the heavy
+	# WebRTC and Abseil headers stay completely isolated from the rest of the
+	# Mumble client. In particular the bundled Abseil must not leak into the
+	# global include path, where it would be picked up by - and clash with - the
+	# system protobuf's own Abseil. The public wrapper header pulls in neither.
+	add_library(mumble_webrtc_wrapper STATIC
+		"WebRTCAudioProcessing.h"
+		"WebRTCAudioProcessing.cpp"
+	)
+	set_target_properties(mumble_webrtc_wrapper PROPERTIES UNITY_BUILD OFF POSITION_INDEPENDENT_CODE ON)
+	target_link_libraries(mumble_webrtc_wrapper PRIVATE webrtc-apm)
+
+	target_compile_definitions(mumble_client_object_lib PRIVATE "USE_WEBRTC_AUDIO_PROCESSING")
+	target_link_libraries(mumble_client_object_lib PRIVATE mumble_webrtc_wrapper)
 endif()
 
 if(qtspeech)

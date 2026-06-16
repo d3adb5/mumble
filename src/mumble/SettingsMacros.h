@@ -56,6 +56,8 @@
 	PROCESS(audio, VAD_MAX_KEY, fVADmax)                                                    \
 	PROCESS(audio, NOISE_CANCEL_MODE_KEY, noiseCancelMode)                                  \
 	PROCESS(audio, SPEEX_NOISE_CANCEL_STRENGTH_KEY, iSpeexNoiseCancelStrength)              \
+	PROCESS(audio, WEBRTC_NOISE_LEVEL_KEY, webrtcNoiseLevel)                                \
+	PROCESS(audio, WEBRTC_GAIN_CONTROL_KEY, bWebRTCGainControl)                             \
 	PROCESS(audio, INPUT_CHANNEL_MASK_KEY, uiAudioInputChannelMask)                         \
 	PROCESS(audio, ALLOW_LOW_DELAY_MODE_KEY, bAllowLowDelay)                                \
 	PROCESS(audio, STEREO_INPUT_KEY, bStereoInput)                                          \
@@ -441,6 +443,8 @@
 	PROCESS(audio, VAD_MAX_KEY, fVADmax)                                   \
 	PROCESS(audio, NOISE_CANCEL_MODE_KEY, noiseCancelMode)               \
 	PROCESS(audio, SPEEX_NOISE_CANCEL_STRENGTH_KEY, iSpeexNoiseCancelStrength) \
+	PROCESS(audio, WEBRTC_NOISE_LEVEL_KEY, webrtcNoiseLevel)             \
+	PROCESS(audio, WEBRTC_GAIN_CONTROL_KEY, bWebRTCGainControl)          \
 	PROCESS(audio, ALLOW_LOW_DELAY_MODE_KEY, bAllowLowDelay)              \
 	PROCESS(audio, STEREO_INPUT_KEY, bStereoInput)                        \
 	PROCESS(audio, VOICE_HOLD_KEY, iVoiceHold)                            \

@@ -50,13 +50,21 @@
 	PROCESS(Settings::NoiseCancel, NoiseCancelOff, "Off")     \
 	PROCESS(Settings::NoiseCancel, NoiseCancelSpeex, "Speex") \
 	PROCESS(Settings::NoiseCancel, NoiseCancelRNN, "RNN")     \
-	PROCESS(Settings::NoiseCancel, NoiseCancelBoth, "Speex&RNN")
+	PROCESS(Settings::NoiseCancel, NoiseCancelBoth, "Speex&RNN") \
+	PROCESS(Settings::NoiseCancel, NoiseCancelWebRTC, "WebRTC")
+
+#define WEBRTC_NOISE_LEVEL_VALUES                                   \
+	PROCESS(Settings::WebRTCNoiseLevel, WebRTCNoiseLow, "Low")       \
+	PROCESS(Settings::WebRTCNoiseLevel, WebRTCNoiseModerate, "Moderate") \
+	PROCESS(Settings::WebRTCNoiseLevel, WebRTCNoiseHigh, "High")     \
+	PROCESS(Settings::WebRTCNoiseLevel, WebRTCNoiseVeryHigh, "VeryHigh")
 
 #define ECHO_CANCEL_VALUES                                                \
 	PROCESS(EchoCancelOptionID, DISABLED, "Disabled")                     \
 	PROCESS(EchoCancelOptionID, SPEEX_MIXED, "Speex_MixedChannel")        \
 	PROCESS(EchoCancelOptionID, SPEEX_MULTICHANNEL, "Speex_Multichannel") \
-	PROCESS(EchoCancelOptionID, APPLE_AEC, "Apple_AEC")
+	PROCESS(EchoCancelOptionID, APPLE_AEC, "Apple_AEC")                   \
+	PROCESS(EchoCancelOptionID, WEBRTC_AEC3, "WebRTC_AEC3")
 
 #define PROXY_TYPE_VALUES                           \
 	PROCESS(Settings::ProxyType, NoProxy, "None")   \
@@ -183,6 +191,9 @@
 	AFTER_CODE                                         \
 	BEFORE_CODE(Settings::NoiseCancel)                 \
 	NOISE_CANCEL_VALUES                                \
+	AFTER_CODE                                         \
+	BEFORE_CODE(Settings::WebRTCNoiseLevel)            \
+	WEBRTC_NOISE_LEVEL_VALUES                          \
 	AFTER_CODE                                         \
 	BEFORE_CODE(EchoCancelOptionID)                    \
 	ECHO_CANCEL_VALUES                                 \

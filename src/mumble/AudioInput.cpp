@@ -865,7 +865,11 @@ void AudioInput::resetAudioProcessor() {
 		m_preprocessor.setNoiseSuppress(Global::get().s.iSpeexNoiseCancelStrength);
 	}
 
-	if (iEchoChannels > 0 && m_transmitChannels == 1) {
+	const EchoCancelOptionID echoOpt = Global::get().s.echoOption;
+	const bool speexEcho             = (echoOpt == EchoCancelOptionID::SPEEX_MIXED)
+							|| (echoOpt == EchoCancelOptionID::SPEEX_MULTICHANNEL);
+
+	if (iEchoChannels > 0 && m_transmitChannels == 1 && speexEcho) {
 		int filterSize = iFrameSize * (10 + resync.getNominalLag());
 		sesEcho =
 			speex_echo_state_init_mc(iFrameSize, filterSize, 1, bEchoMulti ? static_cast< int >(iEchoChannels) : 1);
@@ -875,11 +879,37 @@ void AudioInput::resetAudioProcessor() {
 
 		qWarning("AudioInput: ECHO CANCELLER ACTIVE");
 	} else {
-		if (iEchoChannels > 0) {
+		if (iEchoChannels > 0 && m_transmitChannels != 1 && speexEcho) {
 			qWarning("AudioInput: Echo cancellation is not available when transmitting in stereo");
 		}
 		sesEcho = nullptr;
 	}
+
+#ifdef USE_WEBRTC_AUDIO_PROCESSING
+	// The WebRTC audio processor backs both the AEC3 echo canceller and the
+	// WebRTC noise suppressor. It is created whenever either is selected; both
+	// only operate on the mono microphone signal.
+	m_webrtc.reset();
+	const bool webrtcEcho =
+		iEchoChannels > 0 && m_transmitChannels == 1 && (echoOpt == EchoCancelOptionID::WEBRTC_AEC3);
+	const bool webrtcNoise = (noiseCancel == Settings::NoiseCancelWebRTC);
+
+	if (webrtcEcho || webrtcNoise) {
+		const auto level = static_cast< WebRTCAudioProcessor::NoiseLevel >(
+			std::clamp(static_cast< int >(Global::get().s.webrtcNoiseLevel), 0, 3));
+
+		m_webrtc = std::make_unique< WebRTCAudioProcessor >(static_cast< int >(iSampleRate), 1, webrtcEcho,
+															webrtcNoise, level, Global::get().s.bWebRTCGainControl);
+
+		if (!m_webrtc->isValid()) {
+			qWarning("AudioInput: Failed to initialize the WebRTC audio processor");
+			m_webrtc.reset();
+		} else {
+			qWarning("AudioInput: WebRTC audio processing active (echo cancellation: %s, noise suppression: %s)",
+					 webrtcEcho ? "on" : "off", webrtcNoise ? "on" : "off");
+		}
+	}
+#endif
 
 	bResetEncoder = true;
 
@@ -933,6 +963,23 @@ void AudioInput::selectNoiseCancel() {
 #endif
 	}
 
+	if (noiseCancel == Settings::NoiseCancelWebRTC) {
+#ifdef USE_WEBRTC_AUDIO_PROCESSING
+		// The WebRTC noise suppressor is run on the mono microphone signal in
+		// AudioInput::encodeAudioFrame, so it is not available in stereo.
+		if (m_transmitChannels > 1) {
+			qInfo("AudioInput: WebRTC noise suppression is not available when transmitting in stereo");
+			noiseCancel = Settings::NoiseCancelOff;
+		} else if (iFrameSize != 480) {
+			qInfo("AudioInput: Ignoring request to enable WebRTC noise suppression: unsupported frame size");
+			noiseCancel = Settings::NoiseCancelSpeex;
+		}
+#else
+		qInfo("AudioInput: Ignoring request to enable WebRTC noise suppression: Mumble was built without support for it");
+		noiseCancel = (m_transmitChannels > 1) ? Settings::NoiseCancelOff : Settings::NoiseCancelSpeex;
+#endif
+	}
+
 	bool preprocessorDenoise = false;
 	switch (noiseCancel) {
 		case Settings::NoiseCancelOff:
@@ -948,6 +995,9 @@ void AudioInput::selectNoiseCancel() {
 		case Settings::NoiseCancelBoth:
 			preprocessorDenoise = true;
 			qInfo("AudioInput: Using RNNoise 0.2 and Speex as noise canceller");
+			break;
+		case Settings::NoiseCancelWebRTC:
+			qInfo("AudioInput: Using WebRTC as noise canceller");
 			break;
 	}
 	m_preprocessor.setDenoise(preprocessorDenoise);
@@ -1038,6 +1088,21 @@ void AudioInput::encodeAudioFrame(AudioChunk chunk) {
 	} else {
 		psSource = chunk.mic;
 	}
+
+#ifdef USE_WEBRTC_AUDIO_PROCESSING
+	// The WebRTC processor performs echo cancellation and/or noise suppression
+	// in place on the mono microphone signal (only ever active for mono transmission).
+	if (m_webrtc) {
+		if (m_webrtc->echoCancelEnabled() && chunk.speaker) {
+			m_webrtc->analyzeReverseStream(chunk.speaker);
+		}
+
+		// The resynchronizer enforces a fixed lag of the microphone relative to
+		// the speaker; AEC3 refines the alignment internally from this estimate.
+		const int streamDelayMs = resync.getNominalLag() * (iFrameSize * 1000 / static_cast< int >(iSampleRate));
+		m_webrtc->processCapture(psSource, streamDelayMs);
+	}
+#endif
 
 #ifdef USE_RNNOISE
 	// At the time of writing this code, RNNoise only supports a sample rate of 48000 Hz.
