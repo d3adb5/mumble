@@ -7,6 +7,7 @@
 
 #include "API.h"
 #include "AudioInputAmplification.h"
+#include "AudioInputSilence.h"
 #include "AudioOutput.h"
 #include "MainWindow.h"
 #include "MumbleProtocol.h"
@@ -1020,14 +1021,12 @@ int AudioInput::encodeOpusFrame(short *source, int size, EncodingOutputBuffer &b
 	// buffer (and thereby into the maximum packet size allowed by the protocol). This
 	// bound holds for CBR and for constrained VBR, which respects the bitrate as a
 	// ceiling.
-	int bitrate = std::min(iAudioQuality, maxPayloadBitrate(tenMsFrameCount));
-
 	// While the outgoing stream is silent (e.g. the voice-hold tail or a held PTT key
 	// over a pause), drop the bitrate to a floor: encoding silence at full quality just
 	// wastes bandwidth.
-	if (silent && Global::get().s.bReduceBitrateOnSilence) {
-		bitrate = std::min(bitrate, SILENCE_BITRATE);
-	}
+	const int bitrate = Mumble::SilenceDetection::transmitBitrate(
+		std::min(iAudioQuality, maxPayloadBitrate(tenMsFrameCount)), SILENCE_BITRATE, silent,
+		Global::get().s.bReduceBitrateOnSilence);
 
 	if (bResetEncoder) {
 		opus_encoder_ctl(opusState, OPUS_RESET_STATE, nullptr);
@@ -1229,7 +1228,7 @@ void AudioInput::encodeAudioFrame(AudioChunk chunk) {
 	// the silence we report for ourselves matches what others see for us. Used both
 	// to drive our own audibility indicator and the silence bitrate reduction.
 	const float fTransmitRMS = sqrtf(outSum / static_cast< float >(frameSamples)) / 32768.0f;
-	const bool bFrameSilent  = fTransmitRMS < ClientUser::AUDIBLE_RMS_THRESHOLD;
+	const bool bFrameSilent  = Mumble::SilenceDetection::isSilent(fTransmitRMS);
 
 	if (bDebugDumpInput) {
 		outMic.write(reinterpret_cast< const char * >(chunk.mic),

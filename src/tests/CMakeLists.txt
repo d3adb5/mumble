@@ -29,6 +29,7 @@ endif()
 
 if(client)
 	add_subdirectory("TestAudioAmplification")
+	add_subdirectory("TestAudioInputSilence")
 	add_subdirectory("TestMultiSlider")
 	add_subdirectory("TestXMLTools")
 	if(NOT "${CMAKE_SYSTEM_NAME}" STREQUAL "FreeBSD")

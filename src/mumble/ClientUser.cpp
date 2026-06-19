@@ -5,6 +5,7 @@
 
 #include "ClientUser.h"
 
+#include "AudioInputSilence.h"
 #include "AudioOutput.h"
 #include "Channel.h"
 #include "Log.h"
@@ -324,21 +325,22 @@ bool ClientUser::isAudible() {
 	if (tsState == Settings::Passive)
 		return false;
 
-	const std::chrono::milliseconds hold(qMax(Global::get().s.iSilenceDetectionHoldMs, 100));
+	const long long hold = qMax(Global::get().s.iSilenceDetectionHoldMs, 100);
 
-	// Only judge users whose audio is actually being received: without stream
-	// data to measure there is no basis to consider anyone silent.
-	if (!tLastAudioReceived.isStarted() || tLastAudioReceived.elapsed() > hold)
-		return true;
-
-	// The hold time bridges the natural pauses within speech
-	return tLastAudible.isStarted() && tLastAudible.elapsed() < hold;
+	// Only judge users whose audio is actually being received: without stream data to
+	// measure there is no basis to consider anyone silent. The hold time bridges the
+	// natural pauses within speech.
+	return Mumble::SilenceDetection::audibleWithinHold(
+		tLastAudioReceived.isStarted(),
+		tLastAudioReceived.isStarted() ? tLastAudioReceived.elapsed< std::chrono::milliseconds >().count() : 0,
+		tLastAudible.isStarted(),
+		tLastAudible.isStarted() ? tLastAudible.elapsed< std::chrono::milliseconds >().count() : 0, hold);
 }
 
 void ClientUser::registerAudioPower(float rmsPower) {
 	tLastAudioReceived.restart();
 
-	if (rmsPower >= AUDIBLE_RMS_THRESHOLD) {
+	if (!Mumble::SilenceDetection::isSilent(rmsPower)) {
 		tLastAudible.restart();
 	}
 
