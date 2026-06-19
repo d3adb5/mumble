@@ -63,8 +63,6 @@ public slots:
 	void on_qsQuality_valueChanged(int v);
 	void on_qsDoublePush_valueChanged(int v);
 	void on_qsPTTHold_valueChanged(int v);
-	void on_qsTransmitMin_valueChanged();
-	void on_qsTransmitMax_valueChanged();
 	void on_qsSpeexNoiseSupStrength_valueChanged(int v);
 	void on_qsAmpRise_valueChanged(int v);
 	void on_qsAmpFall_valueChanged(int v);

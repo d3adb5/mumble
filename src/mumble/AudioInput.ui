@@ -322,13 +322,13 @@
             </property>
            </widget>
           </item>
-          <item row="3" column="0">
-           <widget class="QLabel" name="qliTransmitMin">
+          <item row="2" column="0">
+           <widget class="QLabel" name="qliTransmit">
             <property name="text">
-             <string>Silence Below</string>
+             <string>Thresholds</string>
             </property>
             <property name="buddy">
-             <cstring>qsTransmitMin</cstring>
+             <cstring>qsTransmit</cstring>
             </property>
            </widget>
           </item>
@@ -351,25 +351,6 @@
             </property>
             <property name="orientation">
              <enum>Qt::Horizontal</enum>
-            </property>
-           </widget>
-          </item>
-          <item row="2" column="1">
-           <widget class="AudioBar" name="abSpeech" native="true">
-            <property name="maximumSize">
-             <size>
-              <width>16777215</width>
-              <height>10</height>
-             </size>
-            </property>
-            <property name="toolTip">
-             <string>Current speech detection chance</string>
-            </property>
-            <property name="whatsThis">
-             <string>&lt;b&gt;This shows the current speech detection settings.&lt;/b&gt;&lt;br /&gt;You can change the settings from the Settings dialog or from the Audio Wizard.</string>
-            </property>
-            <property name="accessibleName">
-             <string>Current speech detection chance</string>
             </property>
            </widget>
           </item>
@@ -413,75 +394,31 @@
             </item>
            </layout>
           </item>
-          <item row="4" column="0">
-           <widget class="QLabel" name="qliTransmitMax">
-            <property name="text">
-             <string>Speech Above</string>
+          <item row="2" column="1">
+           <widget class="MultiSlider" name="qsTransmit" native="true">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Expanding" vsizetype="Minimum">
+              <horstretch>1</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
             </property>
-            <property name="buddy">
-             <cstring>qsTransmitMax</cstring>
+            <property name="minimumSize">
+             <size>
+              <width>0</width>
+              <height>56</height>
+             </size>
             </property>
-           </widget>
-          </item>
-          <item row="3" column="1">
-           <widget class="SemanticSlider" name="qsTransmitMin">
             <property name="toolTip">
-             <string>Signal values below this count as silence</string>
+             <string>Silence and speech detection thresholds</string>
             </property>
             <property name="whatsThis">
-             <string>&lt;b&gt;This sets the trigger values for voice detection.&lt;/b&gt;&lt;br /&gt;Use this together with the Audio Statistics window to manually tune the trigger values for detecting speech. Input values below &quot;Silence Below&quot; always count as silence. Values above &quot;Speech Above&quot; always count as voice. Values in between will count as voice if you're already talking, but will not trigger a new detection.</string>
+             <string>&lt;b&gt;This sets the trigger values for voice detection.&lt;/b&gt;&lt;br /&gt;Two coupled handles on one bar, always ordered &lt;i&gt;Silence&lt;/i&gt; &amp;le; &lt;i&gt;Speech&lt;/i&gt;. Use this together with the Audio Statistics window to manually tune the trigger values for detecting speech. Input values below the &lt;i&gt;Silence&lt;/i&gt; handle always count as silence. Values above the &lt;i&gt;Speech&lt;/i&gt; handle always count as voice. Values in between will count as voice if you're already talking, but will not trigger a new detection. The handles cannot cross, so the ordering is always preserved.</string>
             </property>
             <property name="accessibleName">
-             <string>Silence below threshold</string>
+             <string>Voice detection thresholds</string>
             </property>
             <property name="accessibleDescription">
-             <string>This sets the threshold when Mumble will definitively consider a signal silence</string>
-            </property>
-            <property name="minimum">
-             <number>1</number>
-            </property>
-            <property name="maximum">
-             <number>32767</number>
-            </property>
-            <property name="singleStep">
-             <number>100</number>
-            </property>
-            <property name="pageStep">
-             <number>1000</number>
-            </property>
-            <property name="orientation">
-             <enum>Qt::Horizontal</enum>
-            </property>
-           </widget>
-          </item>
-          <item row="4" column="1">
-           <widget class="SemanticSlider" name="qsTransmitMax">
-            <property name="toolTip">
-             <string>Signal values above this count as voice</string>
-            </property>
-            <property name="whatsThis">
-             <string>&lt;b&gt;This sets the trigger values for voice detection.&lt;/b&gt;&lt;br /&gt;Use this together with the Audio Statistics window to manually tune the trigger values for detecting speech. Input values below &quot;Silence Below&quot; always count as silence. Values above &quot;Speech Above&quot; always count as voice. Values in between will count as voice if you're already talking, but will not trigger a new detection.</string>
-            </property>
-            <property name="accessibleName">
-             <string>Speech above threshold</string>
-            </property>
-            <property name="accessibleDescription">
-             <string>This sets the threshold when Mumble will definitively consider a signal speech</string>
-            </property>
-            <property name="minimum">
-             <number>1</number>
-            </property>
-            <property name="maximum">
-             <number>32767</number>
-            </property>
-            <property name="singleStep">
-             <number>100</number>
-            </property>
-            <property name="pageStep">
-             <number>1000</number>
-            </property>
-            <property name="orientation">
-             <enum>Qt::Horizontal</enum>
+             <string>This sets the thresholds when Mumble will definitively consider a signal silence or speech</string>
             </property>
            </widget>
           </item>
@@ -1359,12 +1296,6 @@
  </widget>
  <customwidgets>
   <customwidget>
-   <class>AudioBar</class>
-   <extends>QWidget</extends>
-   <header>AudioStats.h</header>
-   <container>1</container>
-  </customwidget>
-  <customwidget>
    <class>MUComboBox</class>
    <extends>QComboBox</extends>
    <header>widgets/MUComboBox.h</header>
@@ -1389,8 +1320,7 @@
   <tabstop>qrbAmplitude</tabstop>
   <tabstop>qrbSNR</tabstop>
   <tabstop>qsTransmitHold</tabstop>
-  <tabstop>qsTransmitMin</tabstop>
-  <tabstop>qsTransmitMax</tabstop>
+  <tabstop>qsTransmit</tabstop>
   <tabstop>qsQuality</tabstop>
   <tabstop>qsDoublePush</tabstop>
   <tabstop>qsPTTHold</tabstop>

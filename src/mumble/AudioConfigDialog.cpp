@@ -17,6 +17,7 @@
 
 #include <QColor>
 #include <QSignalBlocker>
+#include <QTimer>
 
 #include <cstdint>
 
@@ -127,10 +128,6 @@ AudioInputDialog::AudioInputDialog(Settings &st) : ConfigWidget(st) {
 	qcbWebRTCNoiseLevel->addItem(tr("Very high"), static_cast< int >(Settings::WebRTCNoiseVeryHigh));
 #endif
 
-	abSpeech->qcBelow  = Qt::red;
-	abSpeech->qcInside = Qt::yellow;
-	abSpeech->qcAbove  = Qt::green;
-
 	// One bar, three handles for the base, adaptive and maximum amplification.
 	qsAmp->setRange(0, AMP_SLIDER_MAX);
 	qsAmp->setSingleStep(500);
@@ -143,6 +140,14 @@ AudioInputDialog::AudioInputDialog(Settings &st) : ConfigWidget(st) {
 	qsAmpThreshold->setSingleStep(AMP_THRESHOLD_MAX / 100);
 	qsAmpThreshold->setCaptions({ tr("Min"), tr("Max") });
 	qsAmpThreshold->setValueFormatter(ampThresholdText);
+
+	// Two coupled handles (silence/speech) for the voice activity thresholds,
+	// sharing the same 0-32767 scale as the amplification detection thresholds.
+	qsTransmit->setHandleCount(2);
+	qsTransmit->setRange(1, 32767);
+	qsTransmit->setSingleStep(100);
+	qsTransmit->setCaptions({ tr("Silence"), tr("Speech") });
+	qsTransmit->setValueFormatter(ampThresholdText);
 
 	qcbDevice->view()->setTextElideMode(Qt::ElideRight);
 
@@ -190,8 +195,8 @@ void AudioInputDialog::load(const Settings &r) {
 
 	loadComboBox(qcbTransmit, r.atTransmit);
 	loadSlider(qsTransmitHold, r.iVoiceHold);
-	loadSlider(qsTransmitMin, static_cast< int >(r.fVADmin * 32767.0f + 0.5f));
-	loadSlider(qsTransmitMax, static_cast< int >(r.fVADmax * 32767.0f + 0.5f));
+	qsTransmit->setValues({ static_cast< int >(r.fVADmin * 32767.0f + 0.5f),
+							static_cast< int >(r.fVADmax * 32767.0f + 0.5f) });
 	loadSlider(qsFrames, (r.iFramesPerPacket == 1) ? 1 : (r.iFramesPerPacket / 2 + 1));
 	loadSlider(qsDoublePush, static_cast< int >(static_cast< float >(r.uiDoublePush) / 1000.f + 0.5f));
 	loadSlider(qsPTTHold, static_cast< int >(r.pttHold));
@@ -305,8 +310,8 @@ void AudioInputDialog::save() const {
 	s.iAmplificationRiseMs      = qsAmpRise->value();
 	s.iAmplificationFallMs      = qsAmpFall->value();
 	s.iVoiceHold       = qsTransmitHold->value();
-	s.fVADmin          = static_cast< float >(qsTransmitMin->value()) / 32767.0f;
-	s.fVADmax          = static_cast< float >(qsTransmitMax->value()) / 32767.0f;
+	s.fVADmin          = static_cast< float >(qsTransmit->value(0)) / 32767.0f;
+	s.fVADmax          = static_cast< float >(qsTransmit->value(1)) / 32767.0f;
 	s.vsVAD            = qrbSNR->isChecked() ? Settings::SignalToNoise : Settings::Amplitude;
 	s.iFramesPerPacket = qsFrames->value();
 	s.iFramesPerPacket = (s.iFramesPerPacket == 1) ? 1 : ((s.iFramesPerPacket - 1) * 2);
@@ -412,15 +417,7 @@ void AudioInputDialog::on_qsAmpFall_valueChanged(int v) {
 
 void AudioInputDialog::on_qpbAmpInheritVAD_clicked() {
 	// Copy the current voice-activity thresholds into the amplification ones.
-	qsAmpThreshold->setValues({ qsTransmitMin->value(), qsTransmitMax->value() });
-}
-
-void AudioInputDialog::on_qsTransmitMin_valueChanged() {
-	Mumble::Accessibility::setSliderSemanticValue(qsTransmitMin, Mumble::Accessibility::SliderMode::READ_PERCENT, "%");
-}
-
-void AudioInputDialog::on_qsTransmitMax_valueChanged() {
-	Mumble::Accessibility::setSliderSemanticValue(qsTransmitMax, Mumble::Accessibility::SliderMode::READ_PERCENT, "%");
+	qsAmpThreshold->setValues({ qsTransmit->value(0), qsTransmit->value(1) });
 }
 
 void AudioInputDialog::updateBitrate() {
@@ -683,15 +680,25 @@ void AudioInputDialog::on_Tick_timeout() {
 	if (!ai.get() || !ai->m_preprocessor)
 		return;
 
-	abSpeech->iBelow = qsTransmitMin->value();
-	abSpeech->iAbove = qsTransmitMax->value();
-
+	// Live voice-detection level against the silence/speech thresholds. The
+	// indicator is coloured the way the old AudioBar was: red below the silence
+	// handle, green above the speech handle, amber in the hysteresis band.
+	int detectLevel;
 	if (qrbAmplitude->isChecked()) {
-		abSpeech->iValue = static_cast< int >((32767.f / 96.0f) * (96.0f + ai->dPeakCleanMic) + 0.5f);
+		detectLevel = static_cast< int >((32767.f / 96.0f) * (96.0f + ai->dPeakCleanMic) + 0.5f);
 	} else {
-		abSpeech->iValue = static_cast< int >(ai->fSpeechProb * 32767.0f + 0.5f);
+		detectLevel = static_cast< int >(ai->fSpeechProb * 32767.0f + 0.5f);
 	}
-	abSpeech->update();
+
+	QColor transmitColor;
+	if (detectLevel >= qsTransmit->value(1)) {
+		transmitColor = QColor(0x22, 0xaa, 0x22);
+	} else if (detectLevel < qsTransmit->value(0)) {
+		transmitColor = QColor(0xcc, 0x33, 0x33);
+	} else {
+		transmitColor = QColor(0xcc, 0x88, 0x00);
+	}
+	qsTransmit->setIndicator(detectLevel, true, transmitColor);
 
 	// Live amplification: the factor currently applied, marked on the slider, and
 	// whether the input is detected as speech or noise (noise caps gain at the
