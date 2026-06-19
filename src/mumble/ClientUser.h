@@ -58,6 +58,11 @@ public:
 	 */
 	bool isActive();
 
+	/// RMS values (on float samples in [-1, 1]) at or above this count as audible
+	/// rather than silence (-60 dBFS). Shared so the transmit side classifies its
+	/// own outgoing frames the same way receivers classify the decoded audio.
+	static constexpr float AUDIBLE_RMS_THRESHOLD = 0.001f;
+
 	/// Whether the user's current transmission has recently been audible, i.e.
 	/// whether they are actually heard rather than transmitting silence
 	bool isAudible();

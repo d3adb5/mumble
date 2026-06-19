@@ -323,11 +323,6 @@ bool ClientUser::isAudible() {
 	if (tsState == Settings::Passive)
 		return false;
 
-	// Audibility is measured from received audio, which does not exist for
-	// ourselves: whether we transmit at all is the authoritative signal.
-	if (uiSession == Global::get().uiSession)
-		return true;
-
 	const std::chrono::milliseconds hold(qMax(Global::get().s.iSilenceDetectionHoldMs, 100));
 
 	// Only judge users whose audio is actually being received: without stream
@@ -340,9 +335,6 @@ bool ClientUser::isAudible() {
 }
 
 void ClientUser::registerAudioPower(float rmsPower) {
-	// RMS values (on float samples in [-1, 1]) below this are considered silence (-60 dBFS)
-	constexpr float AUDIBLE_RMS_THRESHOLD = 0.001f;
-
 	tLastAudioReceived.restart();
 
 	if (rmsPower >= AUDIBLE_RMS_THRESHOLD) {

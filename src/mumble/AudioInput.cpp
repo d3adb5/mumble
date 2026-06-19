@@ -1203,6 +1203,12 @@ void AudioInput::encodeAudioFrame(AudioChunk chunk) {
 		outSum += static_cast< float >(psSource[i]) * static_cast< float >(psSource[i]);
 	dPeakProcessed = qMax(20.0f * log10f(sqrtf(outSum / static_cast< float >(frameSamples)) / 32768.0f), -96.0f);
 
+	// RMS of the processed (i.e. transmitted) signal, normalised to [0, 1]. It is
+	// judged silent with the same threshold receivers use on the decoded audio, so
+	// the silence we report for ourselves matches what others see for us. Used both
+	// to drive our own audibility indicator and the silence bitrate reduction.
+	const float fTransmitRMS = sqrtf(outSum / static_cast< float >(frameSamples)) / 32768.0f;
+
 	if (bDebugDumpInput) {
 		outMic.write(reinterpret_cast< const char * >(chunk.mic),
 					 static_cast< std::streamsize >(frameSamples * sizeof(short)));
@@ -1309,6 +1315,13 @@ void AudioInput::encodeAudioFrame(AudioChunk chunk) {
 			p->setTalking(Settings::Talking);
 		else
 			p->setTalking(Settings::Shouting);
+
+		// Feed our own outgoing level into the audibility tracker (there is no
+		// received audio for ourselves) so the self icon switches to the silent
+		// state while we keep transmitting silence. Only meaningful while we
+		// actually transmit; when passive the icon already shows the idle state.
+		if (bIsSpeech)
+			p->registerAudioPower(fTransmitRMS);
 	}
 
 	if (Global::get().uiSession != 0) {
