@@ -61,6 +61,7 @@ option(use-timestamps "Allow using compile-time timestamps" ON)
 option(client "Build the client (Mumble)" ON)
 option(server "Build the server (Murmur)" ON)
 option(packaging "Build package." OFF)
+option(deb-package "Configure CPack to build a Debian (.deb) package; run \"cpack -G DEB\" after building." OFF)
 option(tests "Build tests." ${packaging})
 option(plugins "Build plugins." ON)
 
@@ -273,4 +274,21 @@ if(packaging)
 				${CMAKE_BINARY_DIR}/installer/icons
 		)
 	endif()
+endif()
+
+if(deb-package)
+	# Debian package metadata for CPack. Build the binaries, then run "cpack -G DEB"
+	# in the build tree to turn the install() rules into an installable .deb.
+	set(CPACK_PACKAGE_NAME "mumble")
+	set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+	set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "${PROJECT_DESCRIPTION}")
+	set(CPACK_PACKAGE_HOMEPAGE_URL "${PROJECT_HOMEPAGE_URL}")
+	set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Mumble Developers")
+	set(CPACK_DEBIAN_PACKAGE_SECTION "sound")
+	# Resolve the shared-library dependencies (Qt, OpenSSL, ...) automatically from the
+	# linked binaries; requires dpkg-dev (dpkg-shlibdeps) to be present at package time.
+	set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+	# Produce a single package with every installed component rather than one per component.
+	set(CPACK_DEB_COMPONENT_INSTALL OFF)
+	include(CPack)
 endif()

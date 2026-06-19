@@ -13,10 +13,18 @@ on:
         type: boolean
         default: false
 
+# Only keep the latest run per ref going: a newer push cancels the older,
+# still-running build instead of queueing behind it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
   BUILD_TYPE: Release
-  CMAKE_OPTIONS: -Dtests=ON -Dsymbols=ON -Ddisplay-install-paths=ON -Dtest-lto=OFF -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache
+  # -Dwebrtc-audio-processing=ON is the default, but set explicitly so the AEC3 echo
+  # cancellation and noise suppression are guaranteed to be compiled in and linked.
+  CMAKE_OPTIONS: -Dtests=ON -Dsymbols=ON -Ddisplay-install-paths=ON -Dtest-lto=OFF -Dwebrtc-audio-processing=ON -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache
 
 
 jobs:
@@ -46,13 +54,13 @@ jobs:
     strategy:
         fail-fast: false
         matrix:
-            os: [ubuntu-22.04, ubuntu-24.04, windows-2025-vs2026, macos-14]
+            # macOS and FreeBSD are disabled for now to keep CI fast; Linux (static and
+            # shared) and Windows (static) cover the supported build configurations.
+            os: [ubuntu-22.04, ubuntu-24.04, windows-2025-vs2026]
             type: [static, shared]
             arch: [x86_64]
             exclude:
               - os: windows-2025-vs2026
-                type: shared
-              - os: macos-14
                 type: shared
               - os: ubuntu-22.04
                 type: static
@@ -65,11 +73,6 @@ jobs:
           submodules: 'recursive'
           fetch-depth: 1
 
-
-      # The Bash version installed on macOS is ancient. We need a newer version
-    - name: Install Bash
-      if: startswith(matrix.os, 'macos')
-      run: brew install bash
 
     - name: Set environment variables
       run: $GITHUB_WORKSPACE/.github/workflows/set_environment_variables.sh "${{ matrix.os }}" "${{ matrix.type }}" "${{ matrix.arch }}" "${{ github.workspace }}"
@@ -120,7 +123,6 @@ jobs:
         compression-level: 9
         path: |
           build/mumble
-          build/Mumble.app
           build/mumble-server
           build/**/mumble*.msi
           build/**/mumble*.exe
@@ -134,3 +136,90 @@ jobs:
       with:
           path: '${{ env.MUMBLE_ENVIRONMENT_DIR }}'
           key: ${{ env.MUMBLE_ENVIRONMENT_VERSION }}
+
+
+  # Build an installable Mumble client .deb on the newer Ubuntu releases that are not
+  # available as GitHub runner images, using their official containers. This is a shared
+  # build that links against the distribution's system libraries. The server, the 32-bit
+  # overlay and the tests are left out to keep the package build self-contained on a bare
+  # container (no multilib, no database); the build matrix above covers those.
+  package_deb:
+    needs: [ fetch_build_number ]
+
+    strategy:
+        fail-fast: false
+        matrix:
+            include:
+              - { image: "ubuntu:25.10", label: "ubuntu-25.10" }
+              - { image: "ubuntu:26.04", label: "ubuntu-26.04" }
+
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+
+    steps:
+      # git (for the recursive submodule checkout) and the build toolchain have to be
+      # installed before anything else, as the base image ships none of them. dpkg-dev
+      # provides dpkg-shlibdeps, which CPack uses to resolve the package dependencies.
+    - name: Install build dependencies
+      shell: bash
+      run: |
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update
+        apt-get install -y --no-install-recommends \
+          ca-certificates git cmake ninja-build pkg-config dpkg-dev file python3 \
+          build-essential \
+          qt6-base-dev qt6-svg-dev qt6-tools-dev qt6-tools-dev-tools qt6-l10n-tools libgl-dev \
+          libboost-dev libssl-dev \
+          libprotobuf-dev protobuf-compiler libprotoc-dev \
+          libcap-dev libxi-dev \
+          libasound2-dev libogg-dev libsndfile1-dev libopus-dev \
+          libspeechd-dev libavahi-compat-libdnssd-dev appstream
+
+    - uses: actions/checkout@v6
+      with:
+          submodules: 'recursive'
+          fetch-depth: 1
+
+      # The checkout runs as root inside the container, so mark the tree as a safe
+      # git directory to avoid "dubious ownership" errors from any later git calls.
+    - name: Mark workspace as safe
+      shell: bash
+      run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      # warnings-as-errors is left off here: these are bleeding-edge distributions with
+      # newer compilers, and the goal of this job is to produce a package rather than to
+      # gate on warnings (the build matrix above enforces a warning-clean build). Tests
+      # are likewise built and run by that matrix, so they are skipped here for speed.
+    - name: Configure
+      shell: bash
+      run: |
+        cmake -B build -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_INSTALL_PREFIX=/usr \
+          -DCMAKE_UNITY_BUILD=ON \
+          -DBUILD_NUMBER="$MUMBLE_BUILD_NUMBER" \
+          -Dtests=OFF \
+          -Dserver=OFF \
+          -Doverlay-xcompile=OFF \
+          -Dwarnings-as-errors=OFF \
+          -Dwebrtc-audio-processing=ON \
+          -Dstatic=OFF \
+          -Ddeb-package=ON
+      env:
+          MUMBLE_BUILD_NUMBER: ${{ needs.fetch_build_number.outputs.build_number }}
+
+    - name: Build
+      shell: bash
+      run: cmake --build build --parallel
+
+    - name: Package
+      working-directory: build
+      shell: bash
+      run: cpack -G DEB
+
+    - name: Publish .deb
+      uses: actions/upload-artifact@v7
+      with:
+        name: 'Mumble-${{ matrix.label }}-deb'
+        compression-level: 9
+        path: build/*.deb

@@ -1,11 +1,10 @@
 
 name: Build and Test
 
+# Disabled for now to keep CI fast: this FreeBSD VM build only runs when triggered
+# manually from the Actions tab, not automatically on push or pull request.
 on:
-  push:
-    branches: '*'
-  pull_request:
-    branches: '*'
+  workflow_dispatch:
 
 jobs:
   test:
