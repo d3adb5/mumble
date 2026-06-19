@@ -171,7 +171,7 @@ jobs:
           qt6-base-dev qt6-svg-dev qt6-tools-dev qt6-tools-dev-tools qt6-l10n-tools libgl-dev \
           libboost-dev libssl-dev \
           libprotobuf-dev protobuf-compiler libprotoc-dev \
-          libcap-dev libxi-dev \
+          libcap-dev libxi-dev libpoco-dev \
           libasound2-dev libogg-dev libsndfile1-dev libopus-dev \
           libspeechd-dev libavahi-compat-libdnssd-dev appstream
 
