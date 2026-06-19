@@ -547,7 +547,33 @@
         </property>
        </widget>
       </item>
-      <item row="4" column="0" colspan="3">
+      <item row="5" column="0" colspan="3">
+       <widget class="QCheckBox" name="qcbUseVBR">
+        <property name="toolTip">
+         <string>Encode with variable bitrate, using the quality above as a ceiling and fewer bits when the signal allows</string>
+        </property>
+        <property name="whatsThis">
+         <string>&lt;b&gt;If checked, Mumble encodes your audio with a variable bitrate.&lt;/b&gt;&lt;br /&gt;The &lt;i&gt;Quality&lt;/i&gt; setting acts as a ceiling rather than a constant rate, so simpler audio (and silence) is sent with fewer bits while complex audio is allowed up to the configured quality. This trades a predictable bitrate for better average bandwidth at the same quality.</string>
+        </property>
+        <property name="text">
+         <string>Variable bitrate</string>
+        </property>
+       </widget>
+      </item>
+      <item row="6" column="0" colspan="3">
+       <widget class="QCheckBox" name="qcbReduceBitrateOnSilence">
+        <property name="toolTip">
+         <string>Lower the bitrate while the transmitted stream is silent (voice hold tail, held PTT over a pause, continuous silence)</string>
+        </property>
+        <property name="whatsThis">
+         <string>&lt;b&gt;If checked, Mumble drops the encoder bitrate to a floor while the outgoing stream is detected to be silent.&lt;/b&gt;&lt;br /&gt;This saves bandwidth when frames are still transmitted but carry no speech, such as the voice-hold tail after you stop talking or a push-to-talk key held over a pause.</string>
+        </property>
+        <property name="text">
+         <string>Reduce bitrate when silent</string>
+        </property>
+       </widget>
+      </item>
+      <item row="7" column="0" colspan="3">
        <widget class="QLabel" name="qlBitrate">
         <property name="font">
          <font>
@@ -1327,6 +1353,8 @@
   <tabstop>qcbPushWindow</tabstop>
   <tabstop>qsFrames</tabstop>
   <tabstop>qcbAllowLowDelay</tabstop>
+  <tabstop>qcbUseVBR</tabstop>
+  <tabstop>qcbReduceBitrateOnSilence</tabstop>
   <tabstop>qcbStereoInput</tabstop>
   <tabstop>qsAmp</tabstop>
   <tabstop>qsAmpThreshold</tabstop>

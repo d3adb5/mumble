@@ -222,7 +222,7 @@ public:
 private:
 	using EncodingOutputBuffer = std::array< unsigned char, MAX_PACKET_PAYLOAD >;
 
-	int encodeOpusFrame(short *source, int size, EncodingOutputBuffer &buffer);
+	int encodeOpusFrame(short *source, int size, EncodingOutputBuffer &buffer, bool silent);
 
 	QElapsedTimer qetLastMuteCue;
 

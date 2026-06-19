@@ -47,6 +47,10 @@ static short clampFloatSample(float v) {
 /// rise/fall times into a per-frame smoothing step.
 static constexpr float FRAME_MS = 1000.0f * (SAMPLE_RATE / 100) / SAMPLE_RATE;
 
+// Bitrate the Opus encoder is held at while the outgoing stream is silent (when the
+// silence bitrate reduction is enabled). Matches the floor used by adjustBandwidth().
+static constexpr int SILENCE_BITRATE = 8000;
+
 void Resynchronizer::addMic(short *mic) {
 	bool drop = false;
 	{
@@ -258,7 +262,9 @@ AudioInput::AudioInput()
 		qWarning("AudioInput: Transmitting in stereo");
 	}
 
-	opus_encoder_ctl(opusState, OPUS_SET_VBR(0)); // CBR
+	// Initial encoder rate-control default; the actual VBR/CBR mode and bitrate are
+	// (re)applied per frame in encodeOpusFrame() so the bUseVBR setting takes effect live.
+	opus_encoder_ctl(opusState, OPUS_SET_VBR(0)); // CBR by default
 
 #ifdef USE_RNNOISE
 	denoiseState  = rnnoise_create(nullptr);
@@ -1005,25 +1011,40 @@ void AudioInput::selectNoiseCancel() {
 
 /// \param source interleaved PCM data, holding size * m_transmitChannels samples
 /// \param size number of samples per channel
-int AudioInput::encodeOpusFrame(short *source, int size, EncodingOutputBuffer &buffer) {
+int AudioInput::encodeOpusFrame(short *source, int size, EncodingOutputBuffer &buffer, bool silent) {
 	int len;
 	const int tenMsFrameCount = (size / iFrameSize);
 
-	// With CBR, a packet of N 10 ms frames encoded at bitrate b takes b * N / (100 * 8)
+	// A packet of N 10 ms frames encoded at bitrate b takes at most b * N / (100 * 8)
 	// bytes. Cap the bitrate such that the encoded packet always fits into the output
-	// buffer (and thereby into the maximum packet size allowed by the protocol).
-	const int bitrate = std::min(iAudioQuality, maxPayloadBitrate(tenMsFrameCount));
+	// buffer (and thereby into the maximum packet size allowed by the protocol). This
+	// bound holds for CBR and for constrained VBR, which respects the bitrate as a
+	// ceiling.
+	int bitrate = std::min(iAudioQuality, maxPayloadBitrate(tenMsFrameCount));
+
+	// While the outgoing stream is silent (e.g. the voice-hold tail or a held PTT key
+	// over a pause), drop the bitrate to a floor: encoding silence at full quality just
+	// wastes bandwidth.
+	if (silent && Global::get().s.bReduceBitrateOnSilence) {
+		bitrate = std::min(bitrate, SILENCE_BITRATE);
+	}
 
 	if (bResetEncoder) {
 		opus_encoder_ctl(opusState, OPUS_RESET_STATE, nullptr);
 		bResetEncoder = false;
 
-		if (bitrate < iAudioQuality) {
+		if (bitrate < iAudioQuality && !silent) {
 			qWarning("AudioInput: Bitrate clamped from %d to %d bit/s so that %d frames fit into one packet",
 					 iAudioQuality, bitrate, tenMsFrameCount);
 		}
 	}
 
+	// Variable bitrate is purely a client-side encoder choice; the server relays the
+	// opaque Opus frames and decoders handle VBR transparently. Use constrained VBR so
+	// the bitrate above still bounds the packet size. Re-applied each frame so a change
+	// in the setting takes effect without restarting the audio engine.
+	opus_encoder_ctl(opusState, OPUS_SET_VBR(Global::get().s.bUseVBR ? 1 : 0));
+	opus_encoder_ctl(opusState, OPUS_SET_VBR_CONSTRAINT(1));
 	opus_encoder_ctl(opusState, OPUS_SET_BITRATE(bitrate));
 
 	len      = opus_encode(opusState, source, size, &buffer[0], static_cast< opus_int32 >(buffer.size()));
@@ -1208,6 +1229,7 @@ void AudioInput::encodeAudioFrame(AudioChunk chunk) {
 	// the silence we report for ourselves matches what others see for us. Used both
 	// to drive our own audibility indicator and the silence bitrate reduction.
 	const float fTransmitRMS = sqrtf(outSum / static_cast< float >(frameSamples)) / 32768.0f;
+	const bool bFrameSilent  = fTransmitRMS < ClientUser::AUDIBLE_RMS_THRESHOLD;
 
 	if (bDebugDumpInput) {
 		outMic.write(reinterpret_cast< const char * >(chunk.mic),
@@ -1431,7 +1453,7 @@ void AudioInput::encodeAudioFrame(AudioChunk chunk) {
 
 		Q_ASSERT(iBufferedFrames == iAudioFrames);
 
-		len = encodeOpusFrame(&opusBuffer[0], iBufferedFrames * iFrameSize, buffer);
+		len = encodeOpusFrame(&opusBuffer[0], iBufferedFrames * iFrameSize, buffer, bFrameSilent);
 		opusBuffer.clear();
 		if (len <= 0) {
 			iBitrate = 0;

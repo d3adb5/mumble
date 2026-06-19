@@ -313,6 +313,14 @@ struct Settings {
 	/// buffer before old audio is dropped. Only used if bLimitIncomingAudioDelay is set.
 	int iMaxIncomingAudioDelayMs    = 500;
 	bool bAllowLowDelay             = true;
+	/// If true, the Opus encoder runs in (constrained) variable-bitrate mode: the
+	/// configured quality acts as a ceiling, but the encoder uses fewer bits when the
+	/// signal allows it. Off by default so the bitrate stays predictable (CBR).
+	bool bUseVBR                    = false;
+	/// If true, the transmit bitrate is lowered while the outgoing stream is detected
+	/// to be silent (hold tail, held PTT over a pause, continuous transmission of
+	/// silence), saving bandwidth. On by default.
+	bool bReduceBitrateOnSilence    = true;
 	/// If true, a console-log entry is written whenever another user's transmission is
 	/// detected to have gone silent (they keep transmitting but the signal is silence).
 	bool bLogSilentTransmission     = false;

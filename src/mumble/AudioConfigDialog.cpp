@@ -212,6 +212,8 @@ void AudioInputDialog::load(const Settings &r) {
 	updateAudioCueEnabled();
 	loadCheckBox(qcbMuteCue, r.bTxMuteCue);
 	loadCheckBox(qcbAllowLowDelay, r.bAllowLowDelay);
+	loadCheckBox(qcbUseVBR, r.bUseVBR);
+	loadCheckBox(qcbReduceBitrateOnSilence, r.bReduceBitrateOnSilence);
 	loadCheckBox(qcbStereoInput, r.bStereoInput);
 	updateQualitySliderMax();
 	loadSlider(qsQuality, r.iQuality);
@@ -290,6 +292,8 @@ void AudioInputDialog::verifyMicrophonePermission() {
 void AudioInputDialog::save() const {
 	s.iQuality                  = qsQuality->value();
 	s.bAllowLowDelay            = qcbAllowLowDelay->isChecked();
+	s.bUseVBR                   = qcbUseVBR->isChecked();
+	s.bReduceBitrateOnSilence   = qcbReduceBitrateOnSilence->isChecked();
 	s.bStereoInput              = qcbStereoInput->isChecked();
 	s.iSpeexNoiseCancelStrength = (qsSpeexNoiseSupStrength->value() == 14) ? 0 : -qsSpeexNoiseSupStrength->value();
 
