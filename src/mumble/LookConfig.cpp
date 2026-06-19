@@ -261,6 +261,7 @@ void LookConfig::load(const Settings &r) {
 	qsbSilentUserLifetime->setValue(r.iTalkingUI_SilentUserLifeTime);
 	qsbSilenceHold->setValue(r.iSilenceDetectionHoldMs);
 	qleSilenceIcon->setText(r.qsTalkingSilentIcon);
+	loadCheckBox(qcbLogSilentTransmission, r.bLogSilentTransmission);
 	qsbChannelHierarchyDepth->setValue(r.iTalkingUI_ChannelHierarchyDepth);
 	qsbMaxNameLength->setValue(r.iTalkingUI_MaxChannelNameLength);
 	qsbPrefixCharCount->setValue(r.iTalkingUI_PrefixCharCount);
@@ -353,6 +354,7 @@ void LookConfig::save() const {
 	s.iTalkingUI_SilentUserLifeTime       = qsbSilentUserLifetime->value();
 	s.iSilenceDetectionHoldMs             = qsbSilenceHold->value();
 	s.qsTalkingSilentIcon                 = qleSilenceIcon->text();
+	s.bLogSilentTransmission              = qcbLogSilentTransmission->isChecked();
 	s.iTalkingUI_ChannelHierarchyDepth    = qsbChannelHierarchyDepth->value();
 	s.iTalkingUI_MaxChannelNameLength     = qsbMaxNameLength->value();
 	s.iTalkingUI_PrefixCharCount          = qsbPrefixCharCount->value();

@@ -76,6 +76,7 @@ const SettingsKey WEBRTC_NOISE_LEVEL_KEY                      = { "webrtc_noise_
 const SettingsKey WEBRTC_GAIN_CONTROL_KEY                     = { "webrtc_gain_control" };
 const SettingsKey INPUT_CHANNEL_MASK_KEY                      = { "input_channel_mask" };
 const SettingsKey ALLOW_LOW_DELAY_MODE_KEY                    = { "allow_low_delay_mode" };
+const SettingsKey LOG_SILENT_TRANSMISSION_KEY                = { "log_silent_transmission" };
 const SettingsKey STEREO_INPUT_KEY                            = { "stereo_input" };
 const SettingsKey VOICE_HOLD_KEY                              = { "voice_hold" };
 const SettingsKey OUTPUT_DELAY_KEY                            = { "output_delay" };

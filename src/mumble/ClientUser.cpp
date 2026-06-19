@@ -7,6 +7,7 @@
 
 #include "AudioOutput.h"
 #include "Channel.h"
+#include "Log.h"
 #include "PluginManager.h"
 #include "Global.h"
 
@@ -344,6 +345,16 @@ void ClientUser::registerAudioPower(float rmsPower) {
 	const bool nowAudible = isAudible();
 	if (nowAudible != m_lastAudibleState) {
 		m_lastAudibleState = nowAudible;
+
+		// Optionally note in the console log when another user keeps transmitting
+		// but their stream has gone silent. Only for other users: our own silence
+		// is self-evident and would only add noise to the log.
+		if (!nowAudible && Global::get().s.bLogSilentTransmission && uiSession != Global::get().uiSession
+			&& Global::get().l) {
+			Global::get().l->log(Log::Information,
+								  tr("%1 is transmitting silence").arg(qsName.toHtmlEscaped()));
+		}
+
 		// Reuse the talking state notification so that all views re-evaluate this user
 		emit talkingStateChanged();
 	}

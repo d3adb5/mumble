@@ -313,6 +313,9 @@ struct Settings {
 	/// buffer before old audio is dropped. Only used if bLimitIncomingAudioDelay is set.
 	int iMaxIncomingAudioDelayMs    = 500;
 	bool bAllowLowDelay             = true;
+	/// If true, a console-log entry is written whenever another user's transmission is
+	/// detected to have gone silent (they keep transmitting but the signal is silence).
+	bool bLogSilentTransmission     = false;
 	/// If true, the microphone input is transmitted with two channels (stereo) instead of
 	/// being mixed down to mono. Echo cancellation and noise suppression are unavailable
 	/// in this mode.

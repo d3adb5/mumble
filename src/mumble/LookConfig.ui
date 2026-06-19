@@ -218,6 +218,16 @@
         </property>
        </widget>
       </item>
+      <item row="2" column="0" colspan="3">
+       <widget class="QCheckBox" name="qcbLogSilentTransmission">
+        <property name="toolTip">
+         <string>Write a console-log message when another user keeps transmitting but their stream goes silent.</string>
+        </property>
+        <property name="text">
+         <string>Log when a user transmits silence</string>
+        </property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>
@@ -1395,6 +1405,7 @@
   <tabstop>qsbSilenceHold</tabstop>
   <tabstop>qleSilenceIcon</tabstop>
   <tabstop>qpbSilenceIconBrowse</tabstop>
+  <tabstop>qcbLogSilentTransmission</tabstop>
   <tabstop>qbBackgroundColor</tabstop>
  </tabstops>
  <resources/>

@@ -60,6 +60,7 @@
 	PROCESS(audio, WEBRTC_GAIN_CONTROL_KEY, bWebRTCGainControl)                             \
 	PROCESS(audio, INPUT_CHANNEL_MASK_KEY, uiAudioInputChannelMask)                         \
 	PROCESS(audio, ALLOW_LOW_DELAY_MODE_KEY, bAllowLowDelay)                                \
+	PROCESS(audio, LOG_SILENT_TRANSMISSION_KEY, bLogSilentTransmission)                     \
 	PROCESS(audio, STEREO_INPUT_KEY, bStereoInput)                                          \
 	PROCESS(audio, VOICE_HOLD_KEY, iVoiceHold)                                              \
 	PROCESS(audio, OUTPUT_DELAY_KEY, iOutputDelay)                                          \
@@ -446,6 +447,7 @@
 	PROCESS(audio, WEBRTC_NOISE_LEVEL_KEY, webrtcNoiseLevel)             \
 	PROCESS(audio, WEBRTC_GAIN_CONTROL_KEY, bWebRTCGainControl)          \
 	PROCESS(audio, ALLOW_LOW_DELAY_MODE_KEY, bAllowLowDelay)              \
+	PROCESS(audio, LOG_SILENT_TRANSMISSION_KEY, bLogSilentTransmission)   \
 	PROCESS(audio, STEREO_INPUT_KEY, bStereoInput)                        \
 	PROCESS(audio, VOICE_HOLD_KEY, iVoiceHold)                            \
 	PROCESS(audio, ECHO_CANCEL_MODE_KEY, echoOption)                      \
