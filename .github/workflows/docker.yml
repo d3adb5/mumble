@@ -1,0 +1,96 @@
+name: Docker
+
+# Builds a Mumble server container image from this fork and publishes it to the
+# GitHub Container Registry (GHCR). To avoid duplicating the container plumbing,
+# this workflow checks out the upstream mumble-docker repository at build time
+# and reuses its Dockerfile, scripts and entrypoint verbatim. The only change is
+# repointing scripts/clone.sh at this fork so the image is built from our source
+# at the exact commit that triggered the run.
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: 'Comma-separated list of target platforms to build for'
+        required: true
+        type: string
+        # Multi-arch builds run under QEMU emulation and compiling Mumble for a
+        # foreign architecture is very slow, so we default to the native amd64.
+        default: 'linux/amd64'
+
+# A newer push to master supersedes an in-flight image build.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Upstream container definition to reproduce. Pin to a ref here if you ever
+  # need a reproducible base instead of always tracking the default branch.
+  MUMBLE_DOCKER_REPO: mumble-voip/mumble-docker
+  MUMBLE_DOCKER_REF: master
+  # Resulting package: ghcr.io/<owner>/mumble-server
+  IMAGE_NAME: ${{ github.repository_owner }}/mumble-server
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Check out upstream mumble-docker
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ env.MUMBLE_DOCKER_REPO }}
+          ref: ${{ env.MUMBLE_DOCKER_REF }}
+
+      - name: Build this fork instead of upstream Mumble
+        # clone.sh hardcodes the upstream repository URL. Repoint it at this fork
+        # so the image is built from our source. MUMBLE_VERSION (the pushed
+        # commit) is then checked out by the unmodified checkout logic below it.
+        run: |
+          sed -i \
+            -e 's#https://github.com/mumble-voip/mumble/#${{ github.server_url }}/${{ github.repository }}/#' \
+            scripts/clone.sh
+          echo "::group::patched clone.sh"
+          cat scripts/clone.sh
+          echo "::endgroup::"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute image tags and labels
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=sha,format=long
+            type=sha
+
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: ${{ inputs.platforms || 'linux/amd64' }}
+          push: true
+          build-args: |
+            MUMBLE_VERSION=${{ github.sha }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
