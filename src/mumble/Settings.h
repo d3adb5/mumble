@@ -618,6 +618,8 @@ struct Settings {
 
 	bool bShowTransmitModeComboBox = false;
 	bool bShowNoiseCancelComboBox  = true;
+	bool bShowInputDeviceComboBox  = true;
+	bool bShowEchoCancelComboBox   = true;
 
 	// Accessibility
 	bool bHighContrast = false;

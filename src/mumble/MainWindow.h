@@ -204,6 +204,14 @@ protected:
 	QAction *qaNoiseCancel;
 	QAction *qaNoiseCancelSeparator;
 
+	MUComboBox *qcbInputDevice;
+	QAction *qaInputDevice;
+	QAction *qaInputDeviceSeparator;
+
+	MUComboBox *qcbEchoCancel;
+	QAction *qaEchoCancel;
+	QAction *qaEchoCancelSeparator;
+
 	Search::SearchDialog *m_searchDialog = nullptr;
 
 	qt_unique_ptr< MenuLabel > m_localVolumeLabel;
@@ -260,6 +268,10 @@ public slots:
 	void updateTransmitModeComboBox(Settings::AudioTransmit newMode);
 	void qcbNoiseCancel_activated(int index);
 	void updateNoiseCancelComboBox(Settings::NoiseCancel newMode);
+	void qcbInputDevice_activated(int index);
+	void populateInputDeviceComboBox();
+	void qcbEchoCancel_activated(int index);
+	void populateEchoCancelComboBox();
 	void qmUser_aboutToShow();
 	void qmListener_aboutToShow();
 	void on_qaUserCommentReset_triggered();
@@ -408,6 +420,10 @@ public slots:
 	void setTransmissionMode(Settings::AudioTransmit mode);
 	/// Sets the noise-suppression method and applies it to the running input.
 	void setNoiseCancel(Settings::NoiseCancel mode);
+	/// Selects the audio input device and restarts the audio streams to apply it.
+	void setInputDevice(const QVariant &deviceChoice);
+	/// Sets the echo-cancellation option and restarts the audio streams to apply it.
+	void setEchoCancel(EchoCancelOptionID option);
 	/// Sets the local user's mute state
 	///
 	/// @param mute Whether to mute the user

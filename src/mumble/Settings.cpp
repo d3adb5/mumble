@@ -1032,6 +1032,8 @@ void Settings::legacyLoad(const QString &path) {
 	LOAD(qbaConnectDialogHeader, "ui/connect/header");
 	LOAD(bShowTransmitModeComboBox, "ui/transmitmodecombobox");
 	LOAD(bShowNoiseCancelComboBox, "ui/noisecancelcombobox");
+	LOAD(bShowInputDeviceComboBox, "ui/inputdevicecombobox");
+	LOAD(bShowEchoCancelComboBox, "ui/echocancelcombobox");
 	LOAD(bHighContrast, "ui/HighContrast");
 	LOAD(iMaxLogBlocks, "ui/MaxLogBlocks");
 	LOAD(bLog24HourClock, "ui/24HourClock");

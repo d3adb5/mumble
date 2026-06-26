@@ -196,6 +196,8 @@
 	PROCESS(ui, CONNECT_DIALOG_HEADER_STATE_KEY, qbaConnectDialogHeader)         \
 	PROCESS(ui, DISPLAY_TRANSMIT_MODE_COMBOBOX_KEY, bShowTransmitModeComboBox)   \
 	PROCESS(ui, DISPLAY_NOISE_CANCEL_COMBOBOX_KEY, bShowNoiseCancelComboBox)     \
+	PROCESS(ui, DISPLAY_INPUT_DEVICE_COMBOBOX_KEY, bShowInputDeviceComboBox)     \
+	PROCESS(ui, DISPLAY_ECHO_CANCEL_COMBOBOX_KEY, bShowEchoCancelComboBox)       \
 	PROCESS(ui, HIGH_CONTRAST_MODE_KEY, bHighContrast)                           \
 	PROCESS(ui, MAX_LOG_LENGTH_KEY, iMaxLogBlocks)                               \
 	PROCESS(ui, USE_24H_CLOCK_KEY, bLog24HourClock)                              \
@@ -535,6 +537,8 @@
 	PROCESS(ui, CONTEXT_MENU_ENTRIES_IN_MENU_BAR_KEY, bShowContextMenuInMenuBar)                   \
 	PROCESS(ui, DISPLAY_TRANSMIT_MODE_COMBOBOX_KEY, bShowTransmitModeComboBox)                     \
 	PROCESS(ui, DISPLAY_NOISE_CANCEL_COMBOBOX_KEY, bShowNoiseCancelComboBox)                       \
+	PROCESS(ui, DISPLAY_INPUT_DEVICE_COMBOBOX_KEY, bShowInputDeviceComboBox)                       \
+	PROCESS(ui, DISPLAY_ECHO_CANCEL_COMBOBOX_KEY, bShowEchoCancelComboBox)                         \
 	PROCESS(ui, HIGH_CONTRAST_MODE_KEY, bHighContrast)                                             \
 	PROCESS(ui, SELECTED_ITEM_AS_CHATBAR_TARGET_KEY, bChatBarUseSelection)                         \
 	PROCESS(ui, FILTER_HIDES_EMPTY_CHANNEL_KEY, bFilterHidesEmptyChannels)                         \

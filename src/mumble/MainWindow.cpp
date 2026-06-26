@@ -8,6 +8,7 @@
 #include "ACL.h"
 #include "ACLEditor.h"
 #include "About.h"
+#include "Audio.h"
 #include "AudioInput.h"
 #include "AudioStats.h"
 #include "AudioWizard.h"
@@ -617,6 +618,25 @@ void MainWindow::setupGui() {
 
 	updateNoiseCancelComboBox(Global::get().s.noiseCancelMode);
 
+	// Input-device dropdown, listing the devices of the active audio input backend.
+	// Each item carries the backend-specific device identifier as data.
+	qcbInputDevice = new MUComboBox(qtIconToolbar);
+	qcbInputDevice->setObjectName(QLatin1String("qcbInputDevice"));
+	qcbInputDevice->setToolTip(tr("Audio input device"));
+	qaInputDeviceSeparator = qtIconToolbar->insertSeparator(qaNoiseCancel);
+	qaInputDevice          = qtIconToolbar->insertWidget(qaInputDeviceSeparator, qcbInputDevice);
+	connect(qcbInputDevice, SIGNAL(activated(int)), this, SLOT(qcbInputDevice_activated(int)));
+	populateInputDeviceComboBox();
+
+	// Echo-cancellation dropdown, listing the options the active backend supports.
+	qcbEchoCancel = new MUComboBox(qtIconToolbar);
+	qcbEchoCancel->setObjectName(QLatin1String("qcbEchoCancel"));
+	qcbEchoCancel->setToolTip(tr("Echo cancellation"));
+	qaEchoCancelSeparator = qtIconToolbar->insertSeparator(qaInputDevice);
+	qaEchoCancel          = qtIconToolbar->insertWidget(qaEchoCancelSeparator, qcbEchoCancel);
+	connect(qcbEchoCancel, SIGNAL(activated(int)), this, SLOT(qcbEchoCancel_activated(int)));
+	populateEchoCancelComboBox();
+
 #ifdef Q_OS_WIN
 	setupView(false);
 #endif
@@ -904,6 +924,76 @@ void MainWindow::updateNoiseCancelComboBox(Settings::NoiseCancel newMode) {
 	if (index >= 0) {
 		qcbNoiseCancel->setCurrentIndex(index);
 	}
+}
+
+void MainWindow::populateInputDeviceComboBox() {
+	const QSignalBlocker blocker(qcbInputDevice);
+	qcbInputDevice->clear();
+
+	bool hasChoices = false;
+	if (AudioInputRegistrar::qmNew) {
+		AudioInputRegistrar *air = AudioInputRegistrar::qmNew->value(AudioInputRegistrar::current);
+		if (air) {
+			const QVariant current             = air->getDeviceChoice();
+			const QList< audioDevice > choices = air->getDeviceChoices();
+			for (int i = 0; i < choices.size(); ++i) {
+				const audioDevice &choice = choices.at(i);
+				qcbInputDevice->addItem(choice.first, choice.second);
+				qcbInputDevice->setItemData(i, choice.first.toHtmlEscaped(), Qt::ToolTipRole);
+				if (choice.second == current) {
+					qcbInputDevice->setCurrentIndex(i);
+				}
+			}
+			hasChoices = !choices.isEmpty();
+		}
+	}
+
+	qcbInputDevice->setEnabled(hasChoices);
+}
+
+void MainWindow::qcbInputDevice_activated(int index) {
+	setInputDevice(qcbInputDevice->itemData(index));
+}
+
+void MainWindow::populateEchoCancelComboBox() {
+	const QSignalBlocker blocker(qcbEchoCancel);
+	qcbEchoCancel->clear();
+
+	// Index 0 is always "disabled"; backend-supported options follow.
+	qcbEchoCancel->addItem(tr("No Echo Cancellation"), static_cast< int >(EchoCancelOptionID::DISABLED));
+
+	bool hasUsableOption = false;
+	if (AudioInputRegistrar::qmNew) {
+		AudioInputRegistrar *air = AudioInputRegistrar::qmNew->value(AudioInputRegistrar::current);
+		if (air) {
+			const QString outputInterface = Global::get().s.qsAudioOutput;
+			int i                         = 0;
+			for (EchoCancelOptionID echoid : air->echoOptions) {
+				if (air->canEcho(echoid, outputInterface)) {
+					++i;
+					hasUsableOption             = true;
+					const EchoCancelOption &opt = EchoCancelOption::getOptions()[static_cast< std::size_t >(echoid)];
+					qcbEchoCancel->insertItem(i, opt.description, static_cast< int >(echoid));
+					qcbEchoCancel->setItemData(i, opt.explanation, Qt::ToolTipRole);
+					if (Global::get().s.echoOption == echoid) {
+						qcbEchoCancel->setCurrentIndex(i);
+					}
+				}
+			}
+		}
+	}
+
+	if (Global::get().s.echoOption == EchoCancelOptionID::DISABLED) {
+		qcbEchoCancel->setCurrentIndex(0);
+	}
+
+	// Echo cancellation only operates on a mono signal, so it is unavailable in
+	// stereo transmission.
+	qcbEchoCancel->setEnabled(hasUsableOption && !Global::get().s.bStereoInput);
+}
+
+void MainWindow::qcbEchoCancel_activated(int index) {
+	setEchoCancel(static_cast< EchoCancelOptionID >(qcbEchoCancel->itemData(index).toInt()));
 }
 
 QMenu *MainWindow::createPopupMenu() {
@@ -1220,6 +1310,40 @@ void MainWindow::setNoiseCancel(Settings::NoiseCancel mode) {
 
 		emit noiseCancelModeChanged(mode);
 	}
+}
+
+void MainWindow::setInputDevice(const QVariant &deviceChoice) {
+	if (!AudioInputRegistrar::qmNew) {
+		return;
+	}
+	AudioInputRegistrar *air = AudioInputRegistrar::qmNew->value(AudioInputRegistrar::current);
+	if (!air) {
+		return;
+	}
+
+	air->setDeviceChoice(deviceChoice, Global::get().s);
+
+	// Restart the audio streams so the new device is opened (mirrors what applying
+	// the audio settings does).
+	Audio::stop();
+	Audio::start();
+
+	// The device may change which echo-cancellation options are usable.
+	populateInputDeviceComboBox();
+	populateEchoCancelComboBox();
+}
+
+void MainWindow::setEchoCancel(EchoCancelOptionID option) {
+	if (Global::get().s.echoOption == option) {
+		return;
+	}
+
+	Global::get().s.echoOption = option;
+
+	Audio::stop();
+	Audio::start();
+
+	populateEchoCancelComboBox();
 }
 
 void MainWindow::on_qaSearch_triggered() {
@@ -1667,6 +1791,24 @@ void MainWindow::setupView(bool toggle_minimize) {
 	} else {
 		qaNoiseCancel->setVisible(false);
 		qaNoiseCancelSeparator->setVisible(false);
+	}
+
+	// ... the input-device dropdown ...
+	if (Global::get().s.bShowInputDeviceComboBox) {
+		qaInputDevice->setVisible(true);
+		qaInputDeviceSeparator->setVisible(true);
+	} else {
+		qaInputDevice->setVisible(false);
+		qaInputDeviceSeparator->setVisible(false);
+	}
+
+	// ... and the echo-cancellation dropdown.
+	if (Global::get().s.bShowEchoCancelComboBox) {
+		qaEchoCancel->setVisible(true);
+		qaEchoCancelSeparator->setVisible(true);
+	} else {
+		qaEchoCancel->setVisible(false);
+		qaEchoCancelSeparator->setVisible(false);
 	}
 
 	// If activated show the PTT window
@@ -4408,6 +4550,8 @@ void MainWindow::openConfigDialog() {
 		showRaiseWindow();
 		updateTransmitModeComboBox(Global::get().s.atTransmit);
 		updateNoiseCancelComboBox(Global::get().s.noiseCancelMode);
+		populateInputDeviceComboBox();
+		populateEchoCancelComboBox();
 		updateUserModel();
 		emit talkingStatusChanged();
 

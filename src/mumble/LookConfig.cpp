@@ -244,6 +244,8 @@ void LookConfig::load(const Settings &r) {
 	loadCheckBox(qcbShowContextMenuInMenuBar, r.bShowContextMenuInMenuBar);
 	loadCheckBox(qcbShowTransmitModeComboBox, r.bShowTransmitModeComboBox);
 	loadCheckBox(qcbShowNoiseCancelComboBox, r.bShowNoiseCancelComboBox);
+	loadCheckBox(qcbShowInputDeviceComboBox, r.bShowInputDeviceComboBox);
+	loadCheckBox(qcbShowEchoCancelComboBox, r.bShowEchoCancelComboBox);
 	loadCheckBox(qcbHighContrast, r.bHighContrast);
 	loadCheckBox(qcbChatBarUseSelection, r.bChatBarUseSelection);
 	loadCheckBox(qcbFilterHidesEmptyChannels, r.bFilterHidesEmptyChannels);
@@ -323,6 +325,8 @@ void LookConfig::save() const {
 	s.bShowContextMenuInMenuBar = qcbShowContextMenuInMenuBar->isChecked();
 	s.bShowTransmitModeComboBox = qcbShowTransmitModeComboBox->isChecked();
 	s.bShowNoiseCancelComboBox  = qcbShowNoiseCancelComboBox->isChecked();
+	s.bShowInputDeviceComboBox  = qcbShowInputDeviceComboBox->isChecked();
+	s.bShowEchoCancelComboBox   = qcbShowEchoCancelComboBox->isChecked();
 	s.bHighContrast             = qcbHighContrast->isChecked();
 	s.bChatBarUseSelection      = qcbChatBarUseSelection->isChecked();
 	s.bFilterHidesEmptyChannels = qcbFilterHidesEmptyChannels->isChecked();

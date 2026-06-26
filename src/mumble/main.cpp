@@ -811,6 +811,12 @@ int main(int argc, char **argv) {
 
 	Audio::start();
 
+	// The audio input backend (and thus the available devices / echo options) is
+	// only known after Audio::start(), so fill the main window's audio toolbar
+	// dropdowns now that it is up.
+	Global::get().mw->populateInputDeviceComboBox();
+	Global::get().mw->populateEchoCancelComboBox();
+
 	a.setQuitOnLastWindowClosed(false);
 
 	if (!Global::get().s.audioWizardShown) {

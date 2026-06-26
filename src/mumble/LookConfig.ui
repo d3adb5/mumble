@@ -1222,6 +1222,20 @@
         </property>
        </widget>
       </item>
+      <item row="13" column="0" colspan="2">
+       <widget class="QCheckBox" name="qcbShowInputDeviceComboBox">
+        <property name="text">
+         <string>Show input device dropdown in toolbar</string>
+        </property>
+       </widget>
+      </item>
+      <item row="14" column="0" colspan="2">
+       <widget class="QCheckBox" name="qcbShowEchoCancelComboBox">
+        <property name="text">
+         <string>Show echo cancellation dropdown in toolbar</string>
+        </property>
+       </widget>
+      </item>
       <item row="5" column="0">
        <widget class="QLabel" name="qliDarkTheme">
         <property name="text">
