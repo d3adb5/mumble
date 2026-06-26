@@ -239,6 +239,13 @@ void from_json(const nlohmann::json &j, Settings &settings) {
 		settings.noiseCancelMode = Settings::NoiseCancelSpeex;
 	}
 #endif
+
+#ifndef USE_DEEPFILTERNET
+	if (settings.noiseCancelMode == Settings::NoiseCancelDeepFilter) {
+		// Use Speex instead as this Mumble build was built without support for DeepFilterNet
+		settings.noiseCancelMode = Settings::NoiseCancelSpeex;
+	}
+#endif
 }
 
 // Build the JSON subset of settings captured by a profile for a given category.

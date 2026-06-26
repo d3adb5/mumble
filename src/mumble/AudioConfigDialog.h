@@ -31,6 +31,10 @@ protected:
 	/// gain control) depending on the currently selected noise/echo options.
 	void updateWebRTCControls();
 
+	/// Show or hide the DeepFilterNet tweakables (attenuation limit and
+	/// post-filter) depending on whether DeepFilterNet is the selected mode.
+	void showDeepFilterControls(bool show);
+
 public:
 	/// The unique name of this ConfigWidget
 	static const QString name;
@@ -64,6 +68,8 @@ public slots:
 	void on_qsDoublePush_valueChanged(int v);
 	void on_qsPTTHold_valueChanged(int v);
 	void on_qsSpeexNoiseSupStrength_valueChanged(int v);
+	void on_qsDeepFilterAttenLimit_valueChanged(int v);
+	void on_qsDeepFilterPostFilter_valueChanged(int v);
 	void on_qsAmpRise_valueChanged(int v);
 	void on_qsAmpFall_valueChanged(int v);
 	void on_qpbAmpInheritVAD_clicked();

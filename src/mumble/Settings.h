@@ -203,7 +203,14 @@ struct Settings {
 	enum ServerShow { ShowPopulated, ShowReachable, ShowAll };
 	enum TalkState { Passive, Talking, Whispering, Shouting, MutedTalking };
 	enum IdleAction { Nothing, Deafen, Mute };
-	enum NoiseCancel { NoiseCancelOff, NoiseCancelSpeex, NoiseCancelRNN, NoiseCancelBoth, NoiseCancelWebRTC };
+	enum NoiseCancel {
+		NoiseCancelOff,
+		NoiseCancelSpeex,
+		NoiseCancelRNN,
+		NoiseCancelBoth,
+		NoiseCancelWebRTC,
+		NoiseCancelDeepFilter
+	};
 	enum WebRTCNoiseLevel { WebRTCNoiseLow, WebRTCNoiseModerate, WebRTCNoiseHigh, WebRTCNoiseVeryHigh };
 	enum MessageLog {
 		LogNone         = 0x00,
@@ -335,6 +342,13 @@ struct Settings {
 	/// Whether to enable WebRTC's adaptive digital gain controller alongside its echo
 	/// cancellation / noise suppression.
 	bool bWebRTCGainControl = false;
+	/// Maximum noise attenuation (dB) of the DeepFilterNet suppressor (when
+	/// noiseCancelMode is NoiseCancelDeepFilter). The maximum leaves the model
+	/// unconstrained; lower values retain more of the ambient signal.
+	int iDeepFilterAttenLimit = 100;
+	/// DeepFilterNet post-filter strength, stored as beta x 1000 (0 disables it).
+	/// Sharpens the speech/noise separation to curb residual "musical" noise.
+	int iDeepFilterPostFilter = 0;
 	quint64 uiAudioInputChannelMask = 0xffffffffffffffffULL;
 
 	// Idle auto actions

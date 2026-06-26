@@ -8,6 +8,7 @@
 #include "Accessibility.h"
 #include "AudioInput.h"
 #include "AudioInputAmplification.h"
+#include "DeepFilterNet.h"
 #include "AudioOutput.h"
 #include "AudioOutputSample.h"
 #include "AudioOutputToken.h"
@@ -127,6 +128,9 @@ AudioInputDialog::AudioInputDialog(Settings &st) : ConfigWidget(st) {
 	qcbWebRTCNoiseLevel->addItem(tr("High"), static_cast< int >(Settings::WebRTCNoiseHigh));
 	qcbWebRTCNoiseLevel->addItem(tr("Very high"), static_cast< int >(Settings::WebRTCNoiseVeryHigh));
 #endif
+#ifdef USE_DEEPFILTERNET
+	qcbNoiseSup->addItem(QStringLiteral("DeepFilterNet"), static_cast< int >(Settings::NoiseCancelDeepFilter));
+#endif
 
 	// One bar, three handles for the base, adaptive and maximum amplification.
 	qsAmp->setRange(0, AMP_SLIDER_MAX);
@@ -157,6 +161,7 @@ AudioInputDialog::AudioInputDialog(Settings &st) : ConfigWidget(st) {
 
 	// Hide the slider by default
 	showSpeexNoiseSuppressionSlider(false);
+	showDeepFilterControls(false);
 }
 
 QString AudioInputDialog::title() const {
@@ -242,6 +247,11 @@ void AudioInputDialog::load(const Settings &r) {
 	loadCheckBox(qcbWebRTCGainControl, r.bWebRTCGainControl);
 #endif
 
+#ifdef USE_DEEPFILTERNET
+	loadSlider(qsDeepFilterAttenLimit, r.iDeepFilterAttenLimit);
+	loadSlider(qsDeepFilterPostFilter, r.iDeepFilterPostFilter);
+#endif
+
 	// The three amplification handles, ordered base <= adaptive <= maximum (the
 	// widget keeps them from crossing).
 	const int adaptiveLoudness = Mumble::Amplification::resolveAdaptiveLoudness(r.iAdaptiveLoudness, r.iMinLoudness);
@@ -302,6 +312,11 @@ void AudioInputDialog::save() const {
 #ifdef USE_WEBRTC_AUDIO_PROCESSING
 	s.webrtcNoiseLevel   = static_cast< Settings::WebRTCNoiseLevel >(qcbWebRTCNoiseLevel->currentData().toInt());
 	s.bWebRTCGainControl = qcbWebRTCGainControl->isChecked();
+#endif
+
+#ifdef USE_DEEPFILTERNET
+	s.iDeepFilterAttenLimit = qsDeepFilterAttenLimit->value();
+	s.iDeepFilterPostFilter = qsDeepFilterPostFilter->value();
 #endif
 
 	s.iBaseLoudness             = loudnessFromAmpSlider(qsAmp->value(0));
@@ -407,6 +422,34 @@ void AudioInputDialog::on_qsSpeexNoiseSupStrength_valueChanged(int v) {
 													  QString("-%1 %2").arg(v).arg(tr("decibels")));
 	}
 	qlSpeexNoiseSupStrength->setPalette(pal);
+}
+
+void AudioInputDialog::on_qsDeepFilterAttenLimit_valueChanged(int v) {
+	if (v >= Mumble::DeepFilter::ATTEN_LIMIT_MAX_DB) {
+		// The maximum leaves the model unconstrained (full suppression).
+		qlDeepFilterAttenLimitValue->setText(tr("Max"));
+		Mumble::Accessibility::setSliderSemanticValue(qsDeepFilterAttenLimit, tr("Maximum"));
+	} else {
+		qlDeepFilterAttenLimitValue->setText(tr("%1 dB").arg(v));
+		Mumble::Accessibility::setSliderSemanticValue(qsDeepFilterAttenLimit,
+													  QString("%1 %2").arg(v).arg(tr("decibels")));
+	}
+}
+
+void AudioInputDialog::on_qsDeepFilterPostFilter_valueChanged(int v) {
+	QPalette pal;
+
+	if (v <= Mumble::DeepFilter::POST_FILTER_MIN) {
+		qlDeepFilterPostFilterValue->setText(tr("Off"));
+		pal.setColor(qlDeepFilterPostFilterValue->foregroundRole(), Qt::red);
+		Mumble::Accessibility::setSliderSemanticValue(qsDeepFilterPostFilter, tr("Off"));
+	} else {
+		// The setting is the post-filter beta scaled by 1000.
+		const QString beta = QString::number(Mumble::DeepFilter::postFilterBeta(v), 'f', 3);
+		qlDeepFilterPostFilterValue->setText(beta);
+		Mumble::Accessibility::setSliderSemanticValue(qsDeepFilterPostFilter, beta);
+	}
+	qlDeepFilterPostFilterValue->setPalette(pal);
 }
 
 void AudioInputDialog::on_qsAmpRise_valueChanged(int v) {
@@ -678,6 +721,15 @@ void AudioInputDialog::showSpeexNoiseSuppressionSlider(bool show) {
 	qlSpeexNoiseSupStrength->setVisible(show);
 }
 
+void AudioInputDialog::showDeepFilterControls(bool show) {
+	qlDeepFilterAttenLimit->setVisible(show);
+	qsDeepFilterAttenLimit->setVisible(show);
+	qlDeepFilterAttenLimitValue->setVisible(show);
+	qlDeepFilterPostFilter->setVisible(show);
+	qsDeepFilterPostFilter->setVisible(show);
+	qlDeepFilterPostFilterValue->setVisible(show);
+}
+
 void AudioInputDialog::on_Tick_timeout() {
 	AudioInputPtr ai = Global::get().ai;
 
@@ -734,6 +786,7 @@ void AudioInputDialog::on_qcbNoiseSup_currentIndexChanged(int) {
 	const auto mode = static_cast< Settings::NoiseCancel >(qcbNoiseSup->currentData().toInt());
 	showSpeexNoiseSuppressionSlider(mode == Settings::NoiseCancelSpeex || mode == Settings::NoiseCancelBoth);
 	updateWebRTCControls();
+	showDeepFilterControls(mode == Settings::NoiseCancelDeepFilter);
 }
 
 void AudioInputDialog::updateWebRTCControls() {

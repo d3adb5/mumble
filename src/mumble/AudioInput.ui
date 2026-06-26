@@ -1020,6 +1020,126 @@
         </property>
        </widget>
       </item>
+      <item row="9" column="0">
+       <widget class="QLabel" name="qlDeepFilterAttenLimit">
+        <property name="toolTip">
+         <string>Maximum amount of noise DeepFilterNet is allowed to attenuate.</string>
+        </property>
+        <property name="text">
+         <string>DeepFilterNet attenuation limit</string>
+        </property>
+        <property name="buddy">
+         <cstring>qsDeepFilterAttenLimit</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="9" column="1">
+       <widget class="SemanticSlider" name="qsDeepFilterAttenLimit">
+        <property name="toolTip">
+         <string>Maximum amount of noise DeepFilterNet is allowed to attenuate.</string>
+        </property>
+        <property name="whatsThis">
+         <string>&lt;b&gt;DeepFilterNet attenuation limit.&lt;/b&gt;&lt;br /&gt;Caps how much background noise the model may remove. The maximum suppresses noise fully; lower values keep more of the original ambience.</string>
+        </property>
+        <property name="accessibleName">
+         <string>DeepFilterNet attenuation limit</string>
+        </property>
+        <property name="minimum">
+         <number>0</number>
+        </property>
+        <property name="maximum">
+         <number>100</number>
+        </property>
+        <property name="pageStep">
+         <number>10</number>
+        </property>
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+       </widget>
+      </item>
+      <item row="9" column="2">
+       <widget class="QLabel" name="qlDeepFilterAttenLimitValue">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>30</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="toolTip">
+         <string>Maximum amount of noise DeepFilterNet is allowed to attenuate.</string>
+        </property>
+        <property name="text">
+         <string/>
+        </property>
+       </widget>
+      </item>
+      <item row="10" column="0">
+       <widget class="QLabel" name="qlDeepFilterPostFilter">
+        <property name="toolTip">
+         <string>DeepFilterNet post-filter that reduces residual noise (0 disables it).</string>
+        </property>
+        <property name="text">
+         <string>DeepFilterNet post-filter</string>
+        </property>
+        <property name="buddy">
+         <cstring>qsDeepFilterPostFilter</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="10" column="1">
+       <widget class="SemanticSlider" name="qsDeepFilterPostFilter">
+        <property name="toolTip">
+         <string>DeepFilterNet post-filter that reduces residual noise (0 disables it).</string>
+        </property>
+        <property name="whatsThis">
+         <string>&lt;b&gt;DeepFilterNet post-filter.&lt;/b&gt;&lt;br /&gt;Sharpens the separation between speech and noise to curb residual &quot;musical&quot; noise. Higher values filter more aggressively; 0 disables the post-filter.</string>
+        </property>
+        <property name="accessibleName">
+         <string>DeepFilterNet post-filter strength</string>
+        </property>
+        <property name="minimum">
+         <number>0</number>
+        </property>
+        <property name="maximum">
+         <number>50</number>
+        </property>
+        <property name="pageStep">
+         <number>5</number>
+        </property>
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+       </widget>
+      </item>
+      <item row="10" column="2">
+       <widget class="QLabel" name="qlDeepFilterPostFilterValue">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>30</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="toolTip">
+         <string>DeepFilterNet post-filter that reduces residual noise (0 disables it).</string>
+        </property>
+        <property name="text">
+         <string/>
+        </property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>
@@ -1366,6 +1486,8 @@
   <tabstop>qcbEcho</tabstop>
   <tabstop>qcbNoiseSup</tabstop>
   <tabstop>qsSpeexNoiseSupStrength</tabstop>
+  <tabstop>qsDeepFilterAttenLimit</tabstop>
+  <tabstop>qsDeepFilterPostFilter</tabstop>
   <tabstop>qcbEnableCuePTT</tabstop>
   <tabstop>qcbEnableCueVAD</tabstop>
   <tabstop>qlePushClickPathOn</tabstop>

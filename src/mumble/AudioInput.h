@@ -33,6 +33,10 @@
 #	include "WebRTCAudioProcessing.h"
 #endif
 
+#ifdef USE_DEEPFILTERNET
+#	include "DeepFilterNetProcessing.h"
+#endif
+
 class AudioInput;
 struct OpusEncoder;
 struct DenoiseState;
@@ -203,6 +207,14 @@ private:
 	/// WebRTC audio processor providing AEC3 echo cancellation and/or noise
 	/// suppression. Only allocated (mono) when one of those is selected.
 	std::unique_ptr< WebRTCAudioProcessor > m_webrtc;
+#endif
+#ifdef USE_DEEPFILTERNET
+	/// DeepFilterNet3 noise suppressor for the mono signal, respectively the left
+	/// channel when transmitting in stereo. Only allocated when selected.
+	std::unique_ptr< DeepFilterNetProcessor > m_deepfilter;
+	/// DeepFilterNet3 suppressor for the right channel, only allocated when
+	/// transmitting in stereo (the model is mono only).
+	std::unique_ptr< DeepFilterNetProcessor > m_deepfilterR;
 #endif
 	bool selectCodec();
 	void selectNoiseCancel();

@@ -58,6 +58,8 @@
 	PROCESS(audio, SPEEX_NOISE_CANCEL_STRENGTH_KEY, iSpeexNoiseCancelStrength)              \
 	PROCESS(audio, WEBRTC_NOISE_LEVEL_KEY, webrtcNoiseLevel)                                \
 	PROCESS(audio, WEBRTC_GAIN_CONTROL_KEY, bWebRTCGainControl)                             \
+	PROCESS(audio, DEEP_FILTER_ATTEN_LIMIT_KEY, iDeepFilterAttenLimit)                      \
+	PROCESS(audio, DEEP_FILTER_POST_FILTER_KEY, iDeepFilterPostFilter)                      \
 	PROCESS(audio, INPUT_CHANNEL_MASK_KEY, uiAudioInputChannelMask)                         \
 	PROCESS(audio, ALLOW_LOW_DELAY_MODE_KEY, bAllowLowDelay)                                \
 	PROCESS(audio, USE_VBR_KEY, bUseVBR)                                                    \
@@ -448,6 +450,8 @@
 	PROCESS(audio, SPEEX_NOISE_CANCEL_STRENGTH_KEY, iSpeexNoiseCancelStrength) \
 	PROCESS(audio, WEBRTC_NOISE_LEVEL_KEY, webrtcNoiseLevel)             \
 	PROCESS(audio, WEBRTC_GAIN_CONTROL_KEY, bWebRTCGainControl)          \
+	PROCESS(audio, DEEP_FILTER_ATTEN_LIMIT_KEY, iDeepFilterAttenLimit)   \
+	PROCESS(audio, DEEP_FILTER_POST_FILTER_KEY, iDeepFilterPostFilter)   \
 	PROCESS(audio, ALLOW_LOW_DELAY_MODE_KEY, bAllowLowDelay)              \
 	PROCESS(audio, USE_VBR_KEY, bUseVBR)                                  \
 	PROCESS(audio, REDUCE_BITRATE_ON_SILENCE_KEY, bReduceBitrateOnSilence) \

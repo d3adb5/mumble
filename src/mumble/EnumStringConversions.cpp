@@ -51,7 +51,8 @@
 	PROCESS(Settings::NoiseCancel, NoiseCancelSpeex, "Speex") \
 	PROCESS(Settings::NoiseCancel, NoiseCancelRNN, "RNN")     \
 	PROCESS(Settings::NoiseCancel, NoiseCancelBoth, "Speex&RNN") \
-	PROCESS(Settings::NoiseCancel, NoiseCancelWebRTC, "WebRTC")
+	PROCESS(Settings::NoiseCancel, NoiseCancelWebRTC, "WebRTC")  \
+	PROCESS(Settings::NoiseCancel, NoiseCancelDeepFilter, "DeepFilterNet")
 
 #define WEBRTC_NOISE_LEVEL_VALUES                                   \
 	PROCESS(Settings::WebRTCNoiseLevel, WebRTCNoiseLow, "Low")       \

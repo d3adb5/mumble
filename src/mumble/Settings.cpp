@@ -851,10 +851,19 @@ void Settings::legacyLoad(const QString &path) {
 	iSpeexNoiseCancelStrength = std::min(oldNoiseSuppress, iSpeexNoiseCancelStrength);
 
 	LOADENUM(noiseCancelMode, "audio/noiseCancelMode");
+	LOAD(iDeepFilterAttenLimit, "audio/deepFilterAttenLimit");
+	LOAD(iDeepFilterPostFilter, "audio/deepFilterPostFilter");
 
 #ifndef USE_RNNOISE
 	if (noiseCancelMode == NoiseCancelRNN || noiseCancelMode == NoiseCancelBoth) {
 		// Use Speex instead as this Mumble build was built without support for RNNoise
+		noiseCancelMode = NoiseCancelSpeex;
+	}
+#endif
+
+#ifndef USE_DEEPFILTERNET
+	if (noiseCancelMode == NoiseCancelDeepFilter) {
+		// Use Speex instead as this Mumble build was built without support for DeepFilterNet
 		noiseCancelMode = NoiseCancelSpeex;
 	}
 #endif

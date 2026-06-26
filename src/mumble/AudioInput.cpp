@@ -28,6 +28,10 @@ extern "C" {
 }
 #endif
 
+#ifdef USE_DEEPFILTERNET
+#	include "DeepFilterNet.h"
+#endif
+
 #include <algorithm>
 #include <cassert>
 #include <chrono>
@@ -918,6 +922,32 @@ void AudioInput::resetAudioProcessor() {
 	}
 #endif
 
+#ifdef USE_DEEPFILTERNET
+	// DeepFilterNet3 runs in encodeAudioFrame on the (possibly per-channel) signal.
+	// The model is mono only, so stereo transmission uses one instance per channel.
+	m_deepfilter.reset();
+	m_deepfilterR.reset();
+
+	if (noiseCancel == Settings::NoiseCancelDeepFilter) {
+		const float attenLimit = Mumble::DeepFilter::clampAttenLimitDb(Global::get().s.iDeepFilterAttenLimit);
+		const float postFilter = Mumble::DeepFilter::postFilterBeta(Global::get().s.iDeepFilterPostFilter);
+
+		m_deepfilter = std::make_unique< DeepFilterNetProcessor >(attenLimit, postFilter);
+		if (m_transmitChannels > 1) {
+			m_deepfilterR = std::make_unique< DeepFilterNetProcessor >(attenLimit, postFilter);
+		}
+
+		if (!m_deepfilter->isValid() || (m_transmitChannels > 1 && !m_deepfilterR->isValid())) {
+			qWarning("AudioInput: Failed to initialize the DeepFilterNet processor");
+			m_deepfilter.reset();
+			m_deepfilterR.reset();
+		} else {
+			qWarning("AudioInput: DeepFilterNet noise suppression active (attenuation limit: %.0f dB, post-filter: %.3f)",
+					 static_cast< double >(attenLimit), static_cast< double >(postFilter));
+		}
+	}
+#endif
+
 	bResetEncoder = true;
 
 	bResetProcessor = false;
@@ -987,6 +1017,20 @@ void AudioInput::selectNoiseCancel() {
 #endif
 	}
 
+	if (noiseCancel == Settings::NoiseCancelDeepFilter) {
+#ifdef USE_DEEPFILTERNET
+		// DeepFilterNet's model is mono only, so stereo runs one instance per
+		// channel (created in resetAudioProcessor); both work on 480-sample frames.
+		if (iFrameSize != 480) {
+			qInfo("AudioInput: Ignoring request to enable DeepFilterNet: unsupported frame size");
+			noiseCancel = (m_transmitChannels > 1) ? Settings::NoiseCancelOff : Settings::NoiseCancelSpeex;
+		}
+#else
+		qInfo("AudioInput: Ignoring request to enable DeepFilterNet: Mumble was built without support for it");
+		noiseCancel = (m_transmitChannels > 1) ? Settings::NoiseCancelOff : Settings::NoiseCancelSpeex;
+#endif
+	}
+
 	bool preprocessorDenoise = false;
 	switch (noiseCancel) {
 		case Settings::NoiseCancelOff:
@@ -1005,6 +1049,9 @@ void AudioInput::selectNoiseCancel() {
 			break;
 		case Settings::NoiseCancelWebRTC:
 			qInfo("AudioInput: Using WebRTC as noise canceller");
+			break;
+		case Settings::NoiseCancelDeepFilter:
+			qInfo("AudioInput: Using DeepFilterNet as noise canceller");
 			break;
 	}
 	m_preprocessor.setDenoise(preprocessorDenoise);
@@ -1157,6 +1204,32 @@ void AudioInput::encodeAudioFrame(AudioChunk chunk) {
 			for (unsigned int i = 0; i < 480; i++) {
 				psSource[2 * i]     = clampFloatSample(denoiseFramesL[i]);
 				psSource[2 * i + 1] = clampFloatSample(denoiseFramesR[i]);
+			}
+		}
+	}
+#endif
+
+#ifdef USE_DEEPFILTERNET
+	// DeepFilterNet3 denoises the 480-sample frame in place. Its model is mono
+	// only, so stereo transmission splits the interleaved frame and denoises each
+	// channel with its own instance (mirroring RNNoise above).
+	if (noiseCancel == Settings::NoiseCancelDeepFilter && m_deepfilter) {
+		if (m_transmitChannels == 1) {
+			m_deepfilter->processFrame(psSource);
+		} else if (m_deepfilterR) {
+			short frameL[480];
+			short frameR[480];
+			for (unsigned int i = 0; i < 480; i++) {
+				frameL[i] = psSource[2 * i];
+				frameR[i] = psSource[2 * i + 1];
+			}
+
+			m_deepfilter->processFrame(frameL);
+			m_deepfilterR->processFrame(frameR);
+
+			for (unsigned int i = 0; i < 480; i++) {
+				psSource[2 * i]     = frameL[i];
+				psSource[2 * i + 1] = frameR[i];
 			}
 		}
 	}
