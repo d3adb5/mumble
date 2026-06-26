@@ -31,6 +31,14 @@ case "$os" in
 
 		eval "$( "C:/vcvars-bash/vcvarsall.sh" x64 )"
 
+		# Rust's cargo links its host build scripts by invoking "link.exe" by name.
+		# In the Git-bash environment the GNU coreutils link (/usr/bin/link.exe)
+		# shadows MSVC's linker, which breaks the bundled DeepFilterNet (Rust) build
+		# with "/usr/bin/link: extra operand". Remove it so the MSVC link.exe set up
+		# by vcvars is used instead. Mumble's own C++ build is unaffected (CMake
+		# resolves cl/link explicitly).
+		rm -f /usr/bin/link /usr/bin/link.exe
+
 		PATH="$PATH:/C/WixSharp"
 		echo "PATH=$PATH" >> "$GITHUB_ENV"
 
