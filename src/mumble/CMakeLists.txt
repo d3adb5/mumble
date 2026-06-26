@@ -282,6 +282,8 @@ set(MUMBLE_SOURCES
 	"VersionCheck.h"
 	"ViewCert.cpp"
 	"ViewCert.h"
+	"X11WindowState.cpp"
+	"X11WindowState.h"
 	"VoiceRecorder.cpp"
 	"VoiceRecorderDialog.cpp"
 	"VoiceRecorderDialog.h"
@@ -1205,6 +1207,7 @@ if(${CMAKE_VERSION} VERSION_GREATER_EQUAL "3.16.0")
 		# an awful lot of macros that can conflict with other code
 		set_source_files_properties(
 			"GlobalShortcut_unix.cpp"
+			"X11WindowState.cpp"
 			PROPERTIES
 				SKIP_UNITY_BUILD_INCLUSION TRUE
 		)

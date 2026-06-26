@@ -8,6 +8,7 @@
 #include "ClientUser.h"
 #include "Log.h"
 #include "MainWindow.h"
+#include "X11WindowState.h"
 #include "Global.h"
 
 #include <QApplication>
@@ -184,6 +185,14 @@ void TrayIcon::on_hideAction_triggered() {
 
 void TrayIcon::on_windowMinimized() {
 	if (!Global::get().s.bHideInTray) {
+		return;
+	}
+
+	// Under tiling / EWMH window managers (e.g. XMonad) a window that merely sits
+	// on a non-visible workspace is reported to Qt as minimized. Such a "minimize"
+	// is really a workspace switch, not the user iconifying the window, so don't
+	// hide it to tray - only genuine, same-desktop minimizes should.
+	if (Mumble::X11WindowState::windowIsOnOtherDesktop(static_cast< unsigned long >(Global::get().mw->winId()))) {
 		return;
 	}
 
