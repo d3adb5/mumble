@@ -168,6 +168,7 @@ jobs:
         apt-get install -y --no-install-recommends \
           ca-certificates git cmake ninja-build pkg-config dpkg-dev file python3 \
           build-essential \
+          cargo rustc \
           qt6-base-dev qt6-svg-dev qt6-tools-dev qt6-tools-dev-tools qt6-l10n-tools libgl-dev \
           libboost-dev libssl-dev \
           libprotobuf-dev protobuf-compiler libprotoc-dev \
@@ -203,6 +204,7 @@ jobs:
           -Doverlay-xcompile=OFF \
           -Dwarnings-as-errors=OFF \
           -Dwebrtc-audio-processing=ON \
+          -Ddeepfilternet=ON \
           -Dstatic=OFF \
           -Ddeb-package=ON
       env:
