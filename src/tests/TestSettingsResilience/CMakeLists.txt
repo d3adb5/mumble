@@ -9,11 +9,15 @@ add_executable(TestSettingsResilience TestSettingsResilience.cpp)
 
 set_target_properties(TestSettingsResilience PROPERTIES AUTOMOC ON)
 
-target_link_libraries(TestSettingsResilience PRIVATE mumble_client_object_lib)
-target_link_libraries(TestSettingsResilience PRIVATE Qt6::Test)
+target_link_libraries(TestSettingsResilience PRIVATE mumble_client_object_lib Qt6::Test)
 
 add_test(
 	NAME TestSettingsResilience
 	COMMAND $<TARGET_FILE:TestSettingsResilience>
-	WORKING_DIRECTORY $<TARGET_FILE_DIR:TestSettingsResilience>
+	# Specifying the working directory is necessary to make sure the dependent DLLs are found (on Windows)
+	WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
+
+# Use the offscreen platform so the QApplication started by QTEST_MAIN does not need a
+# display - otherwise the test hangs on headless Windows CI.
+set_tests_properties(TestSettingsResilience PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
