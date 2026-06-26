@@ -617,6 +617,7 @@ struct Settings {
 	KeyPair kpCertificate = {};
 
 	bool bShowTransmitModeComboBox = false;
+	bool bShowNoiseCancelComboBox  = true;
 
 	// Accessibility
 	bool bHighContrast = false;

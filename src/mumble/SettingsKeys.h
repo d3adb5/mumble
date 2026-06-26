@@ -222,6 +222,7 @@ const SettingsKey CONTEXT_MENU_ENTRIES_IN_MENU_BAR_KEY = { "display_context_menu
 const SettingsKey CONNECT_DIALOG_GEOMETRY_KEY          = { "connect_dialog_geometry" };
 const SettingsKey CONNECT_DIALOG_HEADER_STATE_KEY      = { "connect_dialog_header_state" };
 const SettingsKey DISPLAY_TRANSMIT_MODE_COMBOBOX_KEY   = { "display_transmit_mode_combobox" };
+const SettingsKey DISPLAY_NOISE_CANCEL_COMBOBOX_KEY    = { "display_noise_cancel_combobox" };
 const SettingsKey HIGH_CONTRAST_MODE_KEY               = { "high_contrast_mode" };
 const SettingsKey MAX_LOG_LENGTH_KEY                   = { "max_log_length" };
 const SettingsKey USE_24H_CLOCK_KEY                    = { "use_24h_clock_format" };

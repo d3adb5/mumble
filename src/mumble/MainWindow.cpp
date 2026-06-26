@@ -589,6 +589,34 @@ void MainWindow::setupGui() {
 
 	updateTransmitModeComboBox(Global::get().s.atTransmit);
 
+	// Noise-suppression method dropdown, sitting next to the transmit mode one.
+	// The available methods mirror those offered by the audio settings page and
+	// depend on what this build was compiled with. Each item carries its
+	// Settings::NoiseCancel value as data.
+	qcbNoiseCancel = new MUComboBox(qtIconToolbar);
+	qcbNoiseCancel->setObjectName(QLatin1String("qcbNoiseCancel"));
+	qcbNoiseCancel->setToolTip(tr("Noise suppression method"));
+	qcbNoiseCancel->addItem(tr("No Suppression"), static_cast< int >(Settings::NoiseCancelOff));
+	qcbNoiseCancel->addItem(QStringLiteral("Speex"), static_cast< int >(Settings::NoiseCancelSpeex));
+#ifdef USE_RNNOISE
+	qcbNoiseCancel->addItem(QStringLiteral("RNNoise"), static_cast< int >(Settings::NoiseCancelRNN));
+	qcbNoiseCancel->addItem(tr("Speex & RNNoise"), static_cast< int >(Settings::NoiseCancelBoth));
+#endif
+#ifdef USE_WEBRTC_AUDIO_PROCESSING
+	qcbNoiseCancel->addItem(QStringLiteral("WebRTC"), static_cast< int >(Settings::NoiseCancelWebRTC));
+#endif
+#ifdef USE_DEEPFILTERNET
+	qcbNoiseCancel->addItem(QStringLiteral("DeepFilterNet"), static_cast< int >(Settings::NoiseCancelDeepFilter));
+#endif
+
+	qaNoiseCancelSeparator = qtIconToolbar->insertSeparator(qaTransmitMode);
+	qaNoiseCancel          = qtIconToolbar->insertWidget(qaNoiseCancelSeparator, qcbNoiseCancel);
+
+	connect(qcbNoiseCancel, SIGNAL(activated(int)), this, SLOT(qcbNoiseCancel_activated(int)));
+	QObject::connect(this, &MainWindow::noiseCancelModeChanged, this, &MainWindow::updateNoiseCancelComboBox);
+
+	updateNoiseCancelComboBox(Global::get().s.noiseCancelMode);
+
 #ifdef Q_OS_WIN
 	setupView(false);
 #endif
@@ -871,6 +899,13 @@ void MainWindow::updateTransmitModeComboBox(Settings::AudioTransmit newMode) {
 	}
 }
 
+void MainWindow::updateNoiseCancelComboBox(Settings::NoiseCancel newMode) {
+	const int index = qcbNoiseCancel->findData(static_cast< int >(newMode));
+	if (index >= 0) {
+		qcbNoiseCancel->setCurrentIndex(index);
+	}
+}
+
 QMenu *MainWindow::createPopupMenu() {
 	if ((Global::get().s.wlWindowLayout == Settings::LayoutCustom) && !Global::get().s.bLockLayout) {
 		// We have to explicitly create a menu here instead of simply referring to QMainWindow::createPopupMenu as we
@@ -1146,6 +1181,44 @@ void MainWindow::setTransmissionMode(Settings::AudioTransmit mode) {
 		}
 
 		emit transmissionModeChanged(mode);
+	}
+}
+
+void MainWindow::setNoiseCancel(Settings::NoiseCancel mode) {
+	if (Global::get().s.noiseCancelMode != mode) {
+		Global::get().s.noiseCancelMode = mode;
+
+		QString name;
+		switch (mode) {
+			case Settings::NoiseCancelOff:
+				name = tr("disabled");
+				break;
+			case Settings::NoiseCancelSpeex:
+				name = QStringLiteral("Speex");
+				break;
+			case Settings::NoiseCancelRNN:
+				name = QStringLiteral("RNNoise");
+				break;
+			case Settings::NoiseCancelBoth:
+				name = tr("Speex & RNNoise");
+				break;
+			case Settings::NoiseCancelWebRTC:
+				name = QStringLiteral("WebRTC");
+				break;
+			case Settings::NoiseCancelDeepFilter:
+				name = QStringLiteral("DeepFilterNet");
+				break;
+		}
+		Global::get().l->log(Log::Information, tr("Noise suppression set to %1").arg(name));
+
+		// Apply the change to the running input by asking it to re-select the noise
+		// canceller on its next frame (it reads the mode from the settings there).
+		AudioInputPtr ai = Global::get().ai;
+		if (ai) {
+			ai->bResetProcessor = true;
+		}
+
+		emit noiseCancelModeChanged(mode);
 	}
 }
 
@@ -1587,6 +1660,15 @@ void MainWindow::setupView(bool toggle_minimize) {
 		qaTransmitModeSeparator->setVisible(false);
 	}
 
+	// Likewise for the noise-suppression method dropdown.
+	if (Global::get().s.bShowNoiseCancelComboBox) {
+		qaNoiseCancel->setVisible(true);
+		qaNoiseCancelSeparator->setVisible(true);
+	} else {
+		qaNoiseCancel->setVisible(false);
+		qaNoiseCancelSeparator->setVisible(false);
+	}
+
 	// If activated show the PTT window
 	if (Global::get().s.bShowPTTButtonWindow && Global::get().s.atTransmit == Settings::PushToTalk) {
 		if (qwPTTButtonWidget) {
@@ -1661,6 +1743,10 @@ void MainWindow::qcbTransmitMode_activated(int index) {
 			setTransmissionMode(Settings::PushToTalk);
 			break;
 	}
+}
+
+void MainWindow::qcbNoiseCancel_activated(int index) {
+	setNoiseCancel(static_cast< Settings::NoiseCancel >(qcbNoiseCancel->itemData(index).toInt()));
 }
 
 void MainWindow::on_qmServer_aboutToShow() {
@@ -4321,6 +4407,7 @@ void MainWindow::openConfigDialog() {
 		setupView(false);
 		showRaiseWindow();
 		updateTransmitModeComboBox(Global::get().s.atTransmit);
+		updateNoiseCancelComboBox(Global::get().s.noiseCancelMode);
 		updateUserModel();
 		emit talkingStatusChanged();
 

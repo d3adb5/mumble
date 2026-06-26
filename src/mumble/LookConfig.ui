@@ -1215,6 +1215,13 @@
         </property>
        </widget>
       </item>
+      <item row="12" column="0" colspan="2">
+       <widget class="QCheckBox" name="qcbShowNoiseCancelComboBox">
+        <property name="text">
+         <string>Show noise suppression dropdown in toolbar</string>
+        </property>
+       </widget>
+      </item>
       <item row="5" column="0">
        <widget class="QLabel" name="qliDarkTheme">
         <property name="text">

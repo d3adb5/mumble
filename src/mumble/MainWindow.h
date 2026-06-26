@@ -200,6 +200,10 @@ protected:
 	QAction *qaTransmitMode;
 	QAction *qaTransmitModeSeparator;
 
+	MUComboBox *qcbNoiseCancel;
+	QAction *qaNoiseCancel;
+	QAction *qaNoiseCancelSeparator;
+
 	Search::SearchDialog *m_searchDialog = nullptr;
 
 	qt_unique_ptr< MenuLabel > m_localVolumeLabel;
@@ -254,6 +258,8 @@ public slots:
 	void on_qaSelfRegister_triggered();
 	void qcbTransmitMode_activated(int index);
 	void updateTransmitModeComboBox(Settings::AudioTransmit newMode);
+	void qcbNoiseCancel_activated(int index);
+	void updateNoiseCancelComboBox(Settings::NoiseCancel newMode);
 	void qmUser_aboutToShow();
 	void qmListener_aboutToShow();
 	void on_qaUserCommentReset_triggered();
@@ -400,6 +406,8 @@ public slots:
 	/// filename is discarded).
 	void updateImagePath(QString filepath) const;
 	void setTransmissionMode(Settings::AudioTransmit mode);
+	/// Sets the noise-suppression method and applies it to the running input.
+	void setNoiseCancel(Settings::NoiseCancel mode);
 	/// Sets the local user's mute state
 	///
 	/// @param mute Whether to mute the user
@@ -427,6 +435,7 @@ signals:
 	/// Signal emitted whenever a user removes a ChannelListener
 	void userRemovedChannelListener(ClientUser *user, Channel *channel);
 	void transmissionModeChanged(Settings::AudioTransmit newMode);
+	void noiseCancelModeChanged(Settings::NoiseCancel newMode);
 
 	/// Signal emitted when the local user changes their talking status either actively or passively
 	void talkingStatusChanged();
