@@ -7,6 +7,32 @@
 #include "Cert.h"
 #include "SettingsMacros.h"
 
+#include <functional>
+
+#include <QtCore/QDebug>
+#include <QtCore/QStringList>
+
+namespace {
+// Keys of the settings whose values could not be deserialized during the most
+// recent from_json(Settings) and were therefore left at their default. Collected
+// so the rest of the file can still be loaded and the user warned about the few
+// values that were dropped, rather than discarding the whole file.
+QStringList g_settingsLoadFailures;
+
+void recordSettingsLoadFailure(const QString &key, const char *what) {
+	g_settingsLoadFailures.append(key);
+	if (what) {
+		qWarning() << "Settings: could not load" << key << "-" << what << "- using default value";
+	} else {
+		qWarning() << "Settings: could not load" << key << "- using default value";
+	}
+}
+} // namespace
+
+const QStringList &settingsLoadFailures() {
+	return g_settingsLoadFailures;
+}
+
 
 template< typename T, bool isEnum > struct SaveValueConverter {
 	static const T &getValue(const T &value) { return value; }
@@ -69,7 +95,22 @@ void load(const nlohmann::json &json, const SettingsKey &key, T &variable, const
 	nlohmann::json valueEntry = key.selectFrom(json);
 
 	if (!valueEntry.is_null()) {
-		SaveValueConverter< T, std::is_enum< T >::value >::loadValue(valueEntry, variable);
+		try {
+			SaveValueConverter< T, std::is_enum< T >::value >::loadValue(valueEntry, variable);
+		} catch (const std::exception &e) {
+			// This single value could not be deserialized (e.g. an incompatible type
+			// or an enum string this build does not know). Keep the default for it and
+			// carry on loading the rest of the settings.
+			if (useDefault) {
+				CopyHelper< T, std::is_array< T >::value >::copy(variable, defaultValue);
+			}
+			recordSettingsLoadFailure(QString::fromUtf8(static_cast< const char * >(key)), e.what());
+		} catch (...) {
+			if (useDefault) {
+				CopyHelper< T, std::is_array< T >::value >::copy(variable, defaultValue);
+			}
+			recordSettingsLoadFailure(QString::fromUtf8(static_cast< const char * >(key)), nullptr);
+		}
 	} else if (useDefault) {
 		CopyHelper< T, std::is_array< T >::value >::copy(variable, defaultValue);
 	}
@@ -182,7 +223,27 @@ void migrateSettings(nlohmann::json &json, int settingsVersion) {
 }
 
 void from_json(const nlohmann::json &j, Settings &settings) {
-	int settingsVersion = j.at(SettingsKeys::SETTINGS_VERSION_KEY).get< int >();
+	// Start with a clean slate; individual values that fail to load are recorded
+	// here so the caller can warn the user about them.
+	g_settingsLoadFailures.clear();
+
+	// Run a block that loads part of the settings, keeping going (and noting it) if
+	// it throws, so one unreadable section never discards the rest of the file.
+	const auto tryLoad = [](const char *what, const std::function< void() > &fn) {
+		try {
+			fn();
+		} catch (const std::exception &e) {
+			recordSettingsLoadFailure(QString::fromUtf8(what), e.what());
+		} catch (...) {
+			recordSettingsLoadFailure(QString::fromUtf8(what), nullptr);
+		}
+	};
+
+	int settingsVersion = 1;
+	if (j.contains(static_cast< const char * >(SettingsKeys::SETTINGS_VERSION_KEY))) {
+		tryLoad("settings version",
+				[&]() { settingsVersion = j.at(SettingsKeys::SETTINGS_VERSION_KEY).get< int >(); });
+	}
 
 	// Copy since we might have to make modifications
 	nlohmann::json json = j;
@@ -197,40 +258,42 @@ void from_json(const nlohmann::json &j, Settings &settings) {
 #undef PROCESS
 
 	if (json.contains("shortcuts") && json.at("shortcuts").contains("defined")) {
-		settings.qlShortcuts = json.at("shortcuts").at("defined");
+		tryLoad("shortcuts", [&]() { settings.qlShortcuts = json.at("shortcuts").at("defined"); });
 	}
 
 	if (json.contains("messages") && json.at("messages").contains("traits")) {
-		settings.qmMessages = json.at("messages").at("traits");
+		tryLoad("message traits", [&]() { settings.qmMessages = json.at("messages").at("traits"); });
 	}
 	if (json.contains("messages") && json.at("messages").contains("sounds")) {
-		settings.qmMessageSounds = json.at("messages").at("sounds");
+		tryLoad("message sounds", [&]() { settings.qmMessageSounds = json.at("messages").at("sounds"); });
 	}
 
 	if (json.contains("lcd") && json.at("lcd").contains("devices")) {
-		settings.qmLCDDevices = json.at("lcd").at("devices");
+		tryLoad("LCD devices", [&]() { settings.qmLCDDevices = json.at("lcd").at("devices"); });
 	}
 
 	if (json.contains("plugins")) {
-		settings.qhPluginSettings = json.at("plugins");
+		tryLoad("plugins", [&]() { settings.qhPluginSettings = json.at("plugins"); });
 	}
 
 	if (json.contains("overlay")) {
-		settings.os = json.at("overlay");
+		tryLoad("overlay", [&]() { settings.os = json.at("overlay"); });
 	}
 
 	// Only overwrite the stored profiles when they are present, so applying a
 	// profile (a partial settings subset) does not wipe the profile store.
 	if (json.contains("profiles")) {
-		settings.m_settingsProfilesJson = QString::fromStdString(json.at("profiles").dump());
+		tryLoad("profiles",
+				[&]() { settings.m_settingsProfilesJson = QString::fromStdString(json.at("profiles").dump()); });
 	}
 
 	if (json.contains(static_cast< const char * >(SettingsKeys::CERTIFICATE_KEY))) {
-		settings.kpCertificate = CertWizard::importCert(json.at(SettingsKeys::CERTIFICATE_KEY));
+		tryLoad("certificate", [&]() { settings.kpCertificate = CertWizard::importCert(json.at(SettingsKeys::CERTIFICATE_KEY)); });
 	}
 
 	if (json.contains(static_cast< const char * >(SettingsKeys::MUMBLE_QUIT_NORMALLY_KEY))) {
-		settings.mumbleQuitNormally = json.at(SettingsKeys::MUMBLE_QUIT_NORMALLY_KEY);
+		tryLoad("mumble quit normally",
+				[&]() { settings.mumbleQuitNormally = json.at(SettingsKeys::MUMBLE_QUIT_NORMALLY_KEY); });
 	}
 
 #ifndef USE_RNNOISE

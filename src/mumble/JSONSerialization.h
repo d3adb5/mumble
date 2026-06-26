@@ -34,6 +34,7 @@
 #include <QSize>
 #include <QSizeF>
 #include <QString>
+#include <QStringList>
 
 namespace details {
 template< typename T > using has_enum_to_string_function = decltype(enumToString(std::declval< T >()));
@@ -119,6 +120,13 @@ template<> inline QString from_string< QString >(const std::string &str) {
 
 void to_json(nlohmann::json &j, const Settings &settings);
 void from_json(const nlohmann::json &j, Settings &settings);
+
+/// \returns the user-facing keys of the settings whose values could not be
+/// deserialized during the most recent from_json(Settings) call and were left at
+/// their default value. Lets the UI warn the user about the dropped values instead
+/// of silently discarding (or refusing to load) the whole settings file.
+const QStringList &settingsLoadFailures();
+
 void to_json(nlohmann::json &j, const OverlaySettings &settings);
 void from_json(const nlohmann::json &j, OverlaySettings &settings);
 

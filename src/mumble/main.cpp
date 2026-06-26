@@ -15,6 +15,7 @@
 #ifdef Q_OS_WIN
 #	include "GlobalShortcut_win.h"
 #endif
+#include "JSONSerialization.h"
 #include "LCD.h"
 #include "Log.h"
 #include "Logger.h"
@@ -808,6 +809,17 @@ int main(int argc, char **argv) {
 	SocketRPC *srpc = new SocketRPC(QLatin1String("Mumble"));
 
 	Global::get().l->log(Log::Information, MainWindow::tr("Welcome to Mumble."));
+
+	// If some settings values could not be read when loading the configuration (e.g.
+	// after a downgrade, or a value written by an incompatible version), the rest of
+	// the settings were still loaded and the affected ones reset to their defaults.
+	// Let the user know rather than silently dropping them.
+	const QStringList &failedSettings = settingsLoadFailures();
+	if (!failedSettings.isEmpty()) {
+		Global::get().l->log(Log::Warning,
+							 MainWindow::tr("Some settings could not be read and were reset to their default value: %1")
+								 .arg(failedSettings.join(QLatin1String(", "))));
+	}
 
 	Audio::start();
 
