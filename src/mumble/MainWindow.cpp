@@ -10,6 +10,7 @@
 #include "About.h"
 #include "Audio.h"
 #include "AudioInput.h"
+#include "AudioOutput.h"
 #include "AudioStats.h"
 #include "AudioWizard.h"
 #include "BanEditor.h"
@@ -966,7 +967,15 @@ void MainWindow::populateEchoCancelComboBox() {
 	if (AudioInputRegistrar::qmNew) {
 		AudioInputRegistrar *air = AudioInputRegistrar::qmNew->value(AudioInputRegistrar::current);
 		if (air) {
-			const QString outputInterface = Global::get().s.qsAudioOutput;
+			// Echo cancellation requires the output backend to match the input one
+			// (see e.g. WASAPIInputRegistrar::canEcho). Use the resolved running output
+			// system rather than the raw setting, which is empty until the user picks
+			// an output system explicitly - otherwise the option stays greyed out (this
+			// was the case on Windows, where the default output system is left unset).
+			QString outputInterface = AudioOutputRegistrar::current;
+			if (outputInterface.isEmpty()) {
+				outputInterface = Global::get().s.qsAudioOutput;
+			}
 			int i                         = 0;
 			for (EchoCancelOptionID echoid : air->echoOptions) {
 				if (air->canEcho(echoid, outputInterface)) {
