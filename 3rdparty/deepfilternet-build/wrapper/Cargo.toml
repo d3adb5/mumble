@@ -1,0 +1,32 @@
+# Copyright The Mumble Developers. All rights reserved.
+# Use of this source code is governed by a BSD-style license
+# that can be found in the LICENSE file at the root of the
+# Mumble source tree or at <https://www.mumble.info/LICENSE>.
+
+# A tiny C-ABI shim around the bundled DeepFilterNet (deep_filter) crate. It uses
+# the library's Rust API directly with the embedded default DFN3 model (the
+# "default-model" feature) so no external model file is needed at runtime, and
+# exposes only the handful of functions Mumble's PIMPL wrapper
+# (src/mumble/DeepFilterNetProcessing.cpp) calls.
+
+[package]
+name = "mumble-deepfilter"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "mumble_deepfilter"
+crate-type = ["staticlib"]
+
+[dependencies]
+deep_filter = { path = "../../deepfilternet-src/libDF", default-features = false, features = [
+	"tract",
+	"default-model",
+] }
+ndarray = "^0.15"
+
+[profile.release]
+# Mumble links this in release configurations; keep panics from unwinding across
+# the C ABI boundary by aborting instead.
+panic = "abort"

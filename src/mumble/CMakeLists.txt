@@ -24,6 +24,7 @@ option(bundled-speex "Build the included version of Speex instead of looking for
 option(rnnoise "Use RNNoise for machine learning noise reduction." ON)
 option(bundled-rnnoise "Build the included version of RNNoise instead of looking for one on the system." ${rnnoise})
 option(webrtc-audio-processing "Use the WebRTC audio processing library (AEC3 echo cancellation and noise suppression)." ON)
+option(deepfilternet "Use DeepFilterNet3 for deep-learning noise suppression (requires a Rust toolchain to build)." OFF)
 
 option(manual-plugin "Include the built-in \"manual\" positional audio plugin." ON)
 
@@ -828,6 +829,23 @@ if(webrtc-audio-processing)
 
 	target_compile_definitions(mumble_client_object_lib PRIVATE "USE_WEBRTC_AUDIO_PROCESSING")
 	target_link_libraries(mumble_client_object_lib PRIVATE mumble_webrtc_wrapper)
+endif()
+
+if(deepfilternet)
+	# Builds the bundled DeepFilterNet3 stack (deep_filter + a small C-ABI shim)
+	# via Corrosion into the "mumble_deepfilter" static library. Needs a Rust
+	# toolchain; the build directory emits a clear error if one is missing.
+	add_subdirectory("${3RDPARTY_DIR}/deepfilternet-build" "${CMAKE_CURRENT_BINARY_DIR}/deepfilternet" EXCLUDE_FROM_ALL)
+
+	# The PIMPL wrapper only includes the plain C-ABI declarations of the shim
+	# (no Rust/DeepFilterNet headers), so it compiles straight into the client.
+	target_sources(mumble_client_object_lib PRIVATE
+		"DeepFilterNetProcessing.h"
+		"DeepFilterNetProcessing.cpp"
+	)
+
+	target_compile_definitions(mumble_client_object_lib PRIVATE "USE_DEEPFILTERNET")
+	target_link_libraries(mumble_client_object_lib PRIVATE mumble_deepfilter)
 endif()
 
 if(qtspeech)
