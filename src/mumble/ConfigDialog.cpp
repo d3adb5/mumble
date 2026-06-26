@@ -12,6 +12,7 @@
 #include "Global.h"
 
 #include <QScrollArea>
+#include <QScrollBar>
 #include <QtCore/QMutexLocker>
 #include <QtGui/QScreen>
 #include <QtWidgets/QMessageBox>
@@ -135,18 +136,31 @@ void ConfigDialog::addPage(ConfigWidget *cw, unsigned int idx) {
 		content = container;
 	}
 
-	QSize ms = content->minimumSizeHint();
-	content->resize(ms);
-	content->setMinimumSize(ms);
+	const QSize pageMin = content->minimumSizeHint();
+	content->resize(pageMin);
+	content->setMinimumSize(pageMin);
 
-	ms.rwidth() += 128;
-	ms.rheight() += 192;
-	if ((ms.width() > w) || (ms.height() > h)) {
+	// Wrap the page in a scroll area when it does not fit the available screen once
+	// the dialog's own chrome (the icon list on the left and the button rows at the
+	// bottom) is accounted for.
+	const int widthChrome  = 128;
+	const int heightChrome = 192;
+	if ((pageMin.width() + widthChrome > w) || (pageMin.height() + heightChrome > h)) {
 		QScrollArea *qsa = new QScrollArea();
 		qsa->setFrameShape(QFrame::NoFrame);
 		qsa->setWidgetResizable(true);
 		qsa->setWidget(content);
 		qsa->setFocusPolicy(Qt::NoFocus);
+
+		// Open the scroll area at the page's own size, clamped to what fits on screen,
+		// so the page is shown in full whenever it fits and only the dimension that
+		// genuinely overflows the screen scrolls - rather than collapsing into a small,
+		// doubly-scrolled box. Reserve room for the vertical scrollbar so that needing
+		// one does not also force a horizontal one.
+		const int scrollBarWidth = qsa->verticalScrollBar()->sizeHint().width();
+		qsa->setMinimumSize(qMin(pageMin.width() + scrollBarWidth, w - widthChrome),
+							qMin(pageMin.height(), h - heightChrome));
+
 		qhPages.insert(cw, qsa);
 		qswPages->addWidget(qsa);
 	} else {
