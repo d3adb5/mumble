@@ -46,7 +46,15 @@ jobs:
           build_version="$("${{ github.workspace }}/scripts/mumble-version.py")"
           build_number="$("${{ github.workspace }}/scripts/mumble-build-number.py" \
             --commit "${{ github.sha }}" --version "${build_version}" \
-            --password "${{ secrets.BUILD_NUMBER_TOKEN }}" --default 0)"
+            --password "${{ secrets.BUILD_NUMBER_TOKEN }}" --default "${{ github.run_number }}")"
+          # The central build-number service only assigns numbers for the upstream
+          # repository. On forks every build otherwise stayed at build number 0, i.e.
+          # the same version (e.g. 1.7.0), so the Windows installer saw no version
+          # change and silently refused to update an existing installation. Use the
+          # monotonic run number on forks so each build gets a strictly higher version.
+          if [ "${{ github.repository }}" != "mumble-voip/mumble" ]; then
+            build_number="${{ github.run_number }}"
+          fi
           echo "Build Number: ${build_version}.${build_number}"
           echo "build_number=${build_number}" >> "$GITHUB_OUTPUT"
 
