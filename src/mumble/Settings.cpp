@@ -227,6 +227,25 @@ void Settings::load(const QString &path, bool skipSettingsBackupPrompt) {
 
 	std::ifstream stream(Mumble::QtUtils::qstring_to_path(path));
 
+	// Recover from a settings file we could not read - either because it is not
+	// valid JSON, or because one of its values can not be deserialized (e.g. a value
+	// written by a different Mumble version with an incompatible type, or an unknown
+	// enum string). Fall back to the backup if one exists, otherwise to default
+	// settings, so that a broken settings file never prevents Mumble from starting.
+	const auto recoverFromBrokenSettings = [&]() {
+		if (!path.endsWith(QLatin1String(BACKUP_FILE_EXTENSION)) && QFileInfo(path + BACKUP_FILE_EXTENSION).exists()) {
+			qWarning() << "Falling back to backup settings" << (path + BACKUP_FILE_EXTENSION);
+			load(path + BACKUP_FILE_EXTENSION, skipSettingsBackupPrompt);
+		} else {
+			// No usable backup: discard whatever may have been partially read and
+			// continue with defaults, keeping the location to save back to.
+			qWarning() << "No usable settings backup; resetting to default settings";
+			const QString location = settingsLocation;
+			*this                  = Settings();
+			settingsLocation       = location;
+		}
+	};
+
 	nlohmann::json settingsJSON;
 	try {
 		stream >> settingsJSON;
@@ -276,12 +295,18 @@ void Settings::load(const QString &path, bool skipSettingsBackupPrompt) {
 			}
 		}
 	} catch (const nlohmann::json::parse_error &e) {
-		qWarning() << "Failed to load settings from" << path << "due to invalid format: " << e.what();
-
-		if (!path.endsWith(QLatin1String(BACKUP_FILE_EXTENSION)) && QFileInfo(path + BACKUP_FILE_EXTENSION).exists()) {
-			qWarning() << "Falling back to backup" << path + BACKUP_FILE_EXTENSION;
-			load(path + BACKUP_FILE_EXTENSION, skipSettingsBackupPrompt);
-		}
+		qWarning() << "Failed to load settings from" << path << "due to invalid format:" << e.what();
+		recoverFromBrokenSettings();
+	} catch (const std::exception &e) {
+		// A value could not be deserialized (e.g. an incompatible type, or an enum
+		// value that this Mumble build does not know). Recover instead of letting the
+		// exception escape and crash Mumble on startup.
+		qWarning() << "Failed to load settings from" << path << "due to an unreadable value:" << e.what();
+		recoverFromBrokenSettings();
+	} catch (...) {
+		// Some conversions throw non-std exceptions; treat them the same way.
+		qWarning() << "Failed to load settings from" << path << "due to an unreadable value";
+		recoverFromBrokenSettings();
 	}
 
 	// Always reset this flag to false
