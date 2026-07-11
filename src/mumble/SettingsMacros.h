@@ -65,6 +65,7 @@
 	PROCESS(audio, USE_VBR_KEY, bUseVBR)                                                    \
 	PROCESS(audio, REDUCE_BITRATE_ON_SILENCE_KEY, bReduceBitrateOnSilence)                  \
 	PROCESS(audio, LOG_SILENT_TRANSMISSION_KEY, bLogSilentTransmission)                     \
+	PROCESS(audio, PERSIST_LOCAL_AUDIO_PROCESSING_KEY, bPersistLocalAudioProcessing)        \
 	PROCESS(audio, STEREO_INPUT_KEY, bStereoInput)                                          \
 	PROCESS(audio, VOICE_HOLD_KEY, iVoiceHold)                                              \
 	PROCESS(audio, OUTPUT_DELAY_KEY, iOutputDelay)                                          \
@@ -457,6 +458,7 @@
 	PROCESS(audio, USE_VBR_KEY, bUseVBR)                                  \
 	PROCESS(audio, REDUCE_BITRATE_ON_SILENCE_KEY, bReduceBitrateOnSilence) \
 	PROCESS(audio, LOG_SILENT_TRANSMISSION_KEY, bLogSilentTransmission)   \
+	PROCESS(audio, PERSIST_LOCAL_AUDIO_PROCESSING_KEY, bPersistLocalAudioProcessing) \
 	PROCESS(audio, STEREO_INPUT_KEY, bStereoInput)                        \
 	PROCESS(audio, VOICE_HOLD_KEY, iVoiceHold)                            \
 	PROCESS(audio, ECHO_CANCEL_MODE_KEY, echoOption)                      \

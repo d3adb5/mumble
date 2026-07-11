@@ -373,6 +373,13 @@ void MainWindow::msgUserState(const MumbleProto::UserState &msg) {
 
 		if (msg.has_hash()) {
 			pmModel->setHash(pDst, u8(msg.hash()));
+
+			// Apply remembered local audio processing when the hash becomes
+			// known - not on every state update, which would overwrite live
+			// (unsaved) adjustments - and only when persisting it is enabled.
+			if (Global::get().s.bPersistLocalAudioProcessing) {
+				pDst->setLocalAudioProcessing(Global::get().db->getUserLocalAudioProcessing(pDst->qsHash));
+			}
 		}
 
 		if (pSelf) {
@@ -548,7 +555,6 @@ void MainWindow::msgUserState(const MumbleProto::UserState &msg) {
 			pDst->setLocalIgnoreTTS(true);
 		pDst->setLocalVolumeAdjustment(Global::get().db->getUserLocalVolume(pDst->qsHash));
 		pDst->setLocalNickname(Global::get().db->getUserLocalNickname(pDst->qsHash));
-		pDst->setLocalAudioProcessing(Global::get().db->getUserLocalAudioProcessing(pDst->qsHash));
 	}
 
 	if (msg.has_self_deaf() || msg.has_self_mute()) {

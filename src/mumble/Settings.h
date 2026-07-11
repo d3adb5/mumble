@@ -331,6 +331,11 @@ struct Settings {
 	/// If true, a console-log entry is written whenever another user's transmission is
 	/// detected to have gone silent (they keep transmitting but the signal is silence).
 	bool bLogSilentTransmission     = false;
+	/// If true, the per-user local audio processing (noise suppression and SNR-based
+	/// amplification of received streams) is remembered across restarts, keyed by the
+	/// user's certificate hash. Off by default: adjustments then only last for the
+	/// session.
+	bool bPersistLocalAudioProcessing = false;
 	/// If true, the microphone input is transmitted with two channels (stereo) instead of
 	/// being mixed down to mono. Echo cancellation and noise suppression are unavailable
 	/// in this mode.

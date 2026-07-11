@@ -81,6 +81,7 @@ const SettingsKey ALLOW_LOW_DELAY_MODE_KEY                    = { "allow_low_del
 const SettingsKey USE_VBR_KEY                                 = { "use_vbr" };
 const SettingsKey REDUCE_BITRATE_ON_SILENCE_KEY              = { "reduce_bitrate_on_silence" };
 const SettingsKey LOG_SILENT_TRANSMISSION_KEY                = { "log_silent_transmission" };
+const SettingsKey PERSIST_LOCAL_AUDIO_PROCESSING_KEY         = { "persist_local_audio_processing" };
 const SettingsKey STEREO_INPUT_KEY                            = { "stereo_input" };
 const SettingsKey VOICE_HOLD_KEY                              = { "voice_hold" };
 const SettingsKey OUTPUT_DELAY_KEY                            = { "output_delay" };

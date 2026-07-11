@@ -123,6 +123,10 @@ UserLocalAudioDialog::UserLocalAudioDialog(
 		setWindowTitle(tr("Local Audio Processing for %1").arg(user->qsName));
 		m_originalSettings = user->getLocalAudioProcessing();
 		loadSettings(m_originalSettings);
+		// Only now may widget changes be pushed onto the user; the signals
+		// fired during the setup above must never apply half-initialized
+		// widget state.
+		m_loaded = true;
 	}
 
 	qtMeterTimer = new QTimer(this);
@@ -211,6 +215,9 @@ LocalAudioProcessingSettings UserLocalAudioDialog::gatherSettings() const {
 }
 
 void UserLocalAudioDialog::applyToUser() {
+	if (!m_loaded) {
+		return;
+	}
 	ClientUser *user = ClientUser::get(m_clientSession);
 	if (user) {
 		user->setLocalAudioProcessing(gatherSettings());
@@ -259,10 +266,15 @@ void UserLocalAudioDialog::on_qbbButtons_clicked(QAbstractButton *button) {
 		ClientUser *user = ClientUser::get(m_clientSession);
 		if (user) {
 			user->setLocalAudioProcessing(gatherSettings());
-			if (!user->qsHash.isEmpty()) {
-				Global::get().db->setUserLocalAudioProcessing(user->qsHash, user->getLocalAudioProcessing());
-			} else {
-				Global::get().mw->logChangeNotPermanent(QObject::tr("Local Audio Processing..."), user);
+			// The settings stay applied for the session either way; they are
+			// only written to the database when the user opted into
+			// remembering them across restarts.
+			if (Global::get().s.bPersistLocalAudioProcessing) {
+				if (!user->qsHash.isEmpty()) {
+					Global::get().db->setUserLocalAudioProcessing(user->qsHash, user->getLocalAudioProcessing());
+				} else {
+					Global::get().mw->logChangeNotPermanent(QObject::tr("Local Audio Processing..."), user);
+				}
 			}
 		}
 		UserLocalAudioDialog::close();

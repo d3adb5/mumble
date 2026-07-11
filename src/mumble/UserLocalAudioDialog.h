@@ -30,6 +30,13 @@ class UserLocalAudioDialog : public QDialog, private Ui::UserLocalAudioDialog {
 	LocalAudioProcessingSettings m_originalSettings;
 	std::unordered_map< unsigned int, qt_unique_ptr< UserLocalAudioDialog > > &m_qmTracker;
 
+	/// Set once the construction has loaded the user's settings into the
+	/// widgets. Guards applyToUser() against the widget signals that fire
+	/// while the dialog is still being set up (e.g. populating the method
+	/// combo box), which would otherwise overwrite the user's settings with
+	/// the widgets' defaults.
+	bool m_loaded = false;
+
 	QTimer *qtMeterTimer;
 
 	/// Push the current widget state onto the user (live application).

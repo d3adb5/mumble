@@ -933,6 +933,7 @@ void AudioOutputDialog::load(const Settings &r) {
 			   qBound(qsMaxIncomingDelay->minimum(), r.iMaxIncomingAudioDelayMs / 100, qsMaxIncomingDelay->maximum()));
 	qsMaxIncomingDelay->setEnabled(r.bLimitIncomingAudioDelay);
 	qlMaxIncomingDelay->setEnabled(r.bLimitIncomingAudioDelay);
+	loadCheckBox(qcbPersistLocalAudioProcessing, r.bPersistLocalAudioProcessing);
 	loadComboBox(qcbLoopback, r.lmLoopMode);
 	loadSlider(qsPacketDelay, static_cast< int >(r.dMaxPacketDelay));
 	loadSlider(qsPacketLoss, static_cast< int >(r.dPacketLoss * 100.0f + 0.5f));
@@ -962,6 +963,7 @@ void AudioOutputDialog::save() const {
 	s.iJitterBufferSize              = qsJitter->value();
 	s.bLimitIncomingAudioDelay       = qcbLimitIncomingDelay->isChecked();
 	s.iMaxIncomingAudioDelayMs       = qsMaxIncomingDelay->value() * 100;
+	s.bPersistLocalAudioProcessing   = qcbPersistLocalAudioProcessing->isChecked();
 	s.qsAudioOutput                  = qcbSystem->currentText();
 	s.lmLoopMode                     = static_cast< Settings::LoopMode >(qcbLoopback->currentIndex());
 	s.dMaxPacketDelay                = static_cast< float >(qsPacketDelay->value());

@@ -301,6 +301,19 @@
         </property>
        </widget>
       </item>
+      <item row="4" column="0" colspan="3">
+       <widget class="QCheckBox" name="qcbPersistLocalAudioProcessing">
+        <property name="toolTip">
+         <string>Remember the per-user local audio processing across restarts</string>
+        </property>
+        <property name="whatsThis">
+         <string>&lt;b&gt;This remembers the per-user local audio processing across restarts.&lt;/b&gt;&lt;br /&gt;The local noise suppression and signal-to-noise based amplification configured for individual users (via their context menu) normally only last for the current session. With this option enabled they are stored, keyed by the user's certificate, and applied again whenever that user is encountered.</string>
+        </property>
+        <property name="text">
+         <string>Remember local audio processing per user</string>
+        </property>
+       </widget>
+      </item>
       <item row="3" column="2">
        <widget class="QLabel" name="qlMaxIncomingDelay">
         <property name="minimumSize">
