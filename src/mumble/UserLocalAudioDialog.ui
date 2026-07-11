@@ -116,68 +116,54 @@
      </property>
      <layout class="QGridLayout" name="gridAmp">
       <item row="0" column="0">
-       <widget class="QLabel" name="qliMaxAmp">
+       <widget class="QLabel" name="qliAmp">
         <property name="text">
-         <string>Maximum amplification</string>
+         <string>Amplification</string>
         </property>
         <property name="buddy">
-         <cstring>qsMaxAmp</cstring>
+         <cstring>qsAmp</cstring>
         </property>
        </widget>
       </item>
-      <item row="0" column="1">
-       <widget class="QSlider" name="qsMaxAmp">
+      <item row="0" column="1" colspan="2">
+       <widget class="MultiSlider" name="qsAmp" native="true">
         <property name="toolTip">
-         <string>Upper bound of the amplification applied to this user's speech</string>
-        </property>
-        <property name="minimum">
-         <number>0</number>
-        </property>
-        <property name="maximum">
-         <number>29500</number>
-        </property>
-        <property name="singleStep">
-         <number>500</number>
-        </property>
-        <property name="pageStep">
-         <number>2000</number>
-        </property>
-        <property name="value">
-         <number>20000</number>
-        </property>
-        <property name="orientation">
-         <enum>Qt::Orientation::Horizontal</enum>
-        </property>
-       </widget>
-      </item>
-      <item row="0" column="2">
-       <widget class="QLabel" name="qlMaxAmp">
-        <property name="minimumSize">
-         <size>
-          <width>60</width>
-          <height>0</height>
-         </size>
-        </property>
-        <property name="text">
-         <string notr="true">3.00</string>
+         <string>Base, adaptive and maximum amplification for this user's stream. The base level is always applied, the adaptive level caps the gain while the stream is noise and the maximum level caps it while it is speech. The marker shows the amplification currently applied.</string>
         </property>
        </widget>
       </item>
       <item row="1" column="0">
+       <widget class="QLabel" name="qliSnrGate">
+        <property name="text">
+         <string>SNR thresholds</string>
+        </property>
+        <property name="buddy">
+         <cstring>qsSnr</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1" colspan="2">
+       <widget class="MultiSlider" name="qsSnr" native="true">
+        <property name="toolTip">
+         <string>Frame SNR below the silence threshold counts as noise, above the speech threshold as speech; in between the previous classification is kept. The marker shows the live SNR of the received audio.</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0">
        <widget class="QLabel" name="qliSnr">
         <property name="text">
          <string>Signal-to-noise ratio</string>
         </property>
        </widget>
       </item>
-      <item row="1" column="1">
+      <item row="2" column="1">
        <widget class="AudioBar" name="abSnr" native="true">
         <property name="toolTip">
          <string>Live signal-to-noise ratio of the audio received from this user</string>
         </property>
        </widget>
       </item>
-      <item row="1" column="2">
+      <item row="2" column="2">
        <widget class="QLabel" name="qlSnr">
         <property name="minimumSize">
          <size>
@@ -190,15 +176,22 @@
         </property>
        </widget>
       </item>
-      <item row="2" column="0">
+      <item row="3" column="0">
        <widget class="QLabel" name="qliCurrentAmp">
         <property name="text">
          <string>Current amplification</string>
         </property>
        </widget>
       </item>
-      <item row="2" column="1" colspan="2">
+      <item row="3" column="1">
        <widget class="QLabel" name="qlCurrentAmp">
+        <property name="text">
+         <string notr="true">--</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="2">
+       <widget class="QLabel" name="qlAmpDetect">
         <property name="text">
          <string notr="true">--</string>
         </property>
@@ -225,6 +218,12 @@
    <extends>QWidget</extends>
    <header>AudioStats.h</header>
    <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>MultiSlider</class>
+   <extends>QWidget</extends>
+   <header>widgets/MultiSlider.h</header>
+   <container>0</container>
   </customwidget>
  </customwidgets>
  <resources/>

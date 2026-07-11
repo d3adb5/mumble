@@ -25,8 +25,8 @@ private slots:
 	void trackerConstantNoiseHasZeroSnr();
 	void trackerSeparatesSpeechFromNoise();
 	void trackerNoiseFloorFallsQuicklyRisesSlowly();
-	void frameSnrGatesNoiseFrames();
-	void speechinessGate();
+	void frameSnrGateWithHysteresis();
+	void amplificationLevels();
 	void desiredGainCappedAndNeverNegative();
 	void gainIdentityAtUnity();
 	void gainScalesAndClamps();
@@ -96,26 +96,58 @@ void TestAudioReceiveProcessing::trackerNoiseFloorFallsQuicklyRisesSlowly() {
 	QVERIFY(tracker.noiseLevel < floorLow * 1.2f);
 }
 
-void TestAudioReceiveProcessing::frameSnrGatesNoiseFrames() {
+void TestAudioReceiveProcessing::frameSnrGateWithHysteresis() {
 	SnrTracker tracker;
 	for (int i = 0; i < 200; ++i) {
 		tracker.update(0.01f);
 	}
 
-	// A frame at the noise floor carries no amplifiable signal, a burst well
-	// above it opens the gate completely.
-	QCOMPARE(speechiness(tracker.frameSnrDb(0.01f)), 0.0f);
-	QCOMPARE(speechiness(tracker.frameSnrDb(0.3f)), 1.0f);
+	const float silenceDb = static_cast< float >(DEFAULT_SNR_SILENCE_DB10) / 10.0f;
+	const float speechDb  = static_cast< float >(DEFAULT_SNR_SPEECH_DB10) / 10.0f;
+
+	// A frame at the noise floor stays classified as noise, a burst well
+	// above the speech threshold switches to speech...
+	bool speech = false;
+	speech = Mumble::Amplification::classifySpeech(tracker.frameSnrDb(0.01f), silenceDb, speechDb, speech);
+	QVERIFY(!speech);
+	speech = Mumble::Amplification::classifySpeech(tracker.frameSnrDb(0.3f), silenceDb, speechDb, speech);
+	QVERIFY(speech);
+
+	// ...and a level between the thresholds keeps the previous state, in both
+	// directions (hysteresis, like the input's voice activity detection).
+	const float betweenDb = 0.5f * (silenceDb + speechDb);
+	QVERIFY(Mumble::Amplification::classifySpeech(betweenDb, silenceDb, speechDb, true));
+	QVERIFY(!Mumble::Amplification::classifySpeech(betweenDb, silenceDb, speechDb, false));
+
+	// Back at (or below) the silence threshold the gate closes again.
+	QVERIFY(!Mumble::Amplification::classifySpeech(silenceDb, silenceDb, speechDb, true));
 }
 
-void TestAudioReceiveProcessing::speechinessGate() {
-	QCOMPARE(speechiness(GATE_OPEN_DB), 0.0f);
-	QCOMPARE(speechiness(GATE_FULL_DB), 1.0f);
-	QCOMPARE(speechiness(0.0f), 0.0f);
-	QCOMPARE(speechiness(SNR_MAX_DB), 1.0f);
+void TestAudioReceiveProcessing::amplificationLevels() {
+	// The receive amplification composes the input pipeline's level helpers:
+	// the desired lift is floored at the base level and capped at a ceiling
+	// interpolated between the adaptive (noise) and maximum (speech) levels.
+	const float baseDb     = 2.0f;
+	const float adaptiveDb = 4.0f;
+	const float maxDb      = 20.0f;
+	const float liftDb     = desiredGainDb(0.001f, maxDb);
+	QCOMPARE(liftDb, maxDb);
 
-	const float mid = 0.5f * (GATE_OPEN_DB + GATE_FULL_DB);
-	QVERIFY(std::abs(speechiness(mid) - 0.5f) < 1e-6f);
+	// Pure noise caps at the adaptive level, pure speech reaches the maximum.
+	const float noiseCeiling  = Mumble::Amplification::gainCeilingDb(adaptiveDb, maxDb, 0.0f);
+	const float speechCeiling = Mumble::Amplification::gainCeilingDb(adaptiveDb, maxDb, 1.0f);
+	QCOMPARE(Mumble::Amplification::effectiveGainDb(liftDb, baseDb, noiseCeiling), adaptiveDb);
+	QCOMPARE(Mumble::Amplification::effectiveGainDb(liftDb, baseDb, speechCeiling), maxDb);
+
+	// A stream already at the target still gets at least the base floor.
+	const float noLift = desiredGainDb(TARGET_LEVEL, maxDb);
+	QCOMPARE(Mumble::Amplification::effectiveGainDb(noLift, baseDb, speechCeiling), baseDb);
+
+	// With everything at 0 dB (the defaults for base and adaptive), noise is
+	// left completely untouched.
+	QCOMPARE(Mumble::Amplification::effectiveGainDb(liftDb, 0.0f,
+													Mumble::Amplification::gainCeilingDb(0.0f, maxDb, 0.0f)),
+			 0.0f);
 }
 
 void TestAudioReceiveProcessing::desiredGainCappedAndNeverNegative() {

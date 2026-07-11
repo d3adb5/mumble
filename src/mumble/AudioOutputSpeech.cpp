@@ -433,8 +433,15 @@ void AudioOutputSpeech::applyLocalProcessing(float *samples, unsigned int sample
 	}
 	setupLocalSuppression(suppressMode);
 
-	const bool ampEnabled = p->m_localSnrAmpEnabled.load();
-	const float maxGainDb = Mumble::Amplification::gainDbForLoudnessF(p->m_localAmpMaxLoudness.load());
+	// The amplification levels mirror the input's: a base floor that is always
+	// applied, an adaptive ceiling for noise and the maximum ceiling for
+	// speech, each on the same loudness-knob scale.
+	const bool ampEnabled  = p->m_localSnrAmpEnabled.load();
+	const float maxDb      = Mumble::Amplification::gainDbForLoudnessF(p->m_localAmpMaxLoudness.load());
+	const float adaptiveDb = Mumble::Amplification::gainDbForLoudnessF(p->m_localAmpAdaptiveLoudness.load());
+	const float baseDb     = Mumble::Amplification::gainDbForLoudnessF(p->m_localAmpBaseLoudness.load());
+	const float silenceDb  = static_cast< float >(p->m_localSnrSilenceDb10.load()) / 10.0f;
+	const float speechDb   = static_cast< float >(p->m_localSnrSpeechDb10.load()) / 10.0f;
 
 	if (m_localSuppressActive == Settings::NoiseCancelSpeex || m_localSuppressActive == Settings::NoiseCancelBoth) {
 		const int strength = p->m_localSpeexSuppressStrength.load();
@@ -532,12 +539,25 @@ void AudioOutputSpeech::applyLocalProcessing(float *samples, unsigned int sample
 		const float rms = Mumble::ReceiveProcessing::frameRms(frame, iFrameSize);
 		m_snrTracker.update(rms);
 
+		// Classify the frame as speech or noise with hysteresis on the
+		// configured SNR thresholds (like the input's voice activity gate),
+		// then ease the smoothed speech state towards the result: it selects
+		// how far the amplification ceiling sits between the adaptive (noise)
+		// and maximum (speech) levels.
+		const float frameSnrDb = m_snrTracker.frameSnrDb(rms);
+		m_gateSpeech = Mumble::Amplification::classifySpeech(frameSnrDb, silenceDb, speechDb, m_gateSpeech);
+		const float gateStep = m_gateSpeech ? Mumble::ReceiveProcessing::SPEECHINESS_RISE_PER_FRAME
+											: Mumble::ReceiveProcessing::SPEECHINESS_FALL_PER_FRAME;
+		m_gateSpeechiness =
+			Mumble::Amplification::approach(m_gateSpeechiness, m_gateSpeech ? 1.0f : 0.0f, gateStep);
+
 		float gainTargetDb = 0.0f;
 		if (ampEnabled) {
-			// Amplify what the gate considers signal towards the target level;
-			// noise-only frames ease back to unity so the floor stays put.
-			const float gate = Mumble::ReceiveProcessing::speechiness(m_snrTracker.frameSnrDb(rms));
-			gainTargetDb = Mumble::ReceiveProcessing::desiredGainDb(m_snrTracker.signalLevel, maxGainDb) * gate;
+			// Lift the speech envelope towards the target level, raised to at
+			// least the base floor and capped at this frame's ceiling.
+			const float ceilingDb = Mumble::Amplification::gainCeilingDb(adaptiveDb, maxDb, m_gateSpeechiness);
+			const float liftDb    = Mumble::ReceiveProcessing::desiredGainDb(m_snrTracker.signalLevel, maxDb);
+			gainTargetDb          = Mumble::Amplification::effectiveGainDb(liftDb, baseDb, ceilingDb);
 		}
 		m_localGainDb = Mumble::Amplification::approach(m_localGainDb, gainTargetDb,
 														Mumble::ReceiveProcessing::GAIN_STEP_DB_PER_FRAME);
@@ -545,6 +565,8 @@ void AudioOutputSpeech::applyLocalProcessing(float *samples, unsigned int sample
 		Mumble::ReceiveProcessing::applyGainClamped(frame, iFrameSize, gainFactor);
 
 		p->m_localSnrDb.store(m_snrTracker.snrDb());
+		p->m_localFrameSnrDb.store(frameSnrDb);
+		p->m_localAmpSpeech.store(m_gateSpeech);
 		p->m_localAmpFactor.store(gainFactor);
 	}
 }

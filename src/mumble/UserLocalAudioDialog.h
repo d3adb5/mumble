@@ -46,7 +46,8 @@ public slots:
 	void on_qcbMethod_currentIndexChanged(int index);
 	void on_qsSpeexStrength_valueChanged(int value);
 	void on_qgbAmp_toggled(bool checked);
-	void on_qsMaxAmp_valueChanged(int value);
+	void on_qsAmp_valuesChanged();
+	void on_qsSnr_valuesChanged();
 	void on_qbbButtons_clicked(QAbstractButton *button);
 	void updateMeters();
 	void reject();

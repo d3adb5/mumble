@@ -21,13 +21,21 @@
 // The amplification slider mirrors the input amplification's scale: the value
 // is the AGC target minus the targeted loudness, so a higher value means more
 // gain (see AudioConfigDialog).
+static constexpr int AMP_SLIDER_MAX = static_cast< int >(Mumble::Amplification::AGC_TARGET) - 500;
+
 static int loudnessFromAmpSlider(int value) {
 	return static_cast< int >(Mumble::Amplification::AGC_TARGET) - value;
 }
 
 static int ampSliderFromLoudness(int loudness) {
-	const int max = static_cast< int >(Mumble::Amplification::AGC_TARGET) - 500;
-	return qBound(0, static_cast< int >(Mumble::Amplification::AGC_TARGET) - loudness, max);
+	return qBound(0, static_cast< int >(Mumble::Amplification::AGC_TARGET) - loudness, AMP_SLIDER_MAX);
+}
+
+// Slider value matching a given linear gain factor, for the live indicator.
+static int ampSliderFromFactor(float factor) {
+	factor = qMax(factor, 1.0f);
+	return qBound(0, static_cast< int >(Mumble::Amplification::AGC_TARGET * (1.0f - 1.0f / factor) + 0.5f),
+				  AMP_SLIDER_MAX);
 }
 
 // The multiplication sign used to present amplification factors, e.g. "2.50x".
@@ -37,10 +45,27 @@ static QString ampFactorText(float factor) {
 	return QString::number(static_cast< double >(factor), 'f', 2) + AMP_TIMES;
 }
 
-// Upper end of the SNR meter in dB; everything above simply pegs the bar.
+// Formats an amplification slider value as its gain factor, e.g. "2.50x".
+static QString ampFactorTextFromSlider(int value) {
+	return ampFactorText(Mumble::Amplification::AGC_TARGET / static_cast< float >(loudnessFromAmpSlider(value)));
+}
+
+// The SNR sliders and settings carry tenths of a dB for smooth handles.
+static QString snrTextFromSlider(int value) {
+	return QStringLiteral("%1 dB").arg(static_cast< double >(value) / 10.0, 0, 'f', 1);
+}
+
+// Upper end of the SNR meter and threshold slider in dB; everything above
+// simply pegs the bar.
 static constexpr float SNR_BAR_MAX_DB = 30.0f;
 // The meter stores millibels-ish (dB x 1000) to get a smooth integer scale.
 static constexpr int SNR_BAR_SCALE = 1000;
+
+// Indicator colors matching the input settings' live markers: green for
+// speech, orange for the in-between/noise state, red for silence.
+static const QColor INDICATOR_SPEECH(0x22, 0xaa, 0x22);
+static const QColor INDICATOR_NOISE(0xcc, 0x88, 0x00);
+static const QColor INDICATOR_SILENCE(0xcc, 0x33, 0x33);
 
 UserLocalAudioDialog::UserLocalAudioDialog(
 	unsigned int sessionId, std::unordered_map< unsigned int, qt_unique_ptr< UserLocalAudioDialog > > &qmTracker,
@@ -71,6 +96,21 @@ UserLocalAudioDialog::UserLocalAudioDialog(
 	abSnr->qcBelow = Qt::red;
 	abSnr->qcInside = Qt::yellow;
 	abSnr->qcAbove  = Qt::green;
+
+	// One bar, three handles for the base, adaptive and maximum amplification,
+	// mirroring the input amplification settings.
+	qsAmp->setRange(0, AMP_SLIDER_MAX);
+	qsAmp->setSingleStep(500);
+	qsAmp->setCaptions({ tr("Base"), tr("Adaptive"), tr("Max") });
+	qsAmp->setValueFormatter(ampFactorTextFromSlider);
+
+	// Two coupled handles (silence/speech) for the SNR gate, like the voice
+	// activity thresholds of the input.
+	qsSnr->setHandleCount(2);
+	qsSnr->setRange(0, static_cast< int >(SNR_BAR_MAX_DB) * 10);
+	qsSnr->setSingleStep(5);
+	qsSnr->setCaptions({ tr("Silence"), tr("Speech") });
+	qsSnr->setValueFormatter(snrTextFromSlider);
 
 	ClientUser *user = ClientUser::get(sessionId);
 	if (!user) {
@@ -127,7 +167,8 @@ void UserLocalAudioDialog::loadSettings(const LocalAudioProcessingSettings &sett
 	const QSignalBlocker blockMethod(qcbMethod);
 	const QSignalBlocker blockStrength(qsSpeexStrength);
 	const QSignalBlocker blockAmp(qgbAmp);
-	const QSignalBlocker blockMaxAmp(qsMaxAmp);
+	const QSignalBlocker blockAmpSlider(qsAmp);
+	const QSignalBlocker blockSnrSlider(qsSnr);
 
 	qgbSuppress->setChecked(settings.suppressionEnabled);
 	int methodIndex = qcbMethod->findData(static_cast< int >(settings.suppressionMode));
@@ -139,12 +180,16 @@ void UserLocalAudioDialog::loadSettings(const LocalAudioProcessingSettings &sett
 	qcbMethod->setCurrentIndex(methodIndex);
 	qsSpeexStrength->setValue(-settings.speexSuppressStrength);
 	qgbAmp->setChecked(settings.snrAmplificationEnabled);
-	qsMaxAmp->setValue(ampSliderFromLoudness(settings.ampMaxLoudness));
+
+	// The three amplification handles, ordered base <= adaptive <= maximum
+	// (the widget keeps them from crossing), and the two SNR gate handles.
+	qsAmp->setValues({ ampSliderFromLoudness(settings.ampBaseLoudness),
+					   ampSliderFromLoudness(settings.ampAdaptiveLoudness),
+					   ampSliderFromLoudness(settings.ampMaxLoudness) });
+	qsSnr->setValues({ settings.snrSilenceDb10, settings.snrSpeechDb10 });
 
 	updateSuppressionControls();
 	qlSpeexStrength->setText(tr("-%1 dB").arg(qsSpeexStrength->value()));
-	qlMaxAmp->setText(ampFactorText(Mumble::Amplification::AGC_TARGET
-									/ static_cast< float >(loudnessFromAmpSlider(qsMaxAmp->value()))));
 }
 
 LocalAudioProcessingSettings UserLocalAudioDialog::gatherSettings() const {
@@ -153,7 +198,11 @@ LocalAudioProcessingSettings UserLocalAudioDialog::gatherSettings() const {
 	settings.suppressionMode         = static_cast< Settings::NoiseCancel >(qcbMethod->currentData().toInt());
 	settings.speexSuppressStrength   = -qsSpeexStrength->value();
 	settings.snrAmplificationEnabled = qgbAmp->isChecked();
-	settings.ampMaxLoudness          = loudnessFromAmpSlider(qsMaxAmp->value());
+	settings.ampBaseLoudness         = loudnessFromAmpSlider(qsAmp->value(0));
+	settings.ampAdaptiveLoudness     = loudnessFromAmpSlider(qsAmp->value(1));
+	settings.ampMaxLoudness          = loudnessFromAmpSlider(qsAmp->value(2));
+	settings.snrSilenceDb10          = qsSnr->value(0);
+	settings.snrSpeechDb10           = qsSnr->value(1);
 	return settings;
 }
 
@@ -190,9 +239,11 @@ void UserLocalAudioDialog::on_qgbAmp_toggled(bool) {
 	applyToUser();
 }
 
-void UserLocalAudioDialog::on_qsMaxAmp_valueChanged(int value) {
-	qlMaxAmp->setText(
-		ampFactorText(Mumble::Amplification::AGC_TARGET / static_cast< float >(loudnessFromAmpSlider(value))));
+void UserLocalAudioDialog::on_qsAmp_valuesChanged() {
+	applyToUser();
+}
+
+void UserLocalAudioDialog::on_qsSnr_valuesChanged() {
 	applyToUser();
 }
 
@@ -239,11 +290,34 @@ void UserLocalAudioDialog::updateMeters() {
 	abSnr->setEnabled(receiving);
 	abSnr->update();
 
+	// The live frame SNR against the gate thresholds, colored by where it
+	// sits, like the input's voice activity slider.
+	const bool speech      = user->m_localAmpSpeech.load();
+	const int frameSnrDb10 = static_cast< int >(user->m_localFrameSnrDb.load() * 10.0f + 0.5f);
+	QColor snrColor        = INDICATOR_NOISE;
+	if (frameSnrDb10 >= qsSnr->value(1)) {
+		snrColor = INDICATOR_SPEECH;
+	} else if (frameSnrDb10 < qsSnr->value(0)) {
+		snrColor = INDICATOR_SILENCE;
+	}
+	qsSnr->setIndicator(frameSnrDb10, receiving, snrColor);
+
+	// The amplification currently applied, marked on the level slider, and
+	// whether the stream is detected as speech or noise (noise caps the gain
+	// at the adaptive level).
+	const QColor ampColor = speech ? INDICATOR_SPEECH : INDICATOR_NOISE;
+	const float ampFactor = user->m_localAmpFactor.load();
+	qsAmp->setIndicator(ampSliderFromFactor(ampFactor), receiving && qgbAmp->isChecked(), ampColor);
+
 	if (!qgbAmp->isChecked()) {
 		qlCurrentAmp->setText(tr("off"));
+		qlAmpDetect->setText(QString());
 	} else if (receiving) {
-		qlCurrentAmp->setText(ampFactorText(user->m_localAmpFactor.load()));
+		qlCurrentAmp->setText(ampFactorText(ampFactor));
+		qlAmpDetect->setText(QStringLiteral("<b style=\"color:%1\">%2</b>")
+								 .arg(ampColor.name(), speech ? tr("speech") : tr("noise")));
 	} else {
 		qlCurrentAmp->setText(tr("no audio"));
+		qlAmpDetect->setText(QString());
 	}
 }

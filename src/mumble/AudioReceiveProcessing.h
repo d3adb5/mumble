@@ -44,13 +44,23 @@ namespace ReceiveProcessing {
 	/// gaps between words without letting a stale peak linger forever.
 	constexpr float SIGNAL_DECAY_PER_FRAME = 0.995f;
 
-	/// Frame SNR (dB) below which a frame counts as pure noise and receives no
-	/// amplification at all.
-	constexpr float GATE_OPEN_DB = 3.0f;
+	/// Default frame-SNR threshold (dB) below which a frame counts as noise,
+	/// stored as tenths of a dB like the per-user setting.
+	constexpr int DEFAULT_SNR_SILENCE_DB10 = 30;
 
-	/// Frame SNR (dB) above which a frame counts as pure signal and receives
-	/// the full amplification. In between the gain fades in linearly.
-	constexpr float GATE_FULL_DB = 12.0f;
+	/// Default frame-SNR threshold (dB) above which a frame counts as speech,
+	/// stored as tenths of a dB like the per-user setting. Between the two
+	/// thresholds the previous classification is kept (hysteresis), mirroring
+	/// the input's voice activity detection.
+	constexpr int DEFAULT_SNR_SPEECH_DB10 = 120;
+
+	/// How far the smoothed speechiness moves towards 1 per 10 ms frame once
+	/// the gate classifies speech: fast, so onsets are not clipped.
+	constexpr float SPEECHINESS_RISE_PER_FRAME = 0.5f;
+
+	/// How far the smoothed speechiness falls towards 0 per 10 ms frame once
+	/// the gate classifies noise: slow, so word tails are not chopped off.
+	constexpr float SPEECHINESS_FALL_PER_FRAME = 0.02f;
 
 	/// Maximum change of the applied gain per 10 ms frame (50 dB/s): fast
 	/// enough to follow speech onsets, slow enough not to click.
@@ -120,14 +130,6 @@ namespace ReceiveProcessing {
 			return std::clamp(20.0f * std::log10(rms / noiseLevel), 0.0f, SNR_MAX_DB);
 		}
 	};
-
-	/// How much of the amplification a frame with the given SNR receives:
-	/// 0 below GATE_OPEN_DB (noise), 1 above GATE_FULL_DB (signal), linear in
-	/// between. This is what keeps the noise from being amplified as much as
-	/// the speech.
-	inline float speechiness(float frameSnrDb) {
-		return std::clamp((frameSnrDb - GATE_OPEN_DB) / (GATE_FULL_DB - GATE_OPEN_DB), 0.0f, 1.0f);
-	}
 
 	/// Gain (dB) that lifts the speech envelope \p signalLevel up to the
 	/// target level, capped at \p maxGainDb and never negative: an already

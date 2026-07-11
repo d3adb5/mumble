@@ -233,7 +233,15 @@ Database::Database(const QString &dbname) {
 	execQueryAndLogFailure(
 		query, QLatin1String("CREATE TABLE IF NOT EXISTS `local_audio_processing` (`id` INTEGER PRIMARY KEY "
 							 "AUTOINCREMENT, `hash` TEXT, `suppress` INTEGER, `suppress_mode` INTEGER, "
-							 "`speex_strength` INTEGER, `snr_amp` INTEGER, `amp_loudness` INTEGER)"));
+							 "`speex_strength` INTEGER, `snr_amp` INTEGER, `amp_loudness` INTEGER, "
+							 "`amp_adaptive_loudness` INTEGER, `amp_base_loudness` INTEGER, "
+							 "`snr_silence` INTEGER, `snr_speech` INTEGER)"));
+	// Upgrade path for tables created before the adaptive/base levels and SNR
+	// thresholds existed; failing these queries is not noteworthy
+	query.exec(QLatin1String("ALTER TABLE `local_audio_processing` ADD COLUMN `amp_adaptive_loudness` INTEGER"));
+	query.exec(QLatin1String("ALTER TABLE `local_audio_processing` ADD COLUMN `amp_base_loudness` INTEGER"));
+	query.exec(QLatin1String("ALTER TABLE `local_audio_processing` ADD COLUMN `snr_silence` INTEGER"));
+	query.exec(QLatin1String("ALTER TABLE `local_audio_processing` ADD COLUMN `snr_speech` INTEGER"));
 	execQueryAndLogFailure(query, QLatin1String("CREATE UNIQUE INDEX IF NOT EXISTS `local_audio_processing_hash` ON "
 												"`local_audio_processing`(`hash`)"));
 
@@ -441,20 +449,27 @@ void Database::setUserLocalAudioProcessing(const QString &hash, const LocalAudio
 	QSqlQuery query(db);
 
 	query.prepare(QLatin1String("INSERT OR REPLACE INTO `local_audio_processing` (`hash`, `suppress`, "
-								"`suppress_mode`, `speex_strength`, `snr_amp`, `amp_loudness`) VALUES (?,?,?,?,?,?)"));
+								"`suppress_mode`, `speex_strength`, `snr_amp`, `amp_loudness`, "
+								"`amp_adaptive_loudness`, `amp_base_loudness`, `snr_silence`, `snr_speech`) "
+								"VALUES (?,?,?,?,?,?,?,?,?,?)"));
 	query.addBindValue(hash);
 	query.addBindValue(settings.suppressionEnabled ? 1 : 0);
 	query.addBindValue(static_cast< int >(settings.suppressionMode));
 	query.addBindValue(settings.speexSuppressStrength);
 	query.addBindValue(settings.snrAmplificationEnabled ? 1 : 0);
 	query.addBindValue(settings.ampMaxLoudness);
+	query.addBindValue(settings.ampAdaptiveLoudness);
+	query.addBindValue(settings.ampBaseLoudness);
+	query.addBindValue(settings.snrSilenceDb10);
+	query.addBindValue(settings.snrSpeechDb10);
 	execQueryAndLogFailure(query);
 }
 
 LocalAudioProcessingSettings Database::getUserLocalAudioProcessing(const QString &hash) {
 	QSqlQuery query(db);
 
-	query.prepare(QLatin1String("SELECT `suppress`, `suppress_mode`, `speex_strength`, `snr_amp`, `amp_loudness` "
+	query.prepare(QLatin1String("SELECT `suppress`, `suppress_mode`, `speex_strength`, `snr_amp`, `amp_loudness`, "
+								"`amp_adaptive_loudness`, `amp_base_loudness`, `snr_silence`, `snr_speech` "
 								"FROM `local_audio_processing` WHERE `hash` = ?"));
 	query.addBindValue(hash);
 	execQueryAndLogFailure(query);
@@ -471,6 +486,23 @@ LocalAudioProcessingSettings Database::getUserLocalAudioProcessing(const QString
 		settings.speexSuppressStrength   = qBound(-60, query.value(2).toInt(), -15);
 		settings.snrAmplificationEnabled = query.value(3).toInt() != 0;
 		settings.ampMaxLoudness          = qBound(500, query.value(4).toInt(), 30000);
+
+		// Rows written before these columns existed hold NULLs; keep the
+		// defaults in that case. The levels stay ordered base <= adaptive <=
+		// max (in gain terms: loudness values ordered the other way around)
+		// and the thresholds silence <= speech, like the sliders enforce.
+		if (!query.value(5).isNull()) {
+			settings.ampAdaptiveLoudness = qBound(settings.ampMaxLoudness, query.value(5).toInt(), 30000);
+		}
+		if (!query.value(6).isNull()) {
+			settings.ampBaseLoudness = qBound(settings.ampAdaptiveLoudness, query.value(6).toInt(), 30000);
+		}
+		if (!query.value(7).isNull()) {
+			settings.snrSilenceDb10 = qBound(0, query.value(7).toInt(), 300);
+		}
+		if (!query.value(8).isNull()) {
+			settings.snrSpeechDb10 = qBound(settings.snrSilenceDb10, query.value(8).toInt(), 300);
+		}
 	}
 	return settings;
 }

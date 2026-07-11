@@ -35,6 +35,10 @@ LocalAudioProcessingSettings ClientUser::getLocalAudioProcessing() const {
 	settings.speexSuppressStrength   = m_localSpeexSuppressStrength.load();
 	settings.snrAmplificationEnabled = m_localSnrAmpEnabled.load();
 	settings.ampMaxLoudness          = m_localAmpMaxLoudness.load();
+	settings.ampAdaptiveLoudness     = m_localAmpAdaptiveLoudness.load();
+	settings.ampBaseLoudness         = m_localAmpBaseLoudness.load();
+	settings.snrSilenceDb10          = m_localSnrSilenceDb10.load();
+	settings.snrSpeechDb10           = m_localSnrSpeechDb10.load();
 	return settings;
 }
 
@@ -44,6 +48,10 @@ void ClientUser::setLocalAudioProcessing(const LocalAudioProcessingSettings &set
 	m_localSpeexSuppressStrength.store(settings.speexSuppressStrength);
 	m_localSnrAmpEnabled.store(settings.snrAmplificationEnabled);
 	m_localAmpMaxLoudness.store(settings.ampMaxLoudness);
+	m_localAmpAdaptiveLoudness.store(settings.ampAdaptiveLoudness);
+	m_localAmpBaseLoudness.store(settings.ampBaseLoudness);
+	m_localSnrSilenceDb10.store(settings.snrSilenceDb10);
+	m_localSnrSpeechDb10.store(settings.snrSpeechDb10);
 }
 
 QString ClientUser::getLocalNickname() const {

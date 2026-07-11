@@ -30,8 +30,23 @@ struct LocalAudioProcessingSettings {
 	/// Whether the stream is amplified based on its signal-to-noise ratio.
 	bool snrAmplificationEnabled = false;
 	/// Loudness the maximum amplification targets, on the same 1-32768 knob
-	/// scale as Settings::iMinLoudness: smaller values allow more gain.
+	/// scale as Settings::iMinLoudness: smaller values allow more gain. This
+	/// is the gain ceiling while the stream is classified as speech.
 	int ampMaxLoudness = 10000;
+	/// Loudness the adaptive amplification targets: the gain ceiling while
+	/// the stream is classified as noise, like Settings::iAdaptiveLoudness.
+	/// The default (the AGC target) means noise is not amplified at all.
+	int ampAdaptiveLoudness = 30000;
+	/// Loudness the base amplification floor targets: the stream is always
+	/// amplified by at least this much, like Settings::iBaseLoudness. The
+	/// default (the AGC target) means a 0 dB floor.
+	int ampBaseLoudness = 30000;
+	/// Frame SNR below which the stream counts as noise, in tenths of a dB.
+	int snrSilenceDb10 = 30;
+	/// Frame SNR above which the stream counts as speech, in tenths of a dB.
+	/// Between the thresholds the previous classification is kept, mirroring
+	/// the input's voice activity detection.
+	int snrSpeechDb10 = 120;
 };
 
 class ClientUser : public QObject, public User {
@@ -73,10 +88,16 @@ public:
 	std::atomic< int > m_localSpeexSuppressStrength{ -30 };
 	std::atomic< bool > m_localSnrAmpEnabled{ false };
 	std::atomic< int > m_localAmpMaxLoudness{ 10000 };
+	std::atomic< int > m_localAmpAdaptiveLoudness{ 30000 };
+	std::atomic< int > m_localAmpBaseLoudness{ 30000 };
+	std::atomic< int > m_localSnrSilenceDb10{ 30 };
+	std::atomic< int > m_localSnrSpeechDb10{ 120 };
 
 	/// Live measurements of this user's stream, written by the audio output
 	/// thread while their audio is decoded and read by the UI.
 	std::atomic< float > m_localSnrDb{ 0.0f };
+	std::atomic< float > m_localFrameSnrDb{ 0.0f };
+	std::atomic< bool > m_localAmpSpeech{ false };
 	std::atomic< float > m_localAmpFactor{ 1.0f };
 
 	QString getFlagsString() const;

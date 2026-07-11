@@ -100,6 +100,12 @@ protected:
 #endif
 	/// Noise floor / speech envelope estimate of the decoded stream.
 	Mumble::ReceiveProcessing::SnrTracker m_snrTracker;
+	/// Whether the frame SNR currently classifies the stream as speech, with
+	/// hysteresis on the configured silence/speech thresholds.
+	bool m_gateSpeech = false;
+	/// Smoothed speech state ([0, 1]) easing between the adaptive (noise) and
+	/// maximum (speech) amplification ceilings, like the input's speechiness.
+	float m_gateSpeechiness = 0.0f;
 	/// Smoothed SNR-gated amplification currently applied, in dB.
 	float m_localGainDb = 0.0f;
 
