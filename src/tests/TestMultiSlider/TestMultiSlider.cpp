@@ -10,7 +10,8 @@
 #include "MultiSlider.h"
 
 /// Verifies the MultiSlider keeps its handles from crossing, so the base,
-/// adaptive and maximum amplification values stay in non-decreasing order.
+/// adaptive and maximum amplification values stay in non-decreasing order,
+/// and that stacked (coincident) handles can still be grabbed by dragging.
 class TestMultiSlider : public QObject {
 	Q_OBJECT
 private slots:
@@ -19,7 +20,23 @@ private slots:
 	void setValuesEnforcesOrder();
 	void rangeClamps();
 	void emitsOnChange();
+	void stackedHandlesDragRightGrabsLast();
+	void stackedHandlesDragLeftGrabsFirst();
+	void stackedHandlesPlainClickKeepsValues();
 };
+
+// Drives the slider with synthesized mouse events, as a user dragging from
+// \p fromX to \p toX would.
+static void drag(MultiSlider &slider, int fromX, int toX) {
+	const QPointF from(fromX, 25);
+	const QPointF to(toX, 25);
+	QMouseEvent press(QEvent::MouseButtonPress, from, from, from, Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+	QApplication::sendEvent(&slider, &press);
+	QMouseEvent move(QEvent::MouseMove, to, to, to, Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+	QApplication::sendEvent(&slider, &move);
+	QMouseEvent release(QEvent::MouseButtonRelease, to, to, to, Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+	QApplication::sendEvent(&slider, &release);
+}
 
 void TestMultiSlider::initialValues() {
 	MultiSlider slider;
@@ -86,6 +103,52 @@ void TestMultiSlider::emitsOnChange() {
 	slider.setValue(0, 999);
 	QCOMPARE(spy.count(), 2);
 	QCOMPARE(slider.value(0), slider.value(1));
+}
+
+void TestMultiSlider::stackedHandlesDragRightGrabsLast() {
+	MultiSlider slider;
+	slider.resize(300, 60);
+	slider.setRange(0, 100);
+	slider.setHandleCount(3);
+	// All handles stacked at the minimum, like three levels at "off": the
+	// first handle is wedged against its neighbours, so a rightwards drag has
+	// to grab the last one for anything to move at all.
+	slider.setValues({ 0, 0, 0 });
+
+	drag(slider, 150, 250);
+
+	QCOMPARE(slider.value(0), 0);
+	QCOMPARE(slider.value(1), 0);
+	QVERIFY(slider.value(2) > 0);
+}
+
+void TestMultiSlider::stackedHandlesDragLeftGrabsFirst() {
+	MultiSlider slider;
+	slider.resize(300, 60);
+	slider.setRange(0, 100);
+	slider.setHandleCount(3);
+	slider.setValues({ 100, 100, 100 });
+
+	drag(slider, 150, 50);
+
+	QVERIFY(slider.value(0) < 100);
+	QCOMPARE(slider.value(1), 100);
+	QCOMPARE(slider.value(2), 100);
+}
+
+void TestMultiSlider::stackedHandlesPlainClickKeepsValues() {
+	MultiSlider slider;
+	slider.resize(300, 60);
+	slider.setRange(0, 100);
+	slider.setHandleCount(3);
+	slider.setValues({ 50, 50, 50 });
+
+	// A click without a drag must not teleport any handle of the stack.
+	drag(slider, 150, 150);
+
+	QCOMPARE(slider.value(0), 50);
+	QCOMPARE(slider.value(1), 50);
+	QCOMPARE(slider.value(2), 50);
 }
 
 QTEST_MAIN(TestMultiSlider)

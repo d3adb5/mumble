@@ -56,6 +56,7 @@ protected:
 	void paintEvent(QPaintEvent *) override;
 	void mousePressEvent(QMouseEvent *) override;
 	void mouseMoveEvent(QMouseEvent *) override;
+	void mouseReleaseEvent(QMouseEvent *) override;
 	void keyPressEvent(QKeyEvent *) override;
 
 private:
@@ -67,6 +68,16 @@ private:
 	std::function< QString(int) > m_formatter;
 	int m_active = 0;
 
+	/// Several handles can sit on the same spot (e.g. every level at "no
+	/// amplification"), making a press ambiguous. The pick is then deferred
+	/// to the first drag movement: dragging right grabs the last handle of
+	/// the stack (the one free to move right), dragging left the first (the
+	/// one free to move left).
+	bool m_pendingPick = false;
+	int m_pickLow      = 0;
+	int m_pickHigh     = 0;
+	int m_pressX       = 0;
+
 	bool m_indicatorActive = false;
 	int m_indicatorValue   = 0;
 	QColor m_indicatorColor;
@@ -75,7 +86,6 @@ private:
 	int clampHandle(int index, int value) const;
 	int valueToX(int value) const;
 	int valueFromX(int x) const;
-	int handleNear(const QPoint &pos) const;
 	int grooveLeft() const;
 	int grooveRight() const;
 	int grooveY() const;

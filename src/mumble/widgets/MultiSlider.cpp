@@ -118,18 +118,6 @@ int MultiSlider::valueFromX(int x) const {
 	return std::clamp(value, m_minimum, m_maximum);
 }
 
-int MultiSlider::handleNear(const QPoint &pos) const {
-	int best         = 0;
-	int bestDistance = std::numeric_limits< int >::max();
-	for (int i = 0; i < m_values.size(); ++i) {
-		const int distance = std::abs(valueToX(m_values[i]) - pos.x());
-		if (distance < bestDistance) {
-			bestDistance = distance;
-			best         = i;
-		}
-	}
-	return best;
-}
 
 void MultiSlider::paintEvent(QPaintEvent *) {
 	QPainter p(this);
@@ -177,32 +165,65 @@ void MultiSlider::paintEvent(QPaintEvent *) {
 	const int labelBase = y + HANDLE_RADIUS + 2;
 	const int labelH    = fontMetrics().height();
 
-	for (int i = 0; i < m_values.size(); ++i) {
+	// Handles that sit on the same spot are treated as one group: they are
+	// fanned out slightly around their shared position so every handle stays
+	// visible, and they share a combined caption/value label instead of
+	// painting several labels on top of each other.
+	for (int i = 0; i < m_values.size();) {
 		const int x = valueToX(m_values[i]);
-
-		// Handle.
-		QColor handleColor = pal.color(i == m_active ? QPalette::Highlight : QPalette::Button);
-		if (!enabled) {
-			handleColor.setAlphaF(0.5f);
+		int last    = i;
+		while (last + 1 < m_values.size() && valueToX(m_values[last + 1]) == x) {
+			++last;
 		}
-		p.setPen(QPen(pal.color(QPalette::Dark), 1));
-		p.setBrush(handleColor);
-		p.drawRoundedRect(QRect(x - HANDLE_WIDTH / 2, y - HANDLE_RADIUS, HANDLE_WIDTH, 2 * HANDLE_RADIUS), 2, 2);
+		const int groupSize = last - i + 1;
 
-		// Value above, caption below, both centred on the handle and kept inside
-		// the widget.
-		// Keep the labels inside the widget so the edge handles are not clipped.
-		const int textW       = 70;
-		const int textX       = std::clamp(x - textW / 2, 0, std::max(0, width() - textW));
+		for (int k = i; k <= last; ++k) {
+			const int fanX = x + ((k - i) * 2 - (groupSize - 1)) * (HANDLE_WIDTH + 1) / 2;
+
+			QColor handleColor = pal.color(k == m_active ? QPalette::Highlight : QPalette::Button);
+			if (!enabled) {
+				handleColor.setAlphaF(0.5f);
+			}
+			p.setPen(QPen(pal.color(QPalette::Dark), 1));
+			p.setBrush(handleColor);
+			p.drawRoundedRect(QRect(fanX - HANDLE_WIDTH / 2, y - HANDLE_RADIUS, HANDLE_WIDTH, 2 * HANDLE_RADIUS), 2,
+							  2);
+		}
+
+		// One value text (distinct values landing on the same pixel are joined)
+		// and one caption for the whole group, centred on the shared position
+		// and kept inside the widget so the edge handles are not clipped.
+		QString valueText;
+		if (m_formatter) {
+			QStringList valueTexts;
+			for (int k = i; k <= last; ++k) {
+				const QString text = m_formatter(m_values[k]);
+				if (!valueTexts.contains(text)) {
+					valueTexts << text;
+				}
+			}
+			valueText = valueTexts.join(QLatin1Char('/'));
+		}
+		QStringList captionTexts;
+		for (int k = i; k <= last && k < m_captions.size(); ++k) {
+			captionTexts << m_captions[k];
+		}
+		const QString captionText = captionTexts.join(QLatin1Char('/'));
+
+		const int textW = std::max({ 70, fontMetrics().horizontalAdvance(valueText) + 8,
+									 fontMetrics().horizontalAdvance(captionText) + 8 });
+		const int textX = std::clamp(x - textW / 2, 0, std::max(0, width() - textW));
 		const QRect valueRect(textX, labelTop, textW, labelH);
 		const QRect captionRect(textX, labelBase, textW, labelH);
 		p.setPen(enabled ? pal.color(QPalette::WindowText) : pal.color(QPalette::Disabled, QPalette::WindowText));
-		if (m_formatter) {
-			p.drawText(valueRect, Qt::AlignHCenter | Qt::AlignVCenter, m_formatter(m_values[i]));
+		if (!valueText.isEmpty()) {
+			p.drawText(valueRect, Qt::AlignHCenter | Qt::AlignVCenter, valueText);
 		}
-		if (i < m_captions.size()) {
-			p.drawText(captionRect, Qt::AlignHCenter | Qt::AlignVCenter, m_captions[i]);
+		if (!captionText.isEmpty()) {
+			p.drawText(captionRect, Qt::AlignHCenter | Qt::AlignVCenter, captionText);
 		}
+
+		i = last + 1;
 	}
 }
 
@@ -210,15 +231,63 @@ void MultiSlider::mousePressEvent(QMouseEvent *event) {
 	if (event->button() != Qt::LeftButton) {
 		return;
 	}
-	const int index = handleNear(event->position().toPoint());
-	moveHandle(index, valueFromX(static_cast< int >(event->position().x())));
+	const int x = static_cast< int >(event->position().x());
+
+	// Find the nearest handle. Several handles may tie for that distance
+	// (typically because they sit on the very same value); grabbing the first
+	// one would wedge it against its neighbour, so for a tie the choice is
+	// deferred until the drag direction is known.
+	int bestDistance = std::numeric_limits< int >::max();
+	for (int i = 0; i < m_values.size(); ++i) {
+		bestDistance = std::min(bestDistance, std::abs(valueToX(m_values[i]) - x));
+	}
+	int low  = -1;
+	int high = -1;
+	for (int i = 0; i < m_values.size(); ++i) {
+		if (std::abs(valueToX(m_values[i]) - x) == bestDistance) {
+			if (low < 0) {
+				low = i;
+			}
+			high = i;
+		}
+	}
+
+	if (low == high) {
+		m_pendingPick = false;
+		moveHandle(low, valueFromX(x));
+	} else {
+		m_pendingPick = true;
+		m_pickLow     = low;
+		m_pickHigh    = high;
+		m_pressX      = x;
+		m_active      = high;
+		update();
+	}
 }
 
 void MultiSlider::mouseMoveEvent(QMouseEvent *event) {
 	if (!(event->buttons() & Qt::LeftButton)) {
 		return;
 	}
-	moveHandle(m_active, valueFromX(static_cast< int >(event->position().x())));
+	const int x = static_cast< int >(event->position().x());
+	if (m_pendingPick) {
+		// Wait for a clear direction before committing to a handle.
+		if (std::abs(x - m_pressX) < 3) {
+			return;
+		}
+		m_active      = (x > m_pressX) ? m_pickHigh : m_pickLow;
+		m_pendingPick = false;
+	}
+	moveHandle(m_active, valueFromX(x));
+}
+
+void MultiSlider::mouseReleaseEvent(QMouseEvent *event) {
+	if (event->button() != Qt::LeftButton) {
+		return;
+	}
+	// A plain click on a stacked group without a drag: leave the values alone,
+	// the group's last handle stays active for keyboard adjustment.
+	m_pendingPick = false;
 }
 
 void MultiSlider::keyPressEvent(QKeyEvent *event) {
