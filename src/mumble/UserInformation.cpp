@@ -26,21 +26,29 @@ UserInformation::UserInformation(const MumbleProto::UserStats &msg, QWidget *p) 
 	connect(qtTimer, SIGNAL(timeout()), this, SLOT(tick()));
 	qtTimer->start(6000);
 
-	// A low SNR is bad, a high one is good. The meter runs from 0 to 30 dB in
-	// thousandths of a dB.
-	abSnr->iMin     = 0;
-	abSnr->iMax     = 30000;
-	abSnr->iBelow   = 6000;
-	abSnr->iAbove   = 15000;
-	abSnr->iValue   = 0;
-	abSnr->qcBelow  = Qt::red;
-	abSnr->qcInside = Qt::yellow;
-	abSnr->qcAbove  = Qt::green;
+	// We never receive audio from ourselves, so there is nothing to measure
+	// or process locally on the self-user's own information dialog.
+	const bool isSelf = (uiSession == Global::get().uiSession);
+	qgbAudio->setVisible(!isSelf);
 
-	qtAudioTimer = new QTimer(this);
-	connect(qtAudioTimer, &QTimer::timeout, this, &UserInformation::updateReceivedAudio);
-	qtAudioTimer->start(200);
-	updateReceivedAudio();
+	qtAudioTimer = nullptr;
+	if (!isSelf) {
+		// A low SNR is bad, a high one is good. The meter runs from 0 to 30 dB
+		// in thousandths of a dB.
+		abSnr->iMin     = 0;
+		abSnr->iMax     = 30000;
+		abSnr->iBelow   = 6000;
+		abSnr->iAbove   = 15000;
+		abSnr->iValue   = 0;
+		abSnr->qcBelow  = Qt::red;
+		abSnr->qcInside = Qt::yellow;
+		abSnr->qcAbove  = Qt::green;
+
+		qtAudioTimer = new QTimer(this);
+		connect(qtAudioTimer, &QTimer::timeout, this, &UserInformation::updateReceivedAudio);
+		qtAudioTimer->start(200);
+		updateReceivedAudio();
+	}
 
 	qgbConnection->setVisible(false);
 
