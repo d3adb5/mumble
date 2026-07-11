@@ -18,6 +18,7 @@
 #include "MumbleProtocol.h"
 #include "QtUtils.h"
 #include "Usage.h"
+#include "UserLocalAudioDialog.h"
 #include "UserLocalNicknameDialog.h"
 
 #include <memory>
@@ -88,6 +89,7 @@ public:
 	QIcon qiTalkingOn, qiTalkingWhisper, qiTalkingShout, qiTalkingOff;
 	QIcon m_iconInformation;
 	std::unordered_map< unsigned int, qt_unique_ptr< UserLocalNicknameDialog > > qmUserNicknameTracker;
+	std::unordered_map< unsigned int, qt_unique_ptr< UserLocalAudioDialog > > qmUserLocalAudioTracker;
 
 	/// "Action" for when there are no actions available
 	QAction *qaEmpty;
@@ -287,6 +289,7 @@ public slots:
 	void on_qaUserLocalIgnoreTTS_triggered();
 	void on_qaUserLocalMute_triggered();
 	void on_qaUserLocalNickname_triggered();
+	void on_qaUserLocalAudio_triggered();
 	void on_qaUserTextMessage_triggered();
 	void on_qaUserRegister_triggered();
 	void on_qaUserInformation_triggered();

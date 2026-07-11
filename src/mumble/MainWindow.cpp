@@ -2037,6 +2037,7 @@ void MainWindow::qmUser_aboutToShow() {
 		qmUser->addAction(m_localVolumeLabel.get());
 		m_userLocalVolumeSlider->setUser(p->uiSession);
 		qmUser->addAction(m_userLocalVolumeSlider.get());
+		qmUser->addAction(qaUserLocalAudio);
 		qmUser->addSeparator();
 	}
 
@@ -2391,6 +2392,15 @@ void MainWindow::on_qaUserLocalNickname_triggered() {
 void MainWindow::openUserLocalNicknameDialog(const ClientUser &p) {
 	unsigned int session = p.uiSession;
 	UserLocalNicknameDialog::present(session, qmUserNicknameTracker, this);
+}
+
+void MainWindow::on_qaUserLocalAudio_triggered() {
+	ClientUser *p = getContextMenuUser();
+
+	if (!p)
+		return;
+
+	UserLocalAudioDialog::present(p->uiSession, qmUserLocalAudioTracker, this);
 }
 
 void MainWindow::on_qaUserCommentView_triggered() {

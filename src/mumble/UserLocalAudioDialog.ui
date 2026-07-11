@@ -1,0 +1,232 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>UserLocalAudioDialog</class>
+ <widget class="QDialog" name="UserLocalAudioDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>520</width>
+    <height>360</height>
+   </rect>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>520</width>
+    <height>0</height>
+   </size>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="QGroupBox" name="qgbSuppress">
+     <property name="title">
+      <string>Noise suppression</string>
+     </property>
+     <property name="toolTip">
+      <string>Denoise this user's audio locally during playback</string>
+     </property>
+     <property name="whatsThis">
+      <string>&lt;b&gt;Local noise suppression&lt;/b&gt;&lt;br /&gt;Applies a noise suppression algorithm to this user's stream on your machine only, after it has been received. It does not change their client or what anyone else hears, and it never affects the audio you transmit.</string>
+     </property>
+     <property name="checkable">
+      <bool>true</bool>
+     </property>
+     <property name="checked">
+      <bool>false</bool>
+     </property>
+     <layout class="QGridLayout" name="gridSuppress">
+      <item row="0" column="0">
+       <widget class="QLabel" name="qliMethod">
+        <property name="text">
+         <string>Method</string>
+        </property>
+        <property name="buddy">
+         <cstring>qcbMethod</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1" colspan="2">
+       <widget class="QComboBox" name="qcbMethod">
+        <property name="toolTip">
+         <string>Noise suppression method used for this user, independent of your own transmission settings</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="qliSpeexStrength">
+        <property name="text">
+         <string>Suppression strength</string>
+        </property>
+        <property name="buddy">
+         <cstring>qsSpeexStrength</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QSlider" name="qsSpeexStrength">
+        <property name="toolTip">
+         <string>Maximum attenuation of the noise in dB</string>
+        </property>
+        <property name="minimum">
+         <number>15</number>
+        </property>
+        <property name="maximum">
+         <number>60</number>
+        </property>
+        <property name="value">
+         <number>30</number>
+        </property>
+        <property name="orientation">
+         <enum>Qt::Orientation::Horizontal</enum>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="2">
+       <widget class="QLabel" name="qlSpeexStrength">
+        <property name="minimumSize">
+         <size>
+          <width>60</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="text">
+         <string notr="true">-30 dB</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="qgbAmp">
+     <property name="title">
+      <string>Signal-to-noise based amplification</string>
+     </property>
+     <property name="toolTip">
+      <string>Amplify this user's speech locally, without amplifying their background noise as much</string>
+     </property>
+     <property name="whatsThis">
+      <string>&lt;b&gt;Signal-to-noise based amplification&lt;/b&gt;&lt;br /&gt;Continuously measures the signal-to-noise ratio of the audio received from this user and amplifies the parts detected as signal towards a comfortable level, up to the configured maximum. Noise-only passages are left unamplified, so you can lower this user's local volume and boost their speech back up without boosting their noise. Playback only - your own transmitted audio is never changed.</string>
+     </property>
+     <property name="checkable">
+      <bool>true</bool>
+     </property>
+     <property name="checked">
+      <bool>false</bool>
+     </property>
+     <layout class="QGridLayout" name="gridAmp">
+      <item row="0" column="0">
+       <widget class="QLabel" name="qliMaxAmp">
+        <property name="text">
+         <string>Maximum amplification</string>
+        </property>
+        <property name="buddy">
+         <cstring>qsMaxAmp</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QSlider" name="qsMaxAmp">
+        <property name="toolTip">
+         <string>Upper bound of the amplification applied to this user's speech</string>
+        </property>
+        <property name="minimum">
+         <number>0</number>
+        </property>
+        <property name="maximum">
+         <number>29500</number>
+        </property>
+        <property name="singleStep">
+         <number>500</number>
+        </property>
+        <property name="pageStep">
+         <number>2000</number>
+        </property>
+        <property name="value">
+         <number>20000</number>
+        </property>
+        <property name="orientation">
+         <enum>Qt::Orientation::Horizontal</enum>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="2">
+       <widget class="QLabel" name="qlMaxAmp">
+        <property name="minimumSize">
+         <size>
+          <width>60</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="text">
+         <string notr="true">3.00</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="qliSnr">
+        <property name="text">
+         <string>Signal-to-noise ratio</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="AudioBar" name="abSnr" native="true">
+        <property name="toolTip">
+         <string>Live signal-to-noise ratio of the audio received from this user</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="2">
+       <widget class="QLabel" name="qlSnr">
+        <property name="minimumSize">
+         <size>
+          <width>60</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="text">
+         <string notr="true">--</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="qliCurrentAmp">
+        <property name="text">
+         <string>Current amplification</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1" colspan="2">
+       <widget class="QLabel" name="qlCurrentAmp">
+        <property name="text">
+         <string notr="true">--</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QDialogButtonBox" name="qbbButtons">
+     <property name="orientation">
+      <enum>Qt::Orientation::Horizontal</enum>
+     </property>
+     <property name="standardButtons">
+      <set>QDialogButtonBox::StandardButton::Cancel|QDialogButtonBox::StandardButton::Ok|QDialogButtonBox::StandardButton::Reset</set>
+     </property>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>AudioBar</class>
+   <extends>QWidget</extends>
+   <header>AudioStats.h</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>

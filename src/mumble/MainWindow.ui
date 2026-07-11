@@ -452,6 +452,17 @@
     <string>Sets a local nickname for another user.</string>
    </property>
   </action>
+  <action name="qaUserLocalAudio">
+   <property name="text">
+    <string>Local Audio &amp;Processing...</string>
+   </property>
+   <property name="toolTip">
+    <string>Configure local noise suppression and amplification for this user</string>
+   </property>
+   <property name="whatsThis">
+    <string>Configures noise suppression and signal-to-noise based amplification that are applied locally to the audio received from this user. This only affects what you hear, never what is transmitted.</string>
+   </property>
+  </action>
   <action name="qaChannelAdd">
    <property name="text">
     <string>&amp;Add...</string>
