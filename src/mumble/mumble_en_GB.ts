@@ -885,7 +885,7 @@ This value allows you to set the maximum number of users allowed in the channel.
     </message>
     <message>
         <source>Enabling this will cancel the echo from your speakers. Mixed has low CPU impact, but only works well if your speakers are equally loud and equidistant from the microphone. Multichannel echo cancellation provides much better echo cancellation, but at a higher CPU cost.</source>
-        <translation>Enabling this will cancel the echo from your speakers. Mixed has low CPU impact but only works well if your speakers are equally loud and equidistant from the microphone. Multichannel echo cancellation provides much better echo cancellation but at a higher CPU cost.</translation>
+        <translation>Enabling this will cancel the echo from your speakers. Mixed has low CPU impact, but only works well if your speakers are equally loud and equidistant from the microphone. Multichannel echo cancellation provides much better echo cancellation, but at a higher CPU cost.</translation>
     </message>
     <message>
         <source>Disabled</source>
@@ -909,7 +909,7 @@ This value allows you to set the maximum number of users allowed in the channel.
     </message>
     <message>
         <source>Use Amplitude based speech detection</source>
-        <translation>Use amplitude-based speech detection</translation>
+        <translation>Use Amplitude based speech detection</translation>
     </message>
     <message>
         <source>&lt;b&gt;This selects how long after a perceived stop in speech transmission should continue.&lt;/b&gt;&lt;br /&gt;Set this higher if your voice breaks up when you speak (seen by a rapidly blinking voice icon next to your name).</source>
@@ -4011,22 +4011,22 @@ Without this option enabled, using Mumble&apos;s global shortcuts in privileged 
     <name>GlobalShortcutWin</name>
     <message>
         <source>Mouse</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Mouse</translation>
     </message>
     <message>
         <source>Keyboard</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Keyboard</translation>
     </message>
 </context>
 <context>
     <name>GlobalShortcutX</name>
     <message>
         <source>Keyboard</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Keyboard</translation>
     </message>
     <message>
         <source>Mouse</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Mouse</translation>
     </message>
 </context>
 <context>
@@ -4618,11 +4618,11 @@ This setting only applies to new messages; existing messages keep the previous t
     </message>
     <message>
         <source>checked</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">checked</translation>
     </message>
     <message>
         <source>unchecked</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">unchecked</translation>
     </message>
     <message>
         <source>decibels</source>
@@ -5198,6 +5198,14 @@ This setting only applies to new messages; existing messages keep the previous t
     </message>
     <message>
         <source>Open Themes Directory</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>This controls whether Mumble will try to restore the window geometry and state from previous sessions on startup.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Restore window geometry on startup</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -8221,11 +8229,11 @@ To upgrade these files to their latest versions, click the button below.</source
     </message>
     <message>
         <source>checked</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">checked</translation>
     </message>
     <message>
         <source>unchecked</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">unchecked</translation>
     </message>
     <message>
         <source>Not available</source>
@@ -9115,7 +9123,7 @@ See &lt;a href=&quot;https://github.com/mumble-voip/mumble&quot;&gt;the project 
     <name>ShortcutActionWidget</name>
     <message>
         <source>Unassigned</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Unassigned</translation>
     </message>
 </context>
 <context>
@@ -9134,7 +9142,7 @@ See &lt;a href=&quot;https://github.com/mumble-voip/mumble&quot;&gt;the project 
     </message>
     <message>
         <source>Unassigned</source>
-        <translation type="unfinished"></translation>
+        <translation type="unfinished">Unassigned</translation>
     </message>
     <message>
         <source>No buttons assigned</source>

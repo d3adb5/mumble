@@ -227,6 +227,7 @@ struct CLIOptions {
 	bool dumpInputStreams         = false;
 	bool printEchoCancelQueue     = false;
 	bool skipSettingsBackupPrompt = false;
+	bool noWindowStates           = false;
 
 	std::optional< std::string > configFile;
 	std::optional< std::string > jackClientName;
@@ -294,6 +295,10 @@ CLIOptions parseCLI(int argc, char **argv) {
 
 	app.add_flag("--skip-settings-backup-prompt", options.skipSettingsBackupPrompt,
 				 "Don't show the settings recovery dialog on startup after a crash.")
+		->group(CLIOptions::CLI_GENERAL_SECTION);
+
+	app.add_flag("--no-window-states", options.noWindowStates,
+				 "Disable restoring and saving window state and geometry.")
 		->group(CLIOptions::CLI_GENERAL_SECTION);
 
 
@@ -472,6 +477,9 @@ int main(int argc, char **argv) {
 	if (options.printEchoCancelQueue) {
 		Global::get().bDebugPrintQueue = true;
 	}
+	if (options.noWindowStates) {
+		Global::get().preventWindowStatesCLI = true;
+	}
 	if (options.defaultCertDir) {
 		qdCert = QDir(QString::fromStdString(*options.defaultCertDir));
 		// I suppose we should really be checking whether the directory is writable here too,
@@ -637,9 +645,9 @@ int main(int argc, char **argv) {
 
 	// Load preferences
 	if (settingsFile.isEmpty()) {
-		Global::get().s.load();
+		Global::get().s.load(options.skipSettingsBackupPrompt);
 	} else {
-		Global::get().s.load(settingsFile);
+		Global::get().s.load(settingsFile, options.skipSettingsBackupPrompt);
 	}
 	if (!Global::get().migratedDBPath.isEmpty()) {
 		// We have migrated the DB to a new location. Make sure that the settings hold the correct (new) path and that
