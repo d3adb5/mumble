@@ -5,6 +5,7 @@
 
 #include "Database.h"
 
+#include "ClientUser.h"
 #include "MumbleApplication.h"
 #include "Net.h"
 #include "Utils.h"
@@ -229,6 +230,12 @@ Database::Database(const QString &dbname) {
 												"AUTOINCREMENT, `hash` TEXT, `nickname` TEXT)"));
 	execQueryAndLogFailure(query,
 						   QLatin1String("CREATE UNIQUE INDEX IF NOT EXISTS `nicknames_hash` ON `nicknames`(`hash`)"));
+	execQueryAndLogFailure(
+		query, QLatin1String("CREATE TABLE IF NOT EXISTS `local_audio_processing` (`id` INTEGER PRIMARY KEY "
+							 "AUTOINCREMENT, `hash` TEXT, `suppress` INTEGER, `suppress_mode` INTEGER, "
+							 "`speex_strength` INTEGER, `snr_amp` INTEGER, `amp_loudness` INTEGER)"));
+	execQueryAndLogFailure(query, QLatin1String("CREATE UNIQUE INDEX IF NOT EXISTS `local_audio_processing_hash` ON "
+												"`local_audio_processing`(`hash`)"));
 
 	// Note: A previous snapshot version created a table called 'hidden'
 	execQueryAndLogFailure(
@@ -428,6 +435,44 @@ QString Database::getUserLocalNickname(const QString &hash) {
 		return query.value(0).toString();
 	}
 	return QString();
+}
+
+void Database::setUserLocalAudioProcessing(const QString &hash, const LocalAudioProcessingSettings &settings) {
+	QSqlQuery query(db);
+
+	query.prepare(QLatin1String("INSERT OR REPLACE INTO `local_audio_processing` (`hash`, `suppress`, "
+								"`suppress_mode`, `speex_strength`, `snr_amp`, `amp_loudness`) VALUES (?,?,?,?,?,?)"));
+	query.addBindValue(hash);
+	query.addBindValue(settings.suppressionEnabled ? 1 : 0);
+	query.addBindValue(static_cast< int >(settings.suppressionMode));
+	query.addBindValue(settings.speexSuppressStrength);
+	query.addBindValue(settings.snrAmplificationEnabled ? 1 : 0);
+	query.addBindValue(settings.ampMaxLoudness);
+	execQueryAndLogFailure(query);
+}
+
+LocalAudioProcessingSettings Database::getUserLocalAudioProcessing(const QString &hash) {
+	QSqlQuery query(db);
+
+	query.prepare(QLatin1String("SELECT `suppress`, `suppress_mode`, `speex_strength`, `snr_amp`, `amp_loudness` "
+								"FROM `local_audio_processing` WHERE `hash` = ?"));
+	query.addBindValue(hash);
+	execQueryAndLogFailure(query);
+
+	LocalAudioProcessingSettings settings;
+	if (query.first()) {
+		settings.suppressionEnabled = query.value(0).toInt() != 0;
+
+		const int mode = query.value(1).toInt();
+		if (mode >= Settings::NoiseCancelOff && mode <= Settings::NoiseCancelDeepFilter) {
+			settings.suppressionMode = static_cast< Settings::NoiseCancel >(mode);
+		}
+
+		settings.speexSuppressStrength   = qBound(-60, query.value(2).toInt(), -15);
+		settings.snrAmplificationEnabled = query.value(3).toInt() != 0;
+		settings.ampMaxLoudness          = qBound(500, query.value(4).toInt(), 30000);
+	}
+	return settings;
 }
 
 void Database::setLocalMuted(const QString &hash, bool muted) {

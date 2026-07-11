@@ -6,6 +6,7 @@
 #include "AudioOutputSpeech.h"
 
 #include "Audio.h"
+#include "AudioInputAmplification.h"
 #include "ClientUser.h"
 #include "PacketDataStream.h"
 #include "Utils.h"
@@ -13,9 +14,56 @@
 
 #include <opus.h>
 
+#ifdef USE_RNNOISE
+extern "C" {
+#	include "rnnoise.h"
+}
+#endif
+
+#ifdef USE_WEBRTC_AUDIO_PROCESSING
+#	include "WebRTCAudioProcessing.h"
+#endif
+
+#ifdef USE_DEEPFILTERNET
+#	include "DeepFilterNet.h"
+#	include "DeepFilterNetProcessing.h"
+#endif
+
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+
+// The Qt-free receive-processing helper mirrors Settings::NoiseCancel value for
+// value; make sure the two never drift apart.
+using LocalSuppression = Mumble::ReceiveProcessing::Suppression;
+static_assert(static_cast< int >(LocalSuppression::Off) == Settings::NoiseCancelOff);
+static_assert(static_cast< int >(LocalSuppression::Speex) == Settings::NoiseCancelSpeex);
+static_assert(static_cast< int >(LocalSuppression::RNN) == Settings::NoiseCancelRNN);
+static_assert(static_cast< int >(LocalSuppression::Both) == Settings::NoiseCancelBoth);
+static_assert(static_cast< int >(LocalSuppression::WebRTC) == Settings::NoiseCancelWebRTC);
+static_assert(static_cast< int >(LocalSuppression::DeepFilter) == Settings::NoiseCancelDeepFilter);
+
+/// The suppression backends this build provides for the receive side.
+static constexpr Mumble::ReceiveProcessing::SuppressionSupport localSuppressionSupport() {
+	Mumble::ReceiveProcessing::SuppressionSupport support;
+#ifdef USE_RNNOISE
+	support.rnnoise = true;
+#endif
+#ifdef USE_WEBRTC_AUDIO_PROCESSING
+	support.webrtc = true;
+#endif
+#ifdef USE_DEEPFILTERNET
+	support.deepfilter = true;
+#endif
+	return support;
+}
+
+/// Scale of the float samples the suppressors' 16 bit PCM view uses.
+static constexpr float LOCAL_PCM_SCALE = 32768.0f;
+
+static short clampToShort(float v) {
+	return static_cast< short >(std::clamp(v, -32768.0f, 32767.0f));
+}
 
 std::mutex AudioOutputSpeech::s_audioCachesMutex;
 std::vector< AudioOutputCache > AudioOutputSpeech::s_audioCaches(100);
@@ -160,6 +208,8 @@ AudioOutputSpeech::~AudioOutputSpeech() {
 		opus_decoder_destroy(opusState);
 	}
 
+	setupLocalSuppression(Settings::NoiseCancelOff);
+
 	if (srs)
 		speex_resampler_destroy(srs);
 
@@ -277,6 +327,225 @@ void AudioOutputSpeech::enforceIncomingDelayLimit() {
 	if (droppedPackets > 0) {
 		qWarning("AudioOutputSpeech: Dropped %u packet(s) (%u ms of audio) to limit the incoming audio delay to %d ms",
 				 droppedPackets, droppedAudio * 10 / iFrameSize, settings.iMaxIncomingAudioDelayMs);
+	}
+}
+
+void AudioOutputSpeech::setupLocalSuppression(Settings::NoiseCancel mode) {
+	if (mode == m_localSuppressActive) {
+		return;
+	}
+
+	const unsigned int channels = bStereo ? 2 : 1;
+
+	// Release everything first; the processors carry stream state that would be
+	// stale after a method change anyway.
+	for (auto &preprocessor : m_localPreprocessor) {
+		preprocessor.deinit();
+	}
+#ifdef USE_RNNOISE
+	for (auto &denoiser : m_localDenoiser) {
+		if (denoiser) {
+			rnnoise_destroy(denoiser);
+			denoiser = nullptr;
+		}
+	}
+#endif
+#ifdef USE_WEBRTC_AUDIO_PROCESSING
+	m_localWebrtc.reset();
+#endif
+#ifdef USE_DEEPFILTERNET
+	for (auto &deepfilter : m_localDeepFilter) {
+		deepfilter.reset();
+	}
+#endif
+
+	if (mode == Settings::NoiseCancelSpeex || mode == Settings::NoiseCancelBoth) {
+		for (unsigned int channel = 0; channel < channels; ++channel) {
+			m_localPreprocessor[channel].init(iSampleRate, iFrameSizePerChannel);
+			m_localPreprocessor[channel].setVAD(false);
+			m_localPreprocessor[channel].setAGC(false);
+			m_localPreprocessor[channel].setDereverb(false);
+			m_localPreprocessor[channel].setDenoise(true);
+		}
+		// Force the strength to be (re)applied on the next processed frame.
+		m_localSpeexStrengthApplied = 0;
+	}
+
+#ifdef USE_RNNOISE
+	if (mode == Settings::NoiseCancelRNN || mode == Settings::NoiseCancelBoth) {
+		for (unsigned int channel = 0; channel < channels; ++channel) {
+			m_localDenoiser[channel] = rnnoise_create(nullptr);
+		}
+	}
+#endif
+
+#ifdef USE_WEBRTC_AUDIO_PROCESSING
+	if (mode == Settings::NoiseCancelWebRTC) {
+		m_localWebrtc = std::make_unique< WebRTCAudioProcessor >(
+			static_cast< int >(iSampleRate), static_cast< int >(channels), false, true,
+			WebRTCAudioProcessor::NoiseLevel::High, false);
+		if (!m_localWebrtc->isValid()) {
+			// Remember the mode anyway so this is not retried every frame; the
+			// processing loop skips the missing processor.
+			qWarning("AudioOutputSpeech: Failed to initialize the local WebRTC noise suppressor");
+			m_localWebrtc.reset();
+		}
+	}
+#endif
+
+#ifdef USE_DEEPFILTERNET
+	if (mode == Settings::NoiseCancelDeepFilter) {
+		const float attenLimit = Mumble::DeepFilter::clampAttenLimitDb(Global::get().s.iDeepFilterAttenLimit);
+		const float postFilter = Mumble::DeepFilter::postFilterBeta(Global::get().s.iDeepFilterPostFilter);
+
+		bool valid = true;
+		for (unsigned int channel = 0; channel < channels; ++channel) {
+			m_localDeepFilter[channel] = std::make_unique< DeepFilterNetProcessor >(attenLimit, postFilter);
+			valid                      = valid && m_localDeepFilter[channel]->isValid();
+		}
+		if (!valid) {
+			// Remember the mode anyway so this is not retried every frame; the
+			// processing loop skips the missing processors.
+			qWarning("AudioOutputSpeech: Failed to initialize the local DeepFilterNet suppressor");
+			for (auto &deepfilter : m_localDeepFilter) {
+				deepfilter.reset();
+			}
+		}
+	}
+#endif
+
+	m_localSuppressActive = mode;
+}
+
+void AudioOutputSpeech::applyLocalProcessing(float *samples, unsigned int sampleCount) {
+	if (!p) {
+		return;
+	}
+
+	const unsigned int channels = bStereo ? 2 : 1;
+
+	// Read the per-user configuration once per call; the UI may change it at
+	// any time.
+	Settings::NoiseCancel suppressMode = Settings::NoiseCancelOff;
+	if (p->m_localSuppressEnabled.load()) {
+		suppressMode = static_cast< Settings::NoiseCancel >(Mumble::ReceiveProcessing::resolveSuppression(
+			static_cast< LocalSuppression >(p->m_localSuppressMode.load()), localSuppressionSupport()));
+	}
+	setupLocalSuppression(suppressMode);
+
+	const bool ampEnabled = p->m_localSnrAmpEnabled.load();
+	const float maxGainDb = Mumble::Amplification::gainDbForLoudnessF(p->m_localAmpMaxLoudness.load());
+
+	if (m_localSuppressActive == Settings::NoiseCancelSpeex || m_localSuppressActive == Settings::NoiseCancelBoth) {
+		const int strength = p->m_localSpeexSuppressStrength.load();
+		if (strength != m_localSpeexStrengthApplied) {
+			for (unsigned int channel = 0; channel < channels; ++channel) {
+				m_localPreprocessor[channel].setNoiseSuppress(strength);
+			}
+			m_localSpeexStrengthApplied = strength;
+		}
+	}
+
+	// Work through the decoded audio one 10 ms frame at a time - the unit all
+	// suppressors operate on. Decoded packets are always whole frames; anything
+	// less is left untouched.
+	for (unsigned int offset = 0; offset + iFrameSize <= sampleCount; offset += iFrameSize) {
+		float *frame = samples + offset;
+
+		if (m_localSuppressActive != Settings::NoiseCancelOff) {
+			// The suppressors operate on (mono) 16 bit PCM, so run them on a
+			// deinterleaved short view of the frame and convert the result back.
+			short deinterleaved[2][480];
+			assert(iFrameSizePerChannel <= 480);
+			for (unsigned int i = 0; i < iFrameSizePerChannel; ++i) {
+				for (unsigned int channel = 0; channel < channels; ++channel) {
+					deinterleaved[channel][i] = clampToShort(frame[i * channels + channel] * LOCAL_PCM_SCALE);
+				}
+			}
+
+#ifdef USE_RNNOISE
+			// RNNoise first, Speex second - the order the input pipeline uses
+			// for the "Both" mode. RNNoise works on floats in 16 bit range.
+			if (m_localSuppressActive == Settings::NoiseCancelRNN
+				|| m_localSuppressActive == Settings::NoiseCancelBoth) {
+				float denoiseFrame[480];
+				for (unsigned int channel = 0; channel < channels; ++channel) {
+					if (!m_localDenoiser[channel]) {
+						continue;
+					}
+					for (unsigned int i = 0; i < iFrameSizePerChannel; ++i) {
+						denoiseFrame[i] = deinterleaved[channel][i];
+					}
+					rnnoise_process_frame(m_localDenoiser[channel], denoiseFrame, denoiseFrame);
+					for (unsigned int i = 0; i < iFrameSizePerChannel; ++i) {
+						deinterleaved[channel][i] = clampToShort(denoiseFrame[i]);
+					}
+				}
+			}
+#endif
+
+			if (m_localSuppressActive == Settings::NoiseCancelSpeex
+				|| m_localSuppressActive == Settings::NoiseCancelBoth) {
+				for (unsigned int channel = 0; channel < channels; ++channel) {
+					if (m_localPreprocessor[channel]) {
+						m_localPreprocessor[channel].run(*deinterleaved[channel]);
+					}
+				}
+			}
+
+#ifdef USE_WEBRTC_AUDIO_PROCESSING
+			if (m_localSuppressActive == Settings::NoiseCancelWebRTC && m_localWebrtc) {
+				// The WebRTC processor handles the interleaved frame in one go.
+				short interleaved[2 * 480];
+				for (unsigned int i = 0; i < iFrameSizePerChannel * channels; ++i) {
+					interleaved[i] = deinterleaved[i % channels][i / channels];
+				}
+				m_localWebrtc->processCapture(interleaved, 0);
+				for (unsigned int i = 0; i < iFrameSizePerChannel * channels; ++i) {
+					deinterleaved[i % channels][i / channels] = interleaved[i];
+				}
+			}
+#endif
+
+#ifdef USE_DEEPFILTERNET
+			if (m_localSuppressActive == Settings::NoiseCancelDeepFilter) {
+				for (unsigned int channel = 0; channel < channels; ++channel) {
+					if (m_localDeepFilter[channel]) {
+						m_localDeepFilter[channel]->processFrame(deinterleaved[channel]);
+					}
+				}
+			}
+#endif
+
+			for (unsigned int i = 0; i < iFrameSizePerChannel; ++i) {
+				for (unsigned int channel = 0; channel < channels; ++channel) {
+					frame[i * channels + channel] =
+						static_cast< float >(deinterleaved[channel][i]) / LOCAL_PCM_SCALE;
+				}
+			}
+		}
+
+		// Track the stream's noise floor and speech envelope on the signal that
+		// is actually played (and possibly amplified), i.e. after suppression.
+		// The measurement runs even while both features are off so that the
+		// user information dialog can always show a live SNR.
+		const float rms = Mumble::ReceiveProcessing::frameRms(frame, iFrameSize);
+		m_snrTracker.update(rms);
+
+		float gainTargetDb = 0.0f;
+		if (ampEnabled) {
+			// Amplify what the gate considers signal towards the target level;
+			// noise-only frames ease back to unity so the floor stays put.
+			const float gate = Mumble::ReceiveProcessing::speechiness(m_snrTracker.frameSnrDb(rms));
+			gainTargetDb = Mumble::ReceiveProcessing::desiredGainDb(m_snrTracker.signalLevel, maxGainDb) * gate;
+		}
+		m_localGainDb = Mumble::Amplification::approach(m_localGainDb, gainTargetDb,
+														Mumble::ReceiveProcessing::GAIN_STEP_DB_PER_FRAME);
+		const float gainFactor = Mumble::Amplification::dbToLinear(m_localGainDb);
+		Mumble::ReceiveProcessing::applyGainClamped(frame, iFrameSize, gainFactor);
+
+		p->m_localSnrDb.store(m_snrTracker.snrDb());
+		p->m_localAmpFactor.store(gainFactor);
 	}
 }
 
@@ -480,6 +749,15 @@ bool AudioOutputSpeech::prepareSampleBuffer(unsigned int frameCount) {
 					decodedSamples = static_cast< int >(iFrameSize);
 					memset(pOut, 0, iFrameSize * sizeof(float));
 				}
+			}
+
+			// Local, receive-side processing configured for this user: noise
+			// suppression and SNR-gated amplification of their decoded stream.
+			// This only ever rewrites the audio played back for this user; the
+			// transmit path is not involved. For locally muted users nothing was
+			// decoded, so there is nothing to process either.
+			if (p && !p->bLocalMute) {
+				applyLocalProcessing(pOut, static_cast< unsigned int >(decodedSamples));
 			}
 
 			if (!nextalive) {

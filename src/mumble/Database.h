@@ -20,6 +20,8 @@ struct FavoriteServer {
 	unsigned short usPort;
 };
 
+struct LocalAudioProcessingSettings;
+
 class Database : public QObject {
 private:
 	Q_OBJECT
@@ -57,6 +59,9 @@ public:
 
 	QString getUserLocalNickname(const QString &hash);
 	void setUserLocalNickname(const QString &hash, const QString &nickname);
+
+	LocalAudioProcessingSettings getUserLocalAudioProcessing(const QString &hash);
+	void setUserLocalAudioProcessing(const QString &hash, const LocalAudioProcessingSettings &settings);
 
 	ChannelFilterMode getChannelFilterMode(const QByteArray &server_cert_digest, unsigned int channel_id);
 	void setChannelFilterMode(const QByteArray &server_cert_digest, unsigned int channel_id,

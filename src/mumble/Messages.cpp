@@ -548,6 +548,7 @@ void MainWindow::msgUserState(const MumbleProto::UserState &msg) {
 			pDst->setLocalIgnoreTTS(true);
 		pDst->setLocalVolumeAdjustment(Global::get().db->getUserLocalVolume(pDst->qsHash));
 		pDst->setLocalNickname(Global::get().db->getUserLocalNickname(pDst->qsHash));
+		pDst->setLocalAudioProcessing(Global::get().db->getUserLocalAudioProcessing(pDst->qsHash));
 	}
 
 	if (msg.has_self_deaf() || msg.has_self_mute()) {

@@ -13,13 +13,20 @@
 
 #include "AudioOutputBuffer.h"
 #include "AudioOutputCache.h"
+#include "AudioPreprocessor.h"
+#include "AudioReceiveProcessing.h"
 #include "MumbleProtocol.h"
+#include "Settings.h"
 
+#include <memory>
 #include <mutex>
 #include <vector>
 
 class ClientUser;
 struct OpusDecoder;
+struct DenoiseState;
+class WebRTCAudioProcessor;
+class DeepFilterNetProcessor;
 
 class AudioOutputSpeech : public AudioOutputBuffer {
 private:
@@ -67,6 +74,43 @@ protected:
 	OpusDecoder *opusState;
 
 	QList< QByteArray > qlFrames;
+
+	/// Local, receive-side processing of this stream, configured per user
+	/// through the owning ClientUser. All state below is only ever touched by
+	/// the audio output thread (from prepareSampleBuffer()).
+	///
+	/// The suppression method the allocated processors currently match;
+	/// NoiseCancelOff while none are allocated.
+	Settings::NoiseCancel m_localSuppressActive = Settings::NoiseCancelOff;
+	/// Speex denoiser per channel (the preprocessor is mono only).
+	AudioPreprocessor m_localPreprocessor[2];
+	/// Suppression strength currently applied to the Speex denoisers.
+	int m_localSpeexStrengthApplied = 0;
+#ifdef USE_RNNOISE
+	/// RNNoise denoiser state per channel.
+	DenoiseState *m_localDenoiser[2] = { nullptr, nullptr };
+#endif
+#ifdef USE_WEBRTC_AUDIO_PROCESSING
+	/// WebRTC noise suppressor, one instance handling all channels interleaved.
+	std::unique_ptr< WebRTCAudioProcessor > m_localWebrtc;
+#endif
+#ifdef USE_DEEPFILTERNET
+	/// DeepFilterNet3 suppressor per channel (the model is mono only).
+	std::unique_ptr< DeepFilterNetProcessor > m_localDeepFilter[2];
+#endif
+	/// Noise floor / speech envelope estimate of the decoded stream.
+	Mumble::ReceiveProcessing::SnrTracker m_snrTracker;
+	/// Smoothed SNR-gated amplification currently applied, in dB.
+	float m_localGainDb = 0.0f;
+
+	/// (Re)allocate or release the suppression processors so they match the
+	/// requested method. \p mode must already be resolved against the backends
+	/// this build provides.
+	void setupLocalSuppression(Settings::NoiseCancel mode);
+	/// Run the per-user local processing (noise suppression and SNR-gated
+	/// amplification) over \p sampleCount interleaved decoded samples,
+	/// in 10 ms frames. Also maintains the live SNR measurement.
+	void applyLocalProcessing(float *samples, unsigned int sampleCount);
 
 public:
 	Mumble::Protocol::audio_context_t m_audioContext;

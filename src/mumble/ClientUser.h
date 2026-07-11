@@ -13,6 +13,27 @@
 #include "Timer.h"
 #include "User.h"
 
+#include <atomic>
+
+/// Local, receive-side audio processing configured for a single other user.
+/// Applied to that user's stream during playback only - it never affects the
+/// audio this client transmits.
+struct LocalAudioProcessingSettings {
+	/// Whether the user's stream is denoised locally.
+	bool suppressionEnabled = false;
+	/// Method the stream is denoised with, independent of the client's own
+	/// (transmit-side) noise suppression.
+	Settings::NoiseCancel suppressionMode = Settings::NoiseCancelRNN;
+	/// Maximum attenuation of the noise in dB (negative number), for the
+	/// Speex-based methods.
+	int speexSuppressStrength = -30;
+	/// Whether the stream is amplified based on its signal-to-noise ratio.
+	bool snrAmplificationEnabled = false;
+	/// Loudness the maximum amplification targets, on the same 1-32768 knob
+	/// scale as Settings::iMinLoudness: smaller values allow more gain.
+	int ampMaxLoudness = 10000;
+};
+
 class ClientUser : public QObject, public User {
 private:
 	Q_OBJECT
@@ -44,8 +65,25 @@ public:
 	QByteArray qbaTextureFormat;
 	QString qsFriendName;
 
+	/// Local receive-side processing of this user's stream. Written by the UI
+	/// thread, read by the audio output thread every frame - hence individual
+	/// atomics rather than a lock.
+	std::atomic< bool > m_localSuppressEnabled{ false };
+	std::atomic< Settings::NoiseCancel > m_localSuppressMode{ Settings::NoiseCancelRNN };
+	std::atomic< int > m_localSpeexSuppressStrength{ -30 };
+	std::atomic< bool > m_localSnrAmpEnabled{ false };
+	std::atomic< int > m_localAmpMaxLoudness{ 10000 };
+
+	/// Live measurements of this user's stream, written by the audio output
+	/// thread while their audio is decoded and read by the UI.
+	std::atomic< float > m_localSnrDb{ 0.0f };
+	std::atomic< float > m_localAmpFactor{ 1.0f };
+
 	QString getFlagsString() const;
 	ClientUser(QObject *p = nullptr);
+
+	LocalAudioProcessingSettings getLocalAudioProcessing() const;
+	void setLocalAudioProcessing(const LocalAudioProcessingSettings &settings);
 
 	float getLocalVolumeAdjustments() const;
 

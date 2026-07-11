@@ -28,6 +28,24 @@ float ClientUser::getLocalVolumeAdjustments() const {
 	return m_localVolume;
 }
 
+LocalAudioProcessingSettings ClientUser::getLocalAudioProcessing() const {
+	LocalAudioProcessingSettings settings;
+	settings.suppressionEnabled      = m_localSuppressEnabled.load();
+	settings.suppressionMode         = m_localSuppressMode.load();
+	settings.speexSuppressStrength   = m_localSpeexSuppressStrength.load();
+	settings.snrAmplificationEnabled = m_localSnrAmpEnabled.load();
+	settings.ampMaxLoudness          = m_localAmpMaxLoudness.load();
+	return settings;
+}
+
+void ClientUser::setLocalAudioProcessing(const LocalAudioProcessingSettings &settings) {
+	m_localSuppressEnabled.store(settings.suppressionEnabled);
+	m_localSuppressMode.store(settings.suppressionMode);
+	m_localSpeexSuppressStrength.store(settings.speexSuppressStrength);
+	m_localSnrAmpEnabled.store(settings.snrAmplificationEnabled);
+	m_localAmpMaxLoudness.store(settings.ampMaxLoudness);
+}
+
 QString ClientUser::getLocalNickname() const {
 	return m_localNickname;
 }
