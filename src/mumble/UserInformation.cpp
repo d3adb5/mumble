@@ -6,12 +6,15 @@
 #include "UserInformation.h"
 
 #include "Audio.h"
+#include "ClientUser.h"
 #include "HostAddress.h"
 #include "ProtoUtils.h"
 #include "QtUtils.h"
 #include "ServerHandler.h"
 #include "ViewCert.h"
 #include "Global.h"
+
+#include <chrono>
 
 
 UserInformation::UserInformation(const MumbleProto::UserStats &msg, QWidget *p) : QDialog(p) {
@@ -22,6 +25,22 @@ UserInformation::UserInformation(const MumbleProto::UserStats &msg, QWidget *p) 
 	qtTimer = new QTimer(this);
 	connect(qtTimer, SIGNAL(timeout()), this, SLOT(tick()));
 	qtTimer->start(6000);
+
+	// A low SNR is bad, a high one is good. The meter runs from 0 to 30 dB in
+	// thousandths of a dB.
+	abSnr->iMin     = 0;
+	abSnr->iMax     = 30000;
+	abSnr->iBelow   = 6000;
+	abSnr->iAbove   = 15000;
+	abSnr->iValue   = 0;
+	abSnr->qcBelow  = Qt::red;
+	abSnr->qcInside = Qt::yellow;
+	abSnr->qcAbove  = Qt::green;
+
+	qtAudioTimer = new QTimer(this);
+	connect(qtAudioTimer, &QTimer::timeout, this, &UserInformation::updateReceivedAudio);
+	qtAudioTimer->start(200);
+	updateReceivedAudio();
 
 	qgbConnection->setVisible(false);
 
@@ -53,6 +72,63 @@ void UserInformation::tick() {
 	bRequested = true;
 
 	Global::get().sh->requestUserStats(uiSession, true);
+}
+
+void UserInformation::updateReceivedAudio() {
+	ClientUser *user = ClientUser::get(uiSession);
+	if (!user) {
+		return;
+	}
+
+	// Only show a measurement while this user's audio is actually flowing;
+	// otherwise the last value would linger and mislead.
+	const bool receiving = user->tLastAudioReceived.isStarted()
+						   && user->tLastAudioReceived.elapsed() < std::chrono::milliseconds(1000);
+
+	if (receiving) {
+		const float snr = user->m_localSnrDb.load();
+		abSnr->iValue   = static_cast< int >(qBound(0.0f, snr, 30.0f) * 1000.0f + 0.5f);
+		qlSnr->setText(tr("%1 dB").arg(static_cast< double >(snr), 0, 'f', 1));
+	} else {
+		abSnr->iValue = 0;
+		qlSnr->setText(tr("no audio"));
+	}
+	abSnr->setEnabled(receiving);
+	abSnr->update();
+
+	// Summarize the local processing configured for this user's stream.
+	QStringList processing;
+	if (user->m_localSuppressEnabled.load()) {
+		switch (user->m_localSuppressMode.load()) {
+			case Settings::NoiseCancelSpeex:
+				processing << tr("Speex noise suppression");
+				break;
+			case Settings::NoiseCancelRNN:
+				processing << tr("RNNoise noise suppression");
+				break;
+			case Settings::NoiseCancelBoth:
+				processing << tr("RNNoise + Speex noise suppression");
+				break;
+			case Settings::NoiseCancelWebRTC:
+				processing << tr("WebRTC noise suppression");
+				break;
+			case Settings::NoiseCancelDeepFilter:
+				processing << tr("DeepFilterNet noise suppression");
+				break;
+			case Settings::NoiseCancelOff:
+				break;
+		}
+	}
+	if (user->m_localSnrAmpEnabled.load()) {
+		if (receiving) {
+			processing << tr("amplification (currently %1)")
+							  .arg(QString::number(static_cast< double >(user->m_localAmpFactor.load()), 'f', 2)
+								   + QChar(static_cast< char16_t >(0x00D7)));
+		} else {
+			processing << tr("amplification");
+		}
+	}
+	qlLocalProcessing->setText(processing.isEmpty() ? tr("none") : processing.join(tr(", ")));
 }
 
 void UserInformation::on_qpbCertificate_clicked() {

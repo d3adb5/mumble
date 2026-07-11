@@ -24,11 +24,15 @@ protected:
 	bool bRequested;
 	unsigned int uiSession;
 	QTimer *qtTimer;
+	/// Faster timer driving the live measurements of the received audio
+	/// (SNR meter); the stats timer above is far too slow for that.
+	QTimer *qtAudioTimer;
 	QList< QSslCertificate > qlCerts;
 	static QString secsToString(unsigned int secs);
 	QFont qfCertificateFont;
 protected slots:
 	void tick();
+	void updateReceivedAudio();
 	void on_qpbCertificate_clicked();
 
 public:

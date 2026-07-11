@@ -765,6 +765,68 @@
      </layout>
     </widget>
    </item>
+   <item>
+    <widget class="AccessibleQGroupBox" name="qgbAudio">
+     <property name="title">
+      <string comment="GroupBox">Received Audio</string>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_5">
+      <item row="0" column="0">
+       <widget class="QLabel" name="qliSnr">
+        <property name="text">
+         <string>Signal-to-noise ratio</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="AudioBar" name="abSnr" native="true">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+          <horstretch>1</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="toolTip">
+         <string>Live signal-to-noise ratio of the audio received from this user, measured locally</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="2">
+       <widget class="QLabel" name="qlSnr">
+        <property name="minimumSize">
+         <size>
+          <width>70</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="text">
+         <string notr="true">--</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignmentFlag::AlignRight|Qt::AlignmentFlag::AlignTrailing|Qt::AlignmentFlag::AlignVCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="qliLocalProcessing">
+        <property name="text">
+         <string>Local processing</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1" colspan="2">
+       <widget class="QLabel" name="qlLocalProcessing">
+        <property name="text">
+         <string notr="true">--</string>
+        </property>
+        <property name="textInteractionFlags">
+         <set>Qt::TextInteractionFlag::LinksAccessibleByMouse|Qt::TextInteractionFlag::TextSelectableByMouse</set>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
   </layout>
  </widget>
  <customwidgets>
@@ -772,6 +834,12 @@
    <class>AccessibleQGroupBox</class>
    <extends>QGroupBox</extends>
    <header>AccessibleQGroupBox.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>AudioBar</class>
+   <extends>QWidget</extends>
+   <header>AudioStats.h</header>
    <container>1</container>
   </customwidget>
  </customwidgets>
