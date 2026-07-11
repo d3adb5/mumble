@@ -50,16 +50,19 @@ static QString ampFactorTextFromSlider(int value) {
 	return ampFactorText(Mumble::Amplification::AGC_TARGET / static_cast< float >(loudnessFromAmpSlider(value)));
 }
 
-// The SNR sliders and settings carry tenths of a dB for smooth handles.
-static QString snrTextFromSlider(int value) {
-	return QStringLiteral("%1 dB").arg(static_cast< double >(value) / 10.0, 0, 'f', 1);
-}
-
 // Upper end of the SNR meter and threshold slider in dB; everything above
 // simply pegs the bar.
 static constexpr float SNR_BAR_MAX_DB = 30.0f;
 // The meter stores millibels-ish (dB x 1000) to get a smooth integer scale.
 static constexpr int SNR_BAR_SCALE = 1000;
+// The SNR threshold slider and settings carry tenths of a dB.
+static constexpr int SNR_SLIDER_MAX = static_cast< int >(SNR_BAR_MAX_DB) * 10;
+
+// The gate thresholds are presented as a percentage of the SNR scale, like
+// the input amplification's detection thresholds, e.g. "40%".
+static QString snrThresholdText(int value) {
+	return QStringLiteral("%1%").arg((value * 100 + SNR_SLIDER_MAX / 2) / SNR_SLIDER_MAX);
+}
 
 // Indicator colors matching the input settings' live markers: green for
 // speech, orange for the in-between/noise state, red for silence.
@@ -104,13 +107,14 @@ UserLocalAudioDialog::UserLocalAudioDialog(
 	qsAmp->setCaptions({ tr("Base"), tr("Adaptive"), tr("Max") });
 	qsAmp->setValueFormatter(ampFactorTextFromSlider);
 
-	// Two coupled handles (silence/speech) for the SNR gate, like the voice
-	// activity thresholds of the input.
+	// Two coupled handles (silence/speech) for the SNR gate, presented as
+	// percentages like the input's voice activity and amplification
+	// detection thresholds.
 	qsSnr->setHandleCount(2);
-	qsSnr->setRange(0, static_cast< int >(SNR_BAR_MAX_DB) * 10);
-	qsSnr->setSingleStep(5);
+	qsSnr->setRange(0, SNR_SLIDER_MAX);
+	qsSnr->setSingleStep(SNR_SLIDER_MAX / 100);
 	qsSnr->setCaptions({ tr("Silence"), tr("Speech") });
-	qsSnr->setValueFormatter(snrTextFromSlider);
+	qsSnr->setValueFormatter(snrThresholdText);
 
 	ClientUser *user = ClientUser::get(sessionId);
 	if (!user) {

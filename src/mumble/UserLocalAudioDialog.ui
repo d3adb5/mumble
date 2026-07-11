@@ -145,7 +145,7 @@
       <item row="1" column="1" colspan="2">
        <widget class="MultiSlider" name="qsSnr" native="true">
         <property name="toolTip">
-         <string>Frame SNR below the silence threshold counts as noise, above the speech threshold as speech; in between the previous classification is kept. The marker shows the live SNR of the received audio.</string>
+         <string>Detection thresholds on the SNR scale, as percentages like the input's voice activity thresholds. A signal below the silence threshold counts as noise, above the speech threshold as speech; in between the previous classification is kept. The marker shows the live SNR of the received audio.</string>
         </property>
        </widget>
       </item>
