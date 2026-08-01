@@ -119,7 +119,7 @@ public:
 
 	/// Whether the user's current transmission has recently been audible, i.e.
 	/// whether they are actually heard rather than transmitting silence
-	bool isAudible();
+	bool isAudible() const;
 
 	/// Feeds the measured power (RMS) of a decoded audio frame into the
 	/// audibility tracking. Called from the audio thread.

@@ -8,6 +8,7 @@
 #include "ClientUser.h"
 #include "Log.h"
 #include "MainWindow.h"
+#include "UserModel.h"
 #include "X11WindowState.h"
 #include "Global.h"
 
@@ -87,7 +88,12 @@ void TrayIcon::on_icon_update() {
 		switch (p->tsState) {
 			case Settings::Talking:
 			case Settings::MutedTalking:
-				newIcon = Global::get().mw->qiTalkingOn;
+				// Match the user list: hint when transmitting nothing but silence.
+				if (p->isAudible()) {
+					newIcon = Global::get().mw->qiTalkingOn;
+				} else {
+					newIcon = Global::get().mw->pmModel->talkingSilentIcon();
+				}
 				break;
 			case Settings::Whispering:
 				newIcon = Global::get().mw->qiTalkingWhisper;

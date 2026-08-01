@@ -108,6 +108,8 @@ protected:
 public:
 	/// (Re)loads the silent-transmission icon from the settings
 	void updateTalkingSilentIcon();
+	/// Icon for users who are transmitting, but whose stream is entirely silent
+	QIcon &talkingSilentIcon() { return qiTalkingSilent; }
 	UserModel(QObject *parent = 0);
 	~UserModel() Q_DECL_OVERRIDE;
 

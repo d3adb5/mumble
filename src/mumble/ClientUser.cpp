@@ -347,7 +347,7 @@ bool ClientUser::isActive() {
 	return tLastTalkStateChange.elapsed() < std::chrono::seconds(Global::get().s.os.uiActiveTime);
 }
 
-bool ClientUser::isAudible() {
+bool ClientUser::isAudible() const {
 	if (tsState == Settings::Passive)
 		return false;
 
