@@ -37,7 +37,18 @@ if(NOT DEFINED CMAKE_CXX_STANDARD OR CMAKE_CXX_STANDARD LESS 20)
 	set(CMAKE_CXX_STANDARD 20)
 endif()
 set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_OSX_DEPLOYMENT_TARGET 10.15)
+
+# Apple Silicon does not exist on anything older than macOS 11, so targeting an earlier
+# version there is meaningless (the toolchain bumps it to 11.0 regardless). Only provide
+# a default: an explicitly requested deployment target always wins.
+if(NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET OR CMAKE_OSX_DEPLOYMENT_TARGET STREQUAL "")
+	if(CMAKE_OSX_ARCHITECTURES MATCHES "arm64"
+			OR (NOT CMAKE_OSX_ARCHITECTURES AND CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "arm64"))
+		set(CMAKE_OSX_DEPLOYMENT_TARGET 11.0)
+	else()
+		set(CMAKE_OSX_DEPLOYMENT_TARGET 10.15)
+	endif()
+endif()
 
 
 include(pkg-utils)

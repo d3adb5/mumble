@@ -65,17 +65,14 @@ jobs:
     strategy:
         fail-fast: false
         matrix:
-            # macOS and FreeBSD are disabled for now to keep CI fast; Linux (static and
-            # shared) and Windows (static) cover the supported build configurations.
-            os: [ubuntu-22.04, ubuntu-24.04, windows-2025-vs2026]
-            type: [static, shared]
-            arch: [x86_64]
-            exclude:
-              - os: windows-2025-vs2026
-                type: shared
-              - os: ubuntu-22.04
-                type: static
-            
+            # Ubuntu is not built here: the releases we target (25.10 and 26.04) have no
+            # GitHub runner image, so they are covered by the container-based job below,
+            # which also produces the .deb. What is left are the two platforms that ship
+            # an installer: Windows (x86_64) and macOS on Apple Silicon (arm64).
+            include:
+              - { os: windows-2025-vs2026, type: static, arch: x86_64 }
+              - { os: macos-15, type: static, arch: arm64 }
+
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -84,6 +81,11 @@ jobs:
           submodules: 'recursive'
           fetch-depth: 1
 
+
+      # The Bash version installed on macOS is ancient. We need a newer version
+    - name: Install Bash
+      if: ${{ startsWith(matrix.os, 'macos') }}
+      run: brew install bash
 
     - name: Set environment variables
       run: $GITHUB_WORKSPACE/.github/workflows/set_environment_variables.sh "${{ matrix.os }}" "${{ matrix.type }}" "${{ matrix.arch }}" "${{ github.workspace }}"
@@ -117,6 +119,20 @@ jobs:
       shell: bash
       run: ctest --output-on-failure -C $BUILD_TYPE
 
+      # Turn the built .app into an installable disk image: the plugins and the icon are
+      # copied into the bundle, its Info.plist gets the real version, and the result is
+      # ad-hoc signed (Apple Silicon refuses to run binaries carrying no signature at
+      # all). The overlay is not built on ARM macOS, hence --no-overlay.
+    - if: ${{ startsWith(matrix.os, 'macos') }}
+      name: Create disk image
+      shell: bash
+      run: |
+        ./macx/scripts/osxdist.py --source-dir . --binary-dir build --no-overlay --ad-hoc-sign \
+          --min-macos-version "11.0.0" \
+          --version "$( ./scripts/mumble-version.py ).${MUMBLE_BUILD_NUMBER}"
+      env:
+          MUMBLE_BUILD_NUMBER: ${{ needs.fetch_build_number.outputs.build_number }}
+
     - if: ${{ inputs.SIGN_WINDOWS_INSTALLER && startsWith(matrix.os, 'windows') }}
       uses: ./.github/actions/sign-binaries
       with:
@@ -135,6 +151,7 @@ jobs:
         path: |
           build/mumble
           build/mumble-server
+          build/*.dmg
           build/**/mumble*.msi
           build/**/mumble*.exe
           build/**/plugins/*.pdb
@@ -155,11 +172,12 @@ jobs:
           key: ${{ env.MUMBLE_ENVIRONMENT_VERSION }}
 
 
-  # Build an installable Mumble client .deb on the newer Ubuntu releases that are not
-  # available as GitHub runner images, using their official containers. This is a shared
-  # build that links against the distribution's system libraries. The server, the 32-bit
-  # overlay and the tests are left out to keep the package build self-contained on a bare
-  # container (no multilib, no database); the build matrix above covers those.
+  # Build an installable Mumble client .deb on the Ubuntu releases we target. Neither is
+  # available as a GitHub runner image, so their official containers are used. This is a
+  # shared build that links against the distribution's system libraries and, being the
+  # only Linux build left, it is also the one that runs the test suite there. The server
+  # and the 32-bit overlay are left out to keep the package build self-contained on a
+  # bare container (no multilib, no database server).
   package_deb:
     needs: [ fetch_build_number ]
 
@@ -204,10 +222,10 @@ jobs:
       shell: bash
       run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
-      # warnings-as-errors is left off here: these are bleeding-edge distributions with
-      # newer compilers, and the goal of this job is to produce a package rather than to
-      # gate on warnings (the build matrix above enforces a warning-clean build). Tests
-      # are likewise built and run by that matrix, so they are skipped here for speed.
+      # warnings-as-errors is left off here: these are bleeding-edge distributions whose
+      # GCC keeps gaining new diagnostics, and the goal of this job is to produce a
+      # package rather than to gate on them. The matrix above still builds warning-clean
+      # with MSVC and clang.
     - name: Configure
       shell: bash
       run: |
@@ -216,7 +234,7 @@ jobs:
           -DCMAKE_INSTALL_PREFIX=/usr \
           -DCMAKE_UNITY_BUILD=ON \
           -DBUILD_NUMBER="$MUMBLE_BUILD_NUMBER" \
-          -Dtests=OFF \
+          -Dtests=ON \
           -Dserver=OFF \
           -Doverlay-xcompile=OFF \
           -Dwarnings-as-errors=OFF \
@@ -230,6 +248,15 @@ jobs:
     - name: Build
       shell: bash
       run: cmake --build build --parallel
+
+      # The container has no display, so the tests are run through Qt's offscreen platform
+      # plugin (shipped by qt6-base-dev), just like the Linux builds of the matrix did.
+    - name: Test
+      working-directory: build
+      shell: bash
+      run: ctest --output-on-failure
+      env:
+          QT_QPA_PLATFORM: offscreen
 
     - name: Package
       working-directory: build

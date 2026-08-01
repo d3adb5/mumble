@@ -32,6 +32,8 @@ VCPKG_CMAKE_OPTIONS=""
 VCPKG_TARGET_TRIPLET=""
 if [[ "$arch" == "x86_64" ]]; then
 	VCPKG_TARGET_TRIPLET="x64"
+elif [[ "$arch" == "arm64" ]]; then
+	VCPKG_TARGET_TRIPLET="arm64"
 else
 	echo "Unknown architecture '$arch'"
 	exit 1

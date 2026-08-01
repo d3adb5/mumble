@@ -69,6 +69,27 @@ def codesign(path):
 			return retval
 	return 0
 
+def adhoc_codesign(bundle):
+	'''
+		Ad-hoc sign an App Bundle and the code nested inside it, i.e. sign it without a
+		certificate. Apple Silicon refuses to execute binaries that carry no signature at
+		all. This is not a replacement for signing with a Developer ID: an ad-hoc signed
+		bundle is still subject to Gatekeeper on any machine other than the one that
+		built it.
+	'''
+
+	nested = glob.glob(os.path.join(bundle, 'Contents', 'Plugins', '*.dylib'))
+	nested += glob.glob(os.path.join(bundle, 'Contents', 'Codecs', '*.dylib'))
+
+	# The nested code has to be signed before the bundle containing it, as the bundle's
+	# signature seals the (by then already signed) contents.
+	for path in nested + [bundle]:
+		p = Popen(('codesign', '--force', '--sign', '-', path))
+		retval = p.wait()
+		if retval != 0:
+			return retval
+	return 0
+
 def prodsign(inf, outf):
 	'''Call the prodsign executable.'''
 
@@ -252,11 +273,12 @@ class DiskImage(FolderObject):
 		print(' * Creating diskimage. Please wait...')
 		if os.path.exists(self.filename):
 			os.remove(self.filename)
+		# The image size is deliberately left for hdiutil to compute from the source
+		# folder: a fixed size silently breaks as soon as the bundle outgrows it.
 		p = Popen(['hdiutil', 'create',
 		           '-srcfolder', self.tmp,
 		           '-format', 'UDBZ',
 		           '-volname', self.volname,
-		           '-megabytes', '130',
 		           self.filename])
 		retval = p.wait()
 		assert retval == 0
@@ -289,10 +311,7 @@ def package_client():
 	a.copy_plugins()
 	a.copy_resources([os.path.join(options.source_dir, 'icons/mumble.icns')])
 	a.update_plist()
-	if not options.universal:
-		a.set_min_macosx_version('10.9.0')
-	else:
-		a.set_min_macosx_version('10.4.8')
+	a.set_min_macosx_version(options.min_macos_version)
 	a.done()
 
 	# Sign our binaries, etc.
@@ -308,6 +327,11 @@ def package_client():
 		)
 		availableBinaries = [bin for bin in binaries if os.path.exists(bin)]
 		codesign(availableBinaries)
+		print()
+	elif options.ad_hoc_sign:
+		print(' * Ad-hoc signing the App Bundle')
+		if adhoc_codesign(os.path.join(options.binary_dir, 'Mumble.app')) != 0:
+			raise Exception('ad-hoc signing failed')
 		print()
 
 	if options.only_appbundle:
@@ -379,11 +403,13 @@ if __name__ == '__main__':
 	parser.add_argument('--binary-dir', help='This sets the path to the folder containing binaries. It will also be used as output directory. (Defaults to "build")', default='build')
 	parser.add_argument('--version', help='This overrides the version number of the build.')
 	parser.add_argument('--universal', help='Build an universal snapshot.', action='store_true', default=False)
+	parser.add_argument('--min-macos-version', help='The macOS version to advertise as the minimum requirement of the App Bundle. (Defaults to "10.15.0", must match the deployment target the build was made with)', default='10.15.0')
 	parser.add_argument('--only-appbundle', help='Only prepare the appbundle. Do not package.', action='store_true', default=False)
 	overlay_group = parser.add_mutually_exclusive_group()
 	overlay_group.add_argument('--only-overlay', help='Only create the overlay installer.', action='store_true', default=False)
 	overlay_group.add_argument('--no-overlay', help='Skip bundling the overlay', action='store_true', default=False)
 	parser.add_argument('--developer-id', help='Identity (Developer ID) to use for code signing. The name is also used for GPG signing. (If not set, no code signing will occur)')
+	parser.add_argument('--ad-hoc-sign', help='Sign the App Bundle without a certificate. Used for unofficial (e.g. CI) builds, which have no Developer ID available, as ARM macOS refuses to run unsigned binaries. Ignored if --developer-id is given.', action='store_true', default=False)
 	parser.add_argument('--keychain', help='The keychain to use when invoking code signing utilities. (Defaults to "login.keychain")', default='login.keychain')
 	parser.add_argument('--server', help='Build a Murmur package.', action='store_true', default=False)
 
