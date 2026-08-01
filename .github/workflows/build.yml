@@ -291,3 +291,54 @@ jobs:
         name: 'Mumble-${{ matrix.label }}-deb'
         compression-level: 9
         path: build/*.deb
+
+
+  # Every push to master becomes a GitHub release carrying the installable client
+  # packages: the macOS (arm64) disk image, the Windows installer and the Ubuntu .deb
+  # of each targeted release. The tag reuses the exact version the builds were stamped
+  # with (mumble-version.py plus the monotonic build number), so it increments on every
+  # push and always matches what the packages report about themselves.
+  release:
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+    needs: [ fetch_build_number, build, package_deb ]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    - uses: actions/checkout@v6
+      with:
+          fetch-depth: 1
+
+    - uses: actions/download-artifact@v6
+      with:
+          path: artifacts
+
+      # The two .deb artifacts contain identically named packages (the distribution is
+      # not part of CPack's file name), so they are renamed after their artifact's
+      # label. Debug symbols (.pdb) stay available through the build artifacts and are
+      # left out of the release itself.
+    - name: Collect release files
+      shell: bash
+      run: |
+        mkdir release
+        find artifacts -name '*.dmg' -exec cp {} release/ \;
+        find artifacts \( -name 'mumble*.msi' -o -name 'mumble*.exe' \) -exec cp {} release/ \;
+        for deb in artifacts/Mumble-ubuntu-*-deb/*.deb; do
+          label="$(basename "$(dirname "$deb")")"
+          label="${label#Mumble-}"; label="${label%-deb}"
+          cp "$deb" "release/$(basename "$deb" .deb)_${label}.deb"
+        done
+        ls -l release
+
+    - name: Create release
+      shell: bash
+      run: |
+        version="$(./scripts/mumble-version.py).${{ needs.fetch_build_number.outputs.build_number }}"
+        gh release create "v${version}" \
+          --title "Mumble ${version}" \
+          --notes "Automated build of ${{ github.sha }}." \
+          --latest \
+          release/*
+      env:
+          GH_TOKEN: ${{ github.token }}
