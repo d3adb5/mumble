@@ -654,7 +654,8 @@ void PipeWireOutput::processCallback(void *param) {
 		// In that infinite loop, Pipewire would wait until the stream starts draining.
 		// But this never happens, if we don't push new data.
 		// Thus pw_stream_destroy() would block forever.
-		memset(data.data, 0, sizeof(float) * chunk->size);
+		// chunk->size is already in bytes.
+		memset(data.data, 0, chunk->size);
 	}
 
 	pwo->m_engine->queueBuffer(buffer);
