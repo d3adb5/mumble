@@ -11,8 +11,5 @@ brew install coreutils aria2 gnu-tar xz
 
 make_build_env_available "tar.xz"
 
-
-# Note: no database server is set up here. Only the SQLite tests are enabled for this
-# job (see build.sh) as those need no external service, which keeps the macOS build -
-# whose main purpose is producing the .dmg - short. MySQL and PostgreSQL are covered by
-# the other jobs of the build matrix.
+# No database server is set up: this job builds the client only, and the database
+# tests come with the server (see src/tests/TestDatabase/CMakeLists.txt).

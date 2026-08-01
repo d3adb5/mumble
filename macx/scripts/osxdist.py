@@ -31,6 +31,9 @@ def certificate_subject_OU(identity):
 
 	openssl = Popen(('/usr/bin/openssl', 'x509', '-subject', '-noout'), stdout=PIPE, stdin=PIPE)
 	subject, _ = openssl.communicate(pem)
+	# Popen hands us bytes; the parsing below (and the requirement template the
+	# result is substituted into) works on text.
+	subject = subject.decode('utf-8')
 
 	attr = '/OU='
 	begin = subject.index(attr) + len(attr)
@@ -63,11 +66,31 @@ def codesign(path):
 				'identifier': identifier,
 				'subject_OU': OU,
 			})
-		p = Popen(('codesign', '--keychain', options.keychain, '-vvvv', '-i', identifier, '-r='+reqs, '-s', certname, p))
+		# The hardened runtime and a trusted timestamp are both preconditions for
+		# notarizing the result, without which Gatekeeper still rejects the build
+		# on machines other than the one that signed it.
+		p = Popen(('codesign', '--keychain', options.keychain, '-vvvv', '-i', identifier, '-r='+reqs,
+		           '--options', 'runtime', '--timestamp', '-s', certname, p))
 		retval = p.wait()
 		if retval != 0:
 			return retval
 	return 0
+
+def bundle_nested_code(bundle):
+	'''
+		List the code inside an App Bundle that has to be signed in its own right. The
+		contents are looked up rather than hardcoded, so that a plugin added later does
+		not silently end up unsigned (which notarization rejects).
+
+		The nested code has to be signed before the bundle containing it, as the bundle's
+		signature seals the (by then already signed) contents.
+	'''
+
+	nested = glob.glob(os.path.join(bundle, 'Contents', 'Plugins', '*.dylib'))
+	nested += glob.glob(os.path.join(bundle, 'Contents', 'Codecs', '*.dylib'))
+	nested += glob.glob(os.path.join(bundle, 'Contents', 'MacOS', '*'))
+
+	return nested
 
 def adhoc_codesign(bundle):
 	'''
@@ -78,12 +101,7 @@ def adhoc_codesign(bundle):
 		built it.
 	'''
 
-	nested = glob.glob(os.path.join(bundle, 'Contents', 'Plugins', '*.dylib'))
-	nested += glob.glob(os.path.join(bundle, 'Contents', 'Codecs', '*.dylib'))
-
-	# The nested code has to be signed before the bundle containing it, as the bundle's
-	# signature seals the (by then already signed) contents.
-	for path in nested + [bundle]:
+	for path in bundle_nested_code(bundle) + [bundle]:
 		p = Popen(('codesign', '--force', '--sign', '-', path))
 		retval = p.wait()
 		if retval != 0:
@@ -315,22 +333,15 @@ def package_client():
 	a.done()
 
 	# Sign our binaries, etc.
+	bundle = os.path.join(options.binary_dir, 'Mumble.app')
 	if options.developer_id:
 		print(' * Signing binaries with Developer ID `%s\'' % options.developer_id)
-		binaries = (
-			os.path.join(options.binary_dir, 'Mumble.app'),
-			os.path.join(options.binary_dir, 'Mumble.app/Contents/Plugins/liblink.dylib'),
-			os.path.join(options.binary_dir, 'Mumble.app/Contents/Plugins/libmanual.dylib'),
-			os.path.join(options.binary_dir, 'Mumble.app/Contents/Codecs/libcelt0.0.7.0.dylib'),
-			os.path.join(options.binary_dir, 'Mumble.app/Contents/Codecs/libopus.dylib'),
-			os.path.join(options.binary_dir, 'Mumble.app/Contents/MacOS/mumble-g15-helper'),
-		)
-		availableBinaries = [bin for bin in binaries if os.path.exists(bin)]
-		codesign(availableBinaries)
+		if codesign(bundle_nested_code(bundle) + [bundle]) != 0:
+			raise Exception('signing failed')
 		print()
 	elif options.ad_hoc_sign:
 		print(' * Ad-hoc signing the App Bundle')
-		if adhoc_codesign(os.path.join(options.binary_dir, 'Mumble.app')) != 0:
+		if adhoc_codesign(bundle) != 0:
 			raise Exception('ad-hoc signing failed')
 		print()
 

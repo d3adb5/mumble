@@ -18,11 +18,6 @@ arch="${arch,,}"
 OS_SPECIFIC_CMAKE_OPTIONS=""
 
 case "$os" in
-	"ubuntu")
-		OS_SPECIFIC_CMAKE_OPTIONS="$OS_SPECIFIC_CMAKE_OPTIONS -Ddatabase-sqlite-tests=ON"
-		OS_SPECIFIC_CMAKE_OPTIONS="$OS_SPECIFIC_CMAKE_OPTIONS -Ddatabase-mysql-tests=ON"
-		OS_SPECIFIC_CMAKE_OPTIONS="$OS_SPECIFIC_CMAKE_OPTIONS -Ddatabase-postgresql-tests=ON"
-		;;
 	"windows")
 		if ! [[ "$arch" = "x86_64" ]]; then
 			echo "Unsupported architecture '$arch'"
@@ -44,9 +39,9 @@ case "$os" in
 
 		OS_SPECIFIC_CMAKE_OPTIONS="$OS_SPECIFIC_CMAKE_OPTIONS -DCMAKE_C_COMPILER=cl"
 		OS_SPECIFIC_CMAKE_OPTIONS="$OS_SPECIFIC_CMAKE_OPTIONS -DCMAKE_CXX_COMPILER=cl"
-		OS_SPECIFIC_CMAKE_OPTIONS="$OS_SPECIFIC_CMAKE_OPTIONS -Ddatabase-sqlite-tests=ON"
-		OS_SPECIFIC_CMAKE_OPTIONS="$OS_SPECIFIC_CMAKE_OPTIONS -Ddatabase-mysql-tests=ON"
-		OS_SPECIFIC_CMAKE_OPTIONS="$OS_SPECIFIC_CMAKE_OPTIONS -Ddatabase-postgresql-tests=OFF"
+		# Only Windows publishes debug symbols (the .pdb files in the build artifact),
+		# so the cost of generating them is not paid anywhere else.
+		OS_SPECIFIC_CMAKE_OPTIONS="$OS_SPECIFIC_CMAKE_OPTIONS -Dsymbols=ON"
 		OS_SPECIFIC_CMAKE_OPTIONS="$OS_SPECIFIC_CMAKE_OPTIONS -Dpackaging=ON"
 		OS_SPECIFIC_CMAKE_OPTIONS="$OS_SPECIFIC_CMAKE_OPTIONS -Dasio=ON"
 		OS_SPECIFIC_CMAKE_OPTIONS="$OS_SPECIFIC_CMAKE_OPTIONS -Dg15=ON"
@@ -60,11 +55,6 @@ case "$os" in
 		fi
 		;;
 	"macos")
-		# Only the SQLite tests are enabled: they need no database server, so no service
-		# has to be installed and started on the runner (see install_macos_static_arm64.sh).
-		OS_SPECIFIC_CMAKE_OPTIONS="$OS_SPECIFIC_CMAKE_OPTIONS -Ddatabase-sqlite-tests=ON"
-		OS_SPECIFIC_CMAKE_OPTIONS="$OS_SPECIFIC_CMAKE_OPTIONS -Ddatabase-mysql-tests=OFF"
-		OS_SPECIFIC_CMAKE_OPTIONS="$OS_SPECIFIC_CMAKE_OPTIONS -Ddatabase-postgresql-tests=OFF"
 		OS_SPECIFIC_CMAKE_OPTIONS="$OS_SPECIFIC_CMAKE_OPTIONS -DCMAKE_OSX_ARCHITECTURES=$arch"
 		;;
 	*)

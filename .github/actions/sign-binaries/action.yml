@@ -32,12 +32,10 @@ runs:
         compression-level: 9
         path: |
           build\installer\client\*client*.msi
-          build\installer\server\*server*.msi
 
     - name: Delete Unsigned MSI Files
       shell: bash
       run: |
-        rm build/installer/server/*server*.msi
         rm build/installer/client/*client*.msi
 
     - name: Create Download Directory
@@ -60,7 +58,6 @@ runs:
     - name: Copy Signed MSI Artifacts
       shell: bash
       run: |
-        cp download/server/*server*.msi build/installer/server
         cp download/client/*client*.msi build/installer/client
 
     - name: Build Unsigned Burn Engine
@@ -76,12 +73,6 @@ runs:
         file=$(ls build/installer/client/*_client-*.exe)
         insignia -ib "$file" -o build/installer/client/mumble_client.exe
 
-    - name: Extract Server Burn Engine Bash
-      shell: bash
-      run: |
-        file=$(ls build/installer/server/*_server-*.exe)
-        insignia -ib "$file" -o build/installer/server/mumble_server.exe
-
     - name: Publish Unsigned Burn Engine
       id: upload-unsigned-burn-engine
       uses: actions/upload-artifact@v4
@@ -90,13 +81,11 @@ runs:
         compression-level: 9
         path: |
           build\installer\client\mumble_client.exe
-          build\installer\server\mumble_server.exe
 
     - name: Delete Unsigned Burn Engine
       shell: bash
       run: |
         rm build/installer/client/mumble_client.exe
-        rm build/installer/server/mumble_server.exe
 
     - name: Submit Burn Engine Signing Request to SignPath
       id: submit-burn-engine-signing-request
@@ -115,7 +104,6 @@ runs:
       shell: bash
       run: |
         cp download/client/mumble_client.exe build/installer/client
-        cp download/server/mumble_server.exe build/installer/server
 
     - name: Re-Introduce Client Burn Engine into Bundle
       shell: bash
@@ -123,17 +111,10 @@ runs:
         file=$(ls build/installer/client/*_client-*.exe)
         insignia -ab build/installer/client/mumble_client.exe "$file" -o "$file"
 
-    - name: Re-Introduce Server Burn Engine into Bundle
-      shell: bash
-      run: |
-        file=$(ls build/installer/server/*_server-*.exe)
-        insignia -ab build/installer/server/mumble_server.exe "$file" -o "$file"
-
     - name: Delete Remaining Burn Engine Files
       shell: bash
       run: |
         rm build/installer/client/mumble_client.exe
-        rm build/installer/server/mumble_server.exe
 
     - name: Publish Unsigned Bundle
       id: upload-unsigned-bundle
@@ -144,8 +125,6 @@ runs:
         path: |
           build\**\*client*.exe
           build\**\*client*.msi
-          build\**\*server*.exe
-          build\**\*server*.msi
           build\**\plugins\*.dll
           build\**\plugins\*.pdb
           build\**\link_tester.*
@@ -154,8 +133,6 @@ runs:
           build\**\mumble-g15*.*
           build\**\mumble_ol*.exe
           build\**\mumble_ol*.pdb
-          build\**\mumble-server.exe
-          build\**\mumble-server.pdb
           build\**\rnnoise.exe
           build\**\rnnoise.pdb
           build\**\speexdsp.exe

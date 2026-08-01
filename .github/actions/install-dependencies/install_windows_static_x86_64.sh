@@ -26,29 +26,5 @@ extract_with_progress "WixSharp.7z" "C:/WixSharp"
 
 git clone "https://github.com/nathan818fr/vcvars-bash.git" "C:/vcvars-bash"
 
-
-# Configure database tables for Mumble tests
-echo -e "[mysqld]\nlog-bin-trust-function-creators = 1" >> "C:/Windows/my.ini"
-
-mysqld --initialize-insecure --console
-
-powershell -Command "Start-Process mysqld"
-
-# Give the MySQL daemon some time to start up: a fixed sleep is not enough, as
-# the daemon regularly takes longer than that to accept connections.
-ready=0
-for _ in {1..30}; do
-	if mysql --user=root -e "SELECT 1" &> /dev/null \
-		|| mysql --user=root --password="root" -e "SELECT 1" &> /dev/null; then
-		ready=1
-		break
-	fi
-	sleep 2
-done
-
-if [[ "$ready" -ne 1 ]]; then
-	echo "MySQL daemon did not accept connections in time" 1>&2
-	exit 1
-fi
-
-configure_database_tables "mysql"
+# No database server is set up: this job builds the client only, and the database
+# tests come with the server (see src/tests/TestDatabase/CMakeLists.txt).

@@ -41,9 +41,6 @@ fi
 
 
 case "$os" in
-	"ubuntu")
-		VCPKG_TARGET_TRIPLET="$VCPKG_TARGET_TRIPLET-linux"
-		;;
 	"windows")
 		VCPKG_TARGET_TRIPLET="$VCPKG_TARGET_TRIPLET-windows-static-md"
 		;;
@@ -74,8 +71,3 @@ echo "ADDITIONAL_CMAKE_OPTIONS=$ADDITIONAL_CMAKE_OPTIONS" >> "$GITHUB_ENV"
 echo "VCPKG_CMAKE_OPTIONS=$VCPKG_CMAKE_OPTIONS" >> "$GITHUB_ENV"
 echo "MUMBLE_VCPKG_TRIPLET=$VCPKG_TARGET_TRIPLET" >> "$GITHUB_ENV"
 echo "QT_DEBUG_PLUGINS=1" >> "$GITHUB_ENV"
-
-if [[ "$os" = "ubuntu" ]]; then
-	# Setting this is necessary in order to be able to run tests on the CLI
-	echo "QT_QPA_PLATFORM=offscreen" >> "$GITHUB_ENV"
-fi

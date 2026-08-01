@@ -138,55 +138,11 @@ make_build_env_available() {
 			exit 1
 		fi
 
-		chmod +x "$env_dir/installed/$MUMBLE_VCPKG_TRIPLET/tools/Ice/slice2cpp"
+		# Only server builds invoke the slice compiler, and not every environment
+		# ships one, so make it executable if and only if it is there.
+		local slice2cpp="$env_dir/installed/$MUMBLE_VCPKG_TRIPLET/tools/Ice/slice2cpp"
+		if [[ -f "$slice2cpp" ]]; then
+			chmod +x "$slice2cpp"
+		fi
 	fi
-}
-
-configure_database_tables() {
-	if [[ -x "$( which sudo )" ]]; then
-		sudo_cmd="sudo"
-	else
-		sudo_cmd=""
-	fi
-
-	while [[ "$#" -gt 0 ]]; do
-		case "$1" in
-			"mysql")
-				local sql_statements='CREATE DATABASE `mumble_test-db`;'
-				sql_statements+="CREATE USER 'mumble_test-user'@'localhost' IDENTIFIED BY 'MumbleTestPassword';"
-				sql_statements+="GRANT ALL PRIVILEGES ON \`mumble_test-db\`.* TO 'mumble_test-user'@'localhost';"
-
-				if $sudo_cmd mysql --user=root -e "SELECT 1" 2> /dev/null; then
-					# Passwordless
-					mysql_cmd=( $sudo_cmd mysql --user=root )
-				else
-					mysql_cmd=( $sudo_cmd mysql --user=root --password="root" )
-				fi
-
-				echo "$sql_statements" | "${mysql_cmd[@]}"
-				;;
-
-			"postgresql")
-				local sql_statements='CREATE DATABASE "mumble_test-db";'
-				sql_statements+="CREATE USER \"mumble_test-user\" ENCRYPTED PASSWORD 'MumbleTestPassword';"
-				sql_statements+='ALTER DATABASE "mumble_test-db" OWNER TO "mumble_test-user";'
-
-				if [[ -n "$sudo_cmd" ]] && id -u postgres > /dev/null 1>&1; then
-					# User postgres exists and we can use sudo to execute commands as that user
-					psql_cmd=( "$sudo_cmd" -u postgres psql )
-				else
-					psql_cmd=( psql -d postgres )
-				fi
-
-				echo "$sql_statements" | "${psql_cmd[@]}"
-				;;
-
-			*)
-				echo "Unsupported database '$1'" 1>&2
-				exit 1
-				;;
-		esac
-
-		shift
-	done
 }
