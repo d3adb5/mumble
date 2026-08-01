@@ -29,9 +29,7 @@ env:
   # -Ddeepfilternet=ON builds the bundled DeepFilterNet3 noise suppressor, model
   # included, via the Rust toolchain preinstalled on the GitHub-hosted runners;
   # TestDeepFilterModel then asserts it really ended up in the binary.
-  # -Dlto=OFF trades a little runtime performance for a much shorter link step: with
-  # a statically linked Qt, link-time optimization dominates the build.
-  CMAKE_OPTIONS: -Dtests=ON -Dserver=OFF -Dlto=OFF -Dwebrtc-audio-processing=ON -Ddeepfilternet=ON -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache
+  CMAKE_OPTIONS: -Dtests=ON -Dserver=OFF -Dwebrtc-audio-processing=ON -Ddeepfilternet=ON -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache
 
 
 jobs:
@@ -79,18 +77,6 @@ jobs:
 
     runs-on: ${{ matrix.os }}
 
-      # Copied into the job environment because a step's "if" cannot read the secrets
-      # context. All of these are optional: with none of them set, the macOS disk image
-      # is merely ad-hoc signed, which installs but makes Gatekeeper warn on every
-      # machine other than the one that built it.
-    env:
-        MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
-        MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
-        MACOS_DEVELOPER_ID: ${{ secrets.MACOS_DEVELOPER_ID }}
-        MACOS_NOTARIZATION_APPLE_ID: ${{ secrets.MACOS_NOTARIZATION_APPLE_ID }}
-        MACOS_NOTARIZATION_PASSWORD: ${{ secrets.MACOS_NOTARIZATION_PASSWORD }}
-        MACOS_NOTARIZATION_TEAM_ID: ${{ secrets.MACOS_NOTARIZATION_TEAM_ID }}
-
     steps:
     - uses: actions/checkout@v6
       with:
@@ -135,75 +121,22 @@ jobs:
       shell: bash
       run: ctest --output-on-failure -C $BUILD_TYPE
 
-      # Optional: import the Apple Developer ID certificate so the bundle can be signed
-      # with it rather than ad-hoc. See docs/dev/maintenance/signing-ci-builds.md.
-    - if: ${{ startsWith(matrix.os, 'macos') && env.MACOS_CERTIFICATE != '' }}
-      name: Import signing certificate
-      shell: bash
-      run: |
-        keychain="$RUNNER_TEMP/mumble-signing.keychain-db"
-        keychain_password="$( uuidgen )"
-        certificate="$RUNNER_TEMP/certificate.p12"
-
-        echo "$MACOS_CERTIFICATE" | base64 --decode > "$certificate"
-
-        security create-keychain -p "$keychain_password" "$keychain"
-        security set-keychain-settings -lut 21600 "$keychain"
-        security unlock-keychain -p "$keychain_password" "$keychain"
-        security import "$certificate" -k "$keychain" -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-        # Without this codesign blocks on an interactive prompt for the key.
-        security set-key-partition-list -S apple-tool:,apple: -k "$keychain_password" "$keychain" > /dev/null
-        security list-keychains -d user -s "$keychain" $( security list-keychains -d user | tr -d '"' )
-
-        rm -f "$certificate"
-
-        echo "MUMBLE_SIGNING_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
-
       # Turn the built .app into an installable disk image: the plugins and the icon are
       # copied into the bundle, its Info.plist gets the real version, and the result is
-      # signed. Signing is not optional even without a certificate, as Apple Silicon
-      # refuses to run binaries carrying no signature at all. The overlay is not built on
-      # ARM macOS, hence --no-overlay.
+      # ad-hoc signed (Apple Silicon refuses to run binaries carrying no signature at
+      # all). Signing it with a Developer ID instead needs a paid Apple account, so the
+      # image is installed through the Homebrew cask rather than by hand - see
+      # docs/dev/maintenance/signing-ci-builds.md. The overlay is not built on ARM macOS,
+      # hence --no-overlay.
     - if: ${{ startsWith(matrix.os, 'macos') }}
       name: Create disk image
       shell: bash
       run: |
-        args=(
-          --source-dir . --binary-dir build --no-overlay
-          --min-macos-version "11.0.0"
+        ./macx/scripts/osxdist.py --source-dir . --binary-dir build --no-overlay --ad-hoc-sign \
+          --min-macos-version "11.0.0" \
           --version "$( ./scripts/mumble-version.py ).${MUMBLE_BUILD_NUMBER}"
-        )
-
-        if [[ -n "$MUMBLE_SIGNING_KEYCHAIN" ]]; then
-          args+=( --developer-id "$MACOS_DEVELOPER_ID" --keychain "$MUMBLE_SIGNING_KEYCHAIN" )
-        else
-          args+=( --ad-hoc-sign )
-        fi
-
-        ./macx/scripts/osxdist.py "${args[@]}"
-
-        if [[ -n "$MUMBLE_SIGNING_KEYCHAIN" ]]; then
-          # Sign the image as well, so that what gets notarized and what the user
-          # downloads carry the same identity.
-          codesign --force --keychain "$MUMBLE_SIGNING_KEYCHAIN" \
-            --sign "Developer ID Application: $MACOS_DEVELOPER_ID" --timestamp build/*.dmg
-        fi
       env:
           MUMBLE_BUILD_NUMBER: ${{ needs.fetch_build_number.outputs.build_number }}
-
-      # Optional, and the half that actually silences Gatekeeper: a signature alone still
-      # leaves a warning until Apple has seen the build. Stapling the resulting ticket
-      # onto the image lets it validate without a network connection.
-    - if: ${{ startsWith(matrix.os, 'macos') && env.MACOS_NOTARIZATION_APPLE_ID != '' }}
-      name: Notarize disk image
-      shell: bash
-      run: |
-        image="$( ls build/*.dmg )"
-        xcrun notarytool submit "$image" --wait \
-          --apple-id "$MACOS_NOTARIZATION_APPLE_ID" \
-          --team-id "$MACOS_NOTARIZATION_TEAM_ID" \
-          --password "$MACOS_NOTARIZATION_PASSWORD"
-        xcrun stapler staple "$image"
 
     - if: ${{ inputs.SIGN_WINDOWS_INSTALLER && startsWith(matrix.os, 'windows') }}
       uses: ./.github/actions/sign-binaries
@@ -311,7 +244,6 @@ jobs:
           -Dwarnings-as-errors=OFF \
           -Dwebrtc-audio-processing=ON \
           -Ddeepfilternet=ON \
-          -Dlto=OFF \
           -Dstatic=OFF \
           -Ddeb-package=ON
       env:
