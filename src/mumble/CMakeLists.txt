@@ -719,6 +719,8 @@ else()
 				"GlobalShortcut_macx.h"
 				"GlobalShortcut_macx.mm"
 				"os_macx.mm"
+				"TouchBar_macx.h"
+				"TouchBar_macx.mm"
 		)
 
 		if(static AND TARGET Qt6::QCocoaIntegrationPlugin)
@@ -1202,6 +1204,7 @@ if(${CMAKE_VERSION} VERSION_GREATER_EQUAL "3.16.0")
 			"TextToSpeech_macx.mm"
 			"Overlay_macx.mm"
 			"CoreAudio.mm"
+			"TouchBar_macx.mm"
 			PROPERTIES
 				SKIP_UNITY_BUILD_INCLUSION TRUE
 		)

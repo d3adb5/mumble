@@ -69,6 +69,7 @@
 
 #ifdef Q_OS_MAC
 #	include "AppNap.h"
+#	include "TouchBar_macx.h"
 #endif
 
 #include <QAccessible>
@@ -846,6 +847,11 @@ void MainWindow::hideEvent(QHideEvent *e) {
 
 void MainWindow::showEvent(QShowEvent *e) {
 	QMainWindow::showEvent(e);
+
+#ifdef Q_OS_MAC
+	// The native window exists by now; a no-op if the bar is already in place.
+	MUInstallTouchBar(this);
+#endif
 }
 
 void MainWindow::changeEvent(QEvent *e) {
@@ -935,6 +941,10 @@ void MainWindow::updateAudioToolTips() {
 		qaAudioDeaf->setToolTip(tr("Undeafen yourself"));
 	else
 		qaAudioDeaf->setToolTip(tr("Deafen yourself"));
+
+#ifdef Q_OS_MAC
+	MUUpdateTouchBar();
+#endif
 }
 
 void MainWindow::updateUserModel() {
@@ -961,6 +971,10 @@ void MainWindow::updateNoiseCancelComboBox(Settings::NoiseCancel newMode) {
 	if (index >= 0) {
 		qcbNoiseCancel->setCurrentIndex(index);
 	}
+
+#ifdef Q_OS_MAC
+	MUUpdateTouchBar();
+#endif
 }
 
 void MainWindow::populateInputDeviceComboBox() {
@@ -1036,6 +1050,10 @@ void MainWindow::populateEchoCancelComboBox() {
 	// Echo cancellation only operates on a mono signal, so it is unavailable in
 	// stereo transmission.
 	qcbEchoCancel->setEnabled(hasUsableOption && !Global::get().s.bStereoInput);
+
+#ifdef Q_OS_MAC
+	MUUpdateTouchBar();
+#endif
 }
 
 void MainWindow::qcbEchoCancel_activated(int index) {
