@@ -523,6 +523,11 @@ void PipeWireEngine::queueBuffer(pw_buffer *buffer) {
 }
 
 void PipeWireEngine::setActive(const bool active) {
+	// Reached from mute toggles even when the engine never came up.
+	if (!m_ok) {
+		return;
+	}
+
 	pws->pw_thread_loop_lock(m_thread);
 	pws->pw_stream_set_active(m_stream, active);
 	pws->pw_thread_loop_unlock(m_thread);
