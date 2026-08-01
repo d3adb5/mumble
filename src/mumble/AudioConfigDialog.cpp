@@ -1011,6 +1011,10 @@ void AudioOutputDialog::save() const {
 		if (idx > -1) {
 			aor->setDeviceChoice(qcbDevice->itemData(idx), s);
 		}
+		idx = qcbChannelLayout->currentIndex();
+		if (idx > -1) {
+			aor->setChannelLayoutChoice(qcbChannelLayout->itemData(idx), s);
+		}
 	}
 }
 
@@ -1031,10 +1035,24 @@ void AudioOutputDialog::refreshDeviceList() {
 void AudioOutputDialog::on_qcbSystem_currentIndexChanged(int) {
 	qcbDevice->clear();
 	qcbDevice->setEnabled(false);
+	qcbChannelLayout->clear();
 
 	if (AudioOutputRegistrar::qmNew) {
 		auto aor = AudioOutputRegistrar::qmNew->value(qcbSystem->currentText());
 		fillDeviceComboBox(qcbDevice, aor->getDeviceChoices(), aor->getDeviceChoice());
+
+		// Backends that mix for a user-chosen channel layout (instead of the
+		// device dictating it) get the layout dropdown.
+		const QList< audioDevice > layouts = aor->getChannelLayouts();
+		const QVariant layout              = aor->getChannelLayoutChoice();
+		for (int i = 0; i < layouts.size(); ++i) {
+			qcbChannelLayout->addItem(layouts.at(i).first, layouts.at(i).second);
+			if (layouts.at(i).second == layout) {
+				qcbChannelLayout->setCurrentIndex(i);
+			}
+		}
+		qliChannelLayout->setVisible(!layouts.isEmpty());
+		qcbChannelLayout->setVisible(!layouts.isEmpty());
 
 		bool canmute = aor->canMuteOthers();
 		qsOtherVolume->setEnabled(canmute);

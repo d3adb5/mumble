@@ -10,20 +10,33 @@
 #include "AudioOutput.h"
 
 #include <QLibrary>
+#include <QMap>
 #include <QMutex>
 #include <QWaitCondition>
 
 class PipeWireInit;
 
 struct pw_buffer;
+struct pw_context;
+struct pw_core;
 struct pw_loop;
 struct pw_properties;
+struct pw_proxy;
+struct pw_registry;
 struct pw_stream;
 struct pw_stream_events;
 struct pw_thread_loop;
 
 struct spa_dict;
+struct spa_hook;
 struct spa_pod;
+
+/// An audio node (source or sink) announced by the PipeWire registry.
+struct PipeWireNode {
+	QString name;
+	QString description;
+	bool isSink;
+};
 
 class PipeWireEngine {
 public:
@@ -38,7 +51,9 @@ public:
 	void queueBuffer(pw_buffer *buffer);
 	void setActive(bool active);
 
-	PipeWireEngine(const char *category, void *param, const std::function< void(void *param) > callback);
+	/// @param target node.name of the device to connect to; empty for the default.
+	PipeWireEngine(const char *category, const QByteArray &target, void *param,
+				   const std::function< void(void *param) > callback);
 	~PipeWireEngine();
 
 protected:
@@ -59,6 +74,10 @@ class PipeWireSystem : public QObject {
 public:
 	bool isOk() { return m_ok; };
 
+	/// Sorted device choices for the UI. Thread-safe.
+	const QList< audioDevice > inputDevices();
+	const QList< audioDevice > outputDevices();
+
 	PipeWireSystem();
 	~PipeWireSystem();
 
@@ -66,6 +85,26 @@ protected:
 	bool m_ok;
 	uint8_t m_users;
 	QLibrary m_lib;
+
+	// Registry monitor: a connection of its own that tracks the audio nodes
+	// coming and going, feeding the device dropdowns.
+	pw_loop *m_monitorLoop           = nullptr;
+	pw_thread_loop *m_monitorThread  = nullptr;
+	pw_context *m_monitorContext     = nullptr;
+	pw_core *m_monitorCore           = nullptr;
+	pw_registry *m_registry          = nullptr;
+	std::unique_ptr< spa_hook > m_registryListener;
+
+	/// Guards m_nodes: written by the monitor thread, read by the UI thread.
+	QMutex m_nodesMutex;
+	QMap< uint32_t, PipeWireNode > m_nodes;
+
+	void startMonitor();
+	void stopMonitor();
+
+	static void onRegistryGlobal(void *data, uint32_t id, uint32_t permissions, const char *type, uint32_t version,
+								 const spa_dict *props);
+	static void onRegistryGlobalRemove(void *data, uint32_t id);
 
 	const char *(*pw_get_library_version)();
 
@@ -83,6 +122,13 @@ protected:
 	void (*pw_thread_loop_unlock)(pw_thread_loop *loop);
 
 	pw_properties *(*pw_properties_new)(const char *key, ...);
+	int (*pw_properties_set)(pw_properties *properties, const char *key, const char *value);
+
+	pw_context *(*pw_context_new)(pw_loop *main_loop, pw_properties *props, size_t user_data_size);
+	void (*pw_context_destroy)(pw_context *context);
+	pw_core *(*pw_context_connect)(pw_context *context, pw_properties *properties, size_t user_data_size);
+	int (*pw_core_disconnect)(pw_core *core);
+	void (*pw_proxy_destroy)(pw_proxy *proxy);
 
 	pw_stream *(*pw_stream_new_simple)(pw_loop *loop, const char *name, pw_properties *props,
 									   const pw_stream_events *events, void *data);

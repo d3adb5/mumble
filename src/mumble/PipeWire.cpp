@@ -5,7 +5,10 @@
 
 #include "PipeWire.h"
 
+#include "Audio.h"
 #include "Global.h"
+
+#include <cstring>
 
 #include <pipewire/core.h>
 #include <pipewire/keys.h>
@@ -13,6 +16,16 @@
 
 #include <spa/param/audio/format-utils.h>
 #include <spa/pod/builder.h>
+#include <spa/utils/dict.h>
+#include <spa/utils/hook.h>
+
+// Not part of the bundled header snapshot.
+#ifndef PW_TYPE_INTERFACE_Node
+#	define PW_TYPE_INTERFACE_Node "PipeWire:Interface:Node"
+#endif
+#ifndef PW_KEY_TARGET_OBJECT
+#	define PW_KEY_TARGET_OBJECT "target.object"
+#endif
 
 #define RESOLVE(var)                                                  \
 	{                                                                 \
@@ -42,6 +55,9 @@ private:
 	const QVariant getDeviceChoice() override;
 	const QList< audioDevice > getDeviceChoices() override;
 	void setDeviceChoice(const QVariant &, Settings &) override;
+	const QList< audioDevice > getChannelLayouts() override;
+	const QVariant getChannelLayoutChoice() override;
+	void setChannelLayoutChoice(const QVariant &, Settings &) override;
 	bool usesOutputDelay() const override;
 
 public:
@@ -64,15 +80,15 @@ AudioInput *PipeWireInputRegistrar::create() {
 }
 
 const QVariant PipeWireInputRegistrar::getDeviceChoice() {
-	return Global::get().s.pipeWireInput;
+	return Global::get().s.qsPipeWireInputDevice;
 }
 
 const QList< audioDevice > PipeWireInputRegistrar::getDeviceChoices() {
-	return { audioDevice(QStringLiteral("Mono"), 1) };
+	return pws->inputDevices();
 }
 
 void PipeWireInputRegistrar::setDeviceChoice(const QVariant &choice, Settings &settings) {
-	settings.pipeWireInput = static_cast< std::uint8_t >(choice.toUInt());
+	settings.qsPipeWireInputDevice = choice.toString();
 }
 
 bool PipeWireInputRegistrar::canEcho(EchoCancelOptionID, const QString &) const {
@@ -91,16 +107,28 @@ AudioOutput *PipeWireOutputRegistrar::create() {
 }
 
 const QVariant PipeWireOutputRegistrar::getDeviceChoice() {
-	return Global::get().s.pipeWireOutput;
+	return Global::get().s.qsPipeWireOutputDevice;
 }
 
 const QList< audioDevice > PipeWireOutputRegistrar::getDeviceChoices() {
+	return pws->outputDevices();
+}
+
+void PipeWireOutputRegistrar::setDeviceChoice(const QVariant &choice, Settings &settings) {
+	settings.qsPipeWireOutputDevice = choice.toString();
+}
+
+const QList< audioDevice > PipeWireOutputRegistrar::getChannelLayouts() {
 	return { audioDevice(QStringLiteral("Mono"), 1), audioDevice(QStringLiteral("Stereo"), 2),
 			 audioDevice(QStringLiteral("2.1"), 3),  audioDevice(QStringLiteral("3.1"), 4),
 			 audioDevice(QStringLiteral("5.1"), 6),  audioDevice(QStringLiteral("7.1"), 8) };
 }
 
-void PipeWireOutputRegistrar::setDeviceChoice(const QVariant &choice, Settings &settings) {
+const QVariant PipeWireOutputRegistrar::getChannelLayoutChoice() {
+	return Global::get().s.pipeWireOutput;
+}
+
+void PipeWireOutputRegistrar::setChannelLayoutChoice(const QVariant &choice, Settings &settings) {
 	settings.pipeWireOutput = static_cast< std::uint8_t >(choice.toUInt());
 }
 
@@ -161,6 +189,12 @@ PipeWireSystem::PipeWireSystem() : m_ok(false), m_users(0) {
 	RESOLVE(pw_thread_loop_lock);
 	RESOLVE(pw_thread_loop_unlock);
 	RESOLVE(pw_properties_new);
+	RESOLVE(pw_properties_set);
+	RESOLVE(pw_context_new);
+	RESOLVE(pw_context_destroy);
+	RESOLVE(pw_context_connect);
+	RESOLVE(pw_core_disconnect);
+	RESOLVE(pw_proxy_destroy);
 	RESOLVE(pw_stream_new_simple);
 	RESOLVE(pw_stream_set_active);
 	RESOLVE(pw_stream_destroy);
@@ -173,15 +207,186 @@ PipeWireSystem::PipeWireSystem() : m_ok(false), m_users(0) {
 	pw_init(nullptr, nullptr);
 
 	m_ok = true;
+
+	startMonitor();
 }
 
 PipeWireSystem::~PipeWireSystem() {
 	if (m_ok) {
+		stopMonitor();
 		pw_deinit();
 	}
 }
 
-PipeWireEngine::PipeWireEngine(const char *category, void *param, const std::function< void(void *param) > callback)
+void PipeWireSystem::startMonitor() {
+	static const pw_registry_events registryEvents = {
+		PW_VERSION_REGISTRY_EVENTS,
+		onRegistryGlobal,
+		onRegistryGlobalRemove,
+	};
+
+	m_monitorLoop = pw_loop_new(nullptr);
+	if (!m_monitorLoop) {
+		return;
+	}
+
+	m_monitorThread = pw_thread_loop_new_full(m_monitorLoop, "DeviceMonitor", nullptr);
+	if (!m_monitorThread) {
+		return;
+	}
+
+	m_monitorContext = pw_context_new(m_monitorLoop, nullptr, 0);
+	if (!m_monitorContext) {
+		return;
+	}
+
+	if (pw_thread_loop_start(m_monitorThread) != 0) {
+		return;
+	}
+
+	pw_thread_loop_lock(m_monitorThread);
+
+	// This fails when no PipeWire daemon is running; the device lists then
+	// simply stay empty while the streams keep behaving as before.
+	m_monitorCore = pw_context_connect(m_monitorContext, nullptr, 0);
+	if (m_monitorCore) {
+		m_registry = pw_core_get_registry(m_monitorCore, PW_VERSION_REGISTRY, 0);
+		if (m_registry) {
+			// make_unique value-initializes, i.e. the hook starts out zeroed.
+			m_registryListener = std::make_unique< spa_hook >();
+			pw_registry_add_listener(m_registry, m_registryListener.get(), &registryEvents, this);
+		}
+	} else {
+		qWarning("PipeWireSystem: Unable to connect the device monitor to the PipeWire daemon");
+	}
+
+	pw_thread_loop_unlock(m_monitorThread);
+}
+
+void PipeWireSystem::stopMonitor() {
+	if (m_monitorThread) {
+		pw_thread_loop_stop(m_monitorThread);
+	}
+
+	if (m_registry) {
+		pw_proxy_destroy(reinterpret_cast< pw_proxy * >(m_registry));
+		m_registry = nullptr;
+	}
+
+	if (m_monitorCore) {
+		pw_core_disconnect(m_monitorCore);
+		m_monitorCore = nullptr;
+	}
+
+	if (m_monitorContext) {
+		pw_context_destroy(m_monitorContext);
+		m_monitorContext = nullptr;
+	}
+
+	if (m_monitorThread) {
+		pw_thread_loop_destroy(m_monitorThread);
+		m_monitorThread = nullptr;
+	}
+
+	if (m_monitorLoop) {
+		pw_loop_destroy(m_monitorLoop);
+		m_monitorLoop = nullptr;
+	}
+}
+
+void PipeWireSystem::onRegistryGlobal(void *data, uint32_t id, uint32_t, const char *type, uint32_t,
+									  const spa_dict *props) {
+	if (!type || !props || strcmp(type, PW_TYPE_INTERFACE_Node) != 0) {
+		return;
+	}
+
+	const char *mediaClass = spa_dict_lookup(props, PW_KEY_MEDIA_CLASS);
+	if (!mediaClass) {
+		return;
+	}
+
+	// "Audio/Source/Virtual" covers virtual microphones; sink monitors are not
+	// separate nodes in PipeWire, so they cannot show up here.
+	const bool isSink   = strcmp(mediaClass, "Audio/Sink") == 0;
+	const bool isSource = strcmp(mediaClass, "Audio/Source") == 0 || strcmp(mediaClass, "Audio/Source/Virtual") == 0;
+	if (!isSink && !isSource) {
+		return;
+	}
+
+	const char *name = spa_dict_lookup(props, PW_KEY_NODE_NAME);
+	if (!name) {
+		return;
+	}
+
+	const char *description = spa_dict_lookup(props, PW_KEY_NODE_DESCRIPTION);
+	if (!description) {
+		description = spa_dict_lookup(props, PW_KEY_NODE_NICK);
+	}
+	if (!description) {
+		description = name;
+	}
+
+	PipeWireSystem *pws = static_cast< PipeWireSystem * >(data);
+	{
+		QMutexLocker lock(&pws->m_nodesMutex);
+		pws->m_nodes.insert(id, { QString::fromUtf8(name), QString::fromUtf8(description), isSink });
+	}
+
+	AudioDeviceMonitor::notifyChanged();
+}
+
+void PipeWireSystem::onRegistryGlobalRemove(void *data, uint32_t id) {
+	PipeWireSystem *pws = static_cast< PipeWireSystem * >(data);
+
+	bool removed = false;
+	{
+		QMutexLocker lock(&pws->m_nodesMutex);
+		removed = pws->m_nodes.remove(id) > 0;
+	}
+
+	if (removed) {
+		AudioDeviceMonitor::notifyChanged();
+	}
+}
+
+const QList< audioDevice > PipeWireSystem::inputDevices() {
+	QList< audioDevice > choices{ audioDevice(tr("Default Device"), QString()) };
+
+	QMutexLocker lock(&m_nodesMutex);
+	QList< audioDevice > nodes;
+	for (const PipeWireNode &node : m_nodes) {
+		if (!node.isSink) {
+			nodes << audioDevice(node.description, node.name);
+		}
+	}
+	lock.unlock();
+
+	std::sort(nodes.begin(), nodes.end(),
+			  [](const audioDevice &a, const audioDevice &b) { return a.first < b.first; });
+
+	return choices + nodes;
+}
+
+const QList< audioDevice > PipeWireSystem::outputDevices() {
+	QList< audioDevice > choices{ audioDevice(tr("Default Device"), QString()) };
+
+	QMutexLocker lock(&m_nodesMutex);
+	QList< audioDevice > nodes;
+	for (const PipeWireNode &node : m_nodes) {
+		if (node.isSink) {
+			nodes << audioDevice(node.description, node.name);
+		}
+	}
+	lock.unlock();
+
+	std::sort(nodes.begin(), nodes.end(),
+			  [](const audioDevice &a, const audioDevice &b) { return a.first < b.first; });
+
+	return choices + nodes;
+}
+
+PipeWireEngine::PipeWireEngine(const char *category, const QByteArray &target, void *param,
+							   const std::function< void(void *param) > callback)
 	: m_ok(false), m_loop(nullptr), m_stream(nullptr), m_thread(nullptr) {
 	if (!pws->isOk()) {
 		return;
@@ -195,6 +400,12 @@ PipeWireEngine::PipeWireEngine(const char *category, void *param, const std::fun
 	pw_properties *props =
 		pws->pw_properties_new(PW_KEY_APP_NAME, "Mumble", PW_KEY_NODE_NAME, category, PW_KEY_MEDIA_CATEGORY, category,
 							   PW_KEY_MEDIA_TYPE, "Audio", PW_KEY_MEDIA_ROLE, "Communication", nullptr);
+
+	if (!target.isEmpty()) {
+		// Servers too old to know target.object simply ignore it and keep the
+		// default routing.
+		pws->pw_properties_set(props, PW_KEY_TARGET_OBJECT, target.constData());
+	}
 
 	m_events          = std::make_unique< pw_stream_events >();
 	m_events->version = PW_VERSION_STREAM_EVENTS;
@@ -317,16 +528,14 @@ void PipeWireEngine::setActive(const bool active) {
 	pws->pw_thread_loop_unlock(m_thread);
 }
 PipeWireInput::PipeWireInput() {
-	m_engine = std::make_unique< PipeWireEngine >("Capture", this, processCallback);
+	m_engine = std::make_unique< PipeWireEngine >("Capture", Global::get().s.qsPipeWireInputDevice.toUtf8(), this,
+												  processCallback);
 	if (!m_engine->isOk()) {
 		return;
 	}
 
-	iMicChannels = Global::get().s.pipeWireInput;
-	if (Global::get().s.bStereoInput && iMicChannels < 2) {
-		// Stereo transmission needs both the front-left and front-right channel
-		iMicChannels = 2;
-	}
+	// Stereo transmission needs both the front-left and front-right channel
+	iMicChannels = Global::get().s.bStereoInput ? 2 : 1;
 
 	constexpr uint32_t CHANNELS[]{
 		SPEAKER_FRONT_LEFT,
@@ -379,7 +588,8 @@ void PipeWireInput::onUserMutedChanged() {
 }
 
 PipeWireOutput::PipeWireOutput() {
-	m_engine = std::make_unique< PipeWireEngine >("Playback", this, processCallback);
+	m_engine = std::make_unique< PipeWireEngine >("Playback", Global::get().s.qsPipeWireOutputDevice.toUtf8(), this,
+												  processCallback);
 	if (!m_engine->isOk()) {
 		return;
 	}

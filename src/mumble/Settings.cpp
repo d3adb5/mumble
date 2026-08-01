@@ -963,7 +963,6 @@ void Settings::legacyLoad(const QString &path) {
 	LOAD(qsALSAInput, "alsa/input");
 	LOAD(qsALSAOutput, "alsa/output");
 
-	LOAD(pipeWireInput, "pipewire/input");
 	LOAD(pipeWireOutput, "pipewire/output");
 
 	LOAD(qsPulseAudioInput, "pulseaudio/input");

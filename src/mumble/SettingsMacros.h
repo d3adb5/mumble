@@ -130,7 +130,8 @@
 	PROCESS(audio_backend, WASAPI_ROLE_KEY, qsWASAPIRole)             \
 	PROCESS(audio_backend, ALSA_INPUT_KEY, qsALSAInput)               \
 	PROCESS(audio_backend, ALSA_OUTPUT_KEY, qsALSAOutput)             \
-	PROCESS(audio_backend, PIPEWIRE_INPUT_KEY, pipeWireInput)         \
+	PROCESS(audio_backend, PIPEWIRE_INPUT_DEVICE_KEY, qsPipeWireInputDevice)   \
+	PROCESS(audio_backend, PIPEWIRE_OUTPUT_DEVICE_KEY, qsPipeWireOutputDevice) \
 	PROCESS(audio_backend, PIPEWIRE_OUTPUT_KEY, pipeWireOutput)       \
 	PROCESS(audio_backend, PULSEAUDIO_INPUT_KEY, qsPulseAudioInput)   \
 	PROCESS(audio_backend, PULSEAUDIO_OUTPUT_KEY, qsPulseAudioOutput) \

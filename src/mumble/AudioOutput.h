@@ -64,6 +64,11 @@ public:
 	virtual const QVariant getDeviceChoice()                   = 0;
 	virtual const QList< audioDevice > getDeviceChoices()      = 0;
 	virtual void setDeviceChoice(const QVariant &, Settings &) = 0;
+	/// Channel layouts the backend lets the user pick, e.g. stereo or 5.1
+	/// surround. Empty (the default) when the device dictates the layout.
+	virtual const QList< audioDevice > getChannelLayouts() { return {}; }
+	virtual const QVariant getChannelLayoutChoice() { return QVariant(); }
+	virtual void setChannelLayoutChoice(const QVariant &, Settings &) {}
 	virtual bool canMuteOthers() const;
 	virtual bool usesOutputDelay() const;
 	virtual bool canExclusive() const;

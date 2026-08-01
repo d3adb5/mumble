@@ -378,9 +378,12 @@ struct Settings {
 	bool bAttenuateLoopbacks            = false;
 	int iOutputDelay                    = 5;
 
-	QString qsALSAInput        = QStringLiteral("default");
-	QString qsALSAOutput       = QStringLiteral("default");
-	uint8_t pipeWireInput      = 1;
+	QString qsALSAInput  = QStringLiteral("default");
+	QString qsALSAOutput = QStringLiteral("default");
+	/// node.name of the PipeWire capture/playback target; empty for the default.
+	QString qsPipeWireInputDevice  = {};
+	QString qsPipeWireOutputDevice = {};
+	/// Output channel count (layout), e.g. 2 for stereo, 6 for 5.1 surround.
 	uint8_t pipeWireOutput     = 2;
 	QString qsPulseAudioInput  = {};
 	QString qsPulseAudioOutput = {};

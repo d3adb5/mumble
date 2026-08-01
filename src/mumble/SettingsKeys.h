@@ -148,8 +148,9 @@ const SettingsKey ALSA_INPUT_KEY  = { "alsa_input" };
 const SettingsKey ALSA_OUTPUT_KEY = { "alsa_output" };
 
 // PipeWire
-const SettingsKey PIPEWIRE_INPUT_KEY  = { "pipewire_input" };
-const SettingsKey PIPEWIRE_OUTPUT_KEY = { "pipewire_output" };
+const SettingsKey PIPEWIRE_INPUT_DEVICE_KEY  = { "pipewire_input_device" };
+const SettingsKey PIPEWIRE_OUTPUT_DEVICE_KEY = { "pipewire_output_device" };
+const SettingsKey PIPEWIRE_OUTPUT_KEY        = { "pipewire_output" };
 
 // PulseAudio
 const SettingsKey PULSEAUDIO_INPUT_KEY  = { "pulseaudio_input" };
