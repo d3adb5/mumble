@@ -29,6 +29,7 @@ endif()
 
 if(client)
 	add_subdirectory("TestAudioAmplification")
+	add_subdirectory("TestAudioDeviceSelection")
 	add_subdirectory("TestAudioInputSilence")
 	add_subdirectory("TestAudioReceiveProcessing")
 	add_subdirectory("TestDeepFilter")

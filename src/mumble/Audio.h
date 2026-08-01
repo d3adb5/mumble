@@ -60,6 +60,22 @@ public:
 	void addFrame(const Mumble::Protocol::AudioData &audioData);
 };
 
+/// Relays "the set of audio devices changed" events from the audio backends to the
+/// UI. Backends call notifyChanged() from any thread; UI code connects to
+/// deviceListsChanged(), which is delivered on the receiver's thread as usual.
+class AudioDeviceMonitor : public QObject {
+private:
+	Q_OBJECT
+	Q_DISABLE_COPY(AudioDeviceMonitor)
+	AudioDeviceMonitor() = default;
+
+public:
+	static AudioDeviceMonitor &instance();
+	static void notifyChanged();
+signals:
+	void deviceListsChanged();
+};
+
 namespace Audio {
 void startInput(const QString &input = QString());
 void stopInput();

@@ -5,6 +5,7 @@
 
 #include "PulseAudio.h"
 
+#include "Audio.h"
 #include "MainWindow.h"
 #include "Timer.h"
 #include "User.h"
@@ -435,6 +436,8 @@ void PulseAudioSystem::sink_callback(pa_context *, const pa_sink_info *i, int eo
 	if (!i || eol) {
 		pas->bSinkDone = true;
 		pas->wakeup();
+		// The output list is complete; let the device dropdowns refresh.
+		AudioDeviceMonitor::notifyChanged();
 		return;
 	}
 
@@ -442,7 +445,10 @@ void PulseAudioSystem::sink_callback(pa_context *, const pa_sink_info *i, int eo
 
 	pas->qhSpecMap.insert(name, i->sample_spec);
 	pas->qhChanMap.insert(name, i->channel_map);
-	pas->qhOutput.insert(name, QString::fromUtf8(i->description));
+	{
+		QMutexLocker lock(&pas->qmDeviceLists);
+		pas->qhOutput.insert(name, QString::fromUtf8(i->description));
+	}
 	pas->qhEchoMap.insert(name, QString::fromUtf8(i->monitor_source_name));
 }
 
@@ -451,6 +457,8 @@ void PulseAudioSystem::source_callback(pa_context *, const pa_source_info *i, in
 	if (!i || eol) {
 		pas->bSourceDone = true;
 		pas->wakeup();
+		// The input list is complete; let the device dropdowns refresh.
+		AudioDeviceMonitor::notifyChanged();
 		return;
 	}
 
@@ -459,7 +467,8 @@ void PulseAudioSystem::source_callback(pa_context *, const pa_source_info *i, in
 	pas->qhSpecMap.insert(name, i->sample_spec);
 	pas->qhChanMap.insert(name, i->channel_map);
 
-	pas->qhInput.insert(QString::fromUtf8(i->name), QString::fromUtf8(i->description));
+	QMutexLocker lock(&pas->qmDeviceLists);
+	pas->qhInput.insert(name, QString::fromUtf8(i->description));
 }
 
 void PulseAudioSystem::server_callback(pa_context *, const pa_server_info *i, void *userdata) {
@@ -856,17 +865,48 @@ void PulseAudioSystem::restore_volume_success_callback(pa_context *, int, void *
 
 void PulseAudioSystem::query() {
 	bSourceDone = bSinkDone = bServerDone = false;
-	qhInput.clear();
-	qhOutput.clear();
+	{
+		QMutexLocker lock(&qmDeviceLists);
+		qhInput.clear();
+		qhOutput.clear();
+		qhInput.insert(QString(), tr("Default Input"));
+		qhOutput.insert(QString(), tr("Default Output"));
+	}
 	qhEchoMap.clear();
 	qhSpecMap.clear();
 	qhChanMap.clear();
-	qhInput.insert(QString(), tr("Default Input"));
-	qhOutput.insert(QString(), tr("Default Output"));
 	m_pulseAudio.operation_unref(m_pulseAudio.context_get_server_info(pacContext, server_callback, this));
 	m_pulseAudio.operation_unref(m_pulseAudio.context_get_sink_info_list(pacContext, sink_callback, this));
 	m_pulseAudio.operation_unref(m_pulseAudio.context_get_source_info_list(pacContext, source_callback, this));
 	wakeup();
+}
+
+const QList< audioDevice > PulseAudioSystem::inputDevices() {
+	QMutexLocker lock(&qmDeviceLists);
+
+	QStringList keys = qhInput.keys();
+	std::sort(keys.begin(), keys.end());
+
+	QList< audioDevice > choices;
+	for (const auto &key : keys) {
+		choices << audioDevice(qhInput.value(key), key);
+	}
+
+	return choices;
+}
+
+const QList< audioDevice > PulseAudioSystem::outputDevices() {
+	QMutexLocker lock(&qmDeviceLists);
+
+	QStringList keys = qhOutput.keys();
+	std::sort(keys.begin(), keys.end());
+
+	QList< audioDevice > choices;
+	for (const auto &key : keys) {
+		choices << audioDevice(qhOutput.value(key), key);
+	}
+
+	return choices;
 }
 
 void PulseAudioSystem::setVolumes() {
@@ -934,16 +974,7 @@ const QVariant PulseAudioInputRegistrar::getDeviceChoice() {
 }
 
 const QList< audioDevice > PulseAudioInputRegistrar::getDeviceChoices() {
-	QList< audioDevice > choices;
-
-	QStringList keys = pasys->qhInput.keys();
-	std::sort(keys.begin(), keys.end());
-
-	for (const auto &key : keys) {
-		choices << audioDevice(pasys->qhInput.value(key), key);
-	}
-
-	return choices;
+	return pasys->inputDevices();
 }
 
 void PulseAudioInputRegistrar::setDeviceChoice(const QVariant &choice, Settings &s) {
@@ -971,16 +1002,7 @@ const QVariant PulseAudioOutputRegistrar::getDeviceChoice() {
 }
 
 const QList< audioDevice > PulseAudioOutputRegistrar::getDeviceChoices() {
-	QList< audioDevice > choices;
-
-	QStringList keys = pasys->qhOutput.keys();
-	std::sort(keys.begin(), keys.end());
-
-	for (const auto &key : keys) {
-		choices << audioDevice(pasys->qhOutput.value(key), key);
-	}
-
-	return choices;
+	return pasys->outputDevices();
 }
 
 void PulseAudioOutputRegistrar::setDeviceChoice(const QVariant &choice, Settings &s) {

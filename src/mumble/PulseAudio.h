@@ -10,6 +10,7 @@
 #include "AudioOutput.h"
 
 #include <QtCore/QLibrary>
+#include <QtCore/QMutex>
 #include <QtCore/QWaitCondition>
 
 #include <pulse/channelmap.h>
@@ -180,10 +181,18 @@ protected:
 	void setVolumes();
 	PulseAttenuation *getAttenuation(QString stream_restore_id);
 
-public:
+	/// Guards qhInput and qhOutput, which the mainloop thread rebuilds on device
+	/// hotplug while the UI thread reads them for the device dropdowns.
+	QMutex qmDeviceLists;
 	QHash< QString, QString > qhInput;
 	QHash< QString, QString > qhOutput;
+
+public:
 	bool bPulseIsGood;
+
+	/// Sorted device choices for the UI. Thread-safe.
+	const QList< audioDevice > inputDevices();
+	const QList< audioDevice > outputDevices();
 
 	void wakeup_lock();
 

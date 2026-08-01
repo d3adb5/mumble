@@ -154,6 +154,17 @@ void Audio::stopOutput() {
 	ao.reset();
 }
 
+AudioDeviceMonitor &AudioDeviceMonitor::instance() {
+	static AudioDeviceMonitor monitor;
+	return monitor;
+}
+
+void AudioDeviceMonitor::notifyChanged() {
+	// Emitting cross-thread is fine: connections made with the default connection
+	// type deliver the signal on the receiver's thread.
+	emit instance().deviceListsChanged();
+}
+
 void Audio::startInput(const QString &input) {
 	Global::get().ai = AudioInputRegistrar::newFromChoice(input);
 	if (Global::get().ai)

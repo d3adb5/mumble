@@ -9,6 +9,7 @@
 #include "ACLEditor.h"
 #include "About.h"
 #include "Audio.h"
+#include "AudioDeviceSelection.h"
 #include "AudioInput.h"
 #include "AudioOutput.h"
 #include "AudioStats.h"
@@ -627,6 +628,9 @@ void MainWindow::setupGui() {
 	qaInputDeviceSeparator = qtIconToolbar->insertSeparator(qaNoiseCancel);
 	qaInputDevice          = qtIconToolbar->insertWidget(qaInputDeviceSeparator, qcbInputDevice);
 	connect(qcbInputDevice, SIGNAL(activated(int)), this, SLOT(qcbInputDevice_activated(int)));
+	// Repopulate whenever a backend notices devices coming or going.
+	connect(&AudioDeviceMonitor::instance(), &AudioDeviceMonitor::deviceListsChanged, this,
+			&MainWindow::populateInputDeviceComboBox);
 	populateInputDeviceComboBox();
 
 	// Echo-cancellation dropdown, listing the options the active backend supports.
@@ -935,17 +939,18 @@ void MainWindow::populateInputDeviceComboBox() {
 	if (AudioInputRegistrar::qmNew) {
 		AudioInputRegistrar *air = AudioInputRegistrar::qmNew->value(AudioInputRegistrar::current);
 		if (air) {
-			const QVariant current             = air->getDeviceChoice();
-			const QList< audioDevice > choices = air->getDeviceChoices();
-			for (int i = 0; i < choices.size(); ++i) {
-				const audioDevice &choice = choices.at(i);
-				qcbInputDevice->addItem(choice.first, choice.second);
-				qcbInputDevice->setItemData(i, choice.first.toHtmlEscaped(), Qt::ToolTipRole);
-				if (choice.second == current) {
-					qcbInputDevice->setCurrentIndex(i);
-				}
+			const auto model =
+				Mumble::AudioDeviceSelection::buildComboModel(air->getDeviceChoices(), air->getDeviceChoice());
+			for (int i = 0; i < model.entries.size(); ++i) {
+				const auto &entry   = model.entries.at(i);
+				const QString label = entry.unavailable ? tr("%1 (unavailable)").arg(entry.label) : entry.label;
+				qcbInputDevice->addItem(label, entry.value);
+				qcbInputDevice->setItemData(i, label.toHtmlEscaped(), Qt::ToolTipRole);
 			}
-			hasChoices = !choices.isEmpty();
+			if (model.currentIndex >= 0) {
+				qcbInputDevice->setCurrentIndex(model.currentIndex);
+			}
+			hasChoices = !model.entries.isEmpty();
 		}
 	}
 

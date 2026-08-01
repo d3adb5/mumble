@@ -6,6 +6,8 @@
 #include "AudioConfigDialog.h"
 
 #include "Accessibility.h"
+#include "Audio.h"
+#include "AudioDeviceSelection.h"
 #include "AudioInput.h"
 #include "AudioInputAmplification.h"
 #include "DeepFilterNet.h"
@@ -71,6 +73,25 @@ static QString ampThresholdText(int value) {
 }
 
 
+// Refills a device combo box from the given choices, selecting the preferred
+// device (with an "(unavailable)" placeholder if it is currently unplugged).
+static void fillDeviceComboBox(QComboBox *combo, const QList< audioDevice > &choices, const QVariant &preferred) {
+	combo->clear();
+
+	const auto model = Mumble::AudioDeviceSelection::buildComboModel(choices, preferred);
+	for (int i = 0; i < model.entries.size(); ++i) {
+		const auto &entry   = model.entries.at(i);
+		const QString label = entry.unavailable ? QObject::tr("%1 (unavailable)").arg(entry.label) : entry.label;
+		combo->addItem(label, entry.value);
+		combo->setItemData(i, label.toHtmlEscaped(), Qt::ToolTipRole);
+	}
+	if (model.currentIndex >= 0) {
+		combo->setCurrentIndex(model.currentIndex);
+	}
+
+	combo->setEnabled(!model.entries.isEmpty());
+}
+
 static ConfigWidget *AudioInputDialogNew(Settings &st) {
 	return new AudioInputDialog(st);
 }
@@ -99,6 +120,9 @@ AudioInputDialog::AudioInputDialog(Settings &st) : ConfigWidget(st) {
 	qtTick->setObjectName(QLatin1String("Tick"));
 
 	setupUi(this);
+
+	connect(&AudioDeviceMonitor::instance(), &AudioDeviceMonitor::deviceListsChanged, this,
+			&AudioInputDialog::refreshDeviceList);
 
 	qlInputHelp->setVisible(false);
 
@@ -632,31 +656,32 @@ void AudioInputDialog::on_qcbTransmit_currentIndexChanged(int v) {
 
 void AudioInputDialog::on_qcbSystem_currentIndexChanged(int) {
 	qcbDevice->clear();
-
-	QList< audioDevice > choices;
+	qcbDevice->setEnabled(false);
 
 	if (AudioInputRegistrar::qmNew) {
-		auto air         = AudioInputRegistrar::qmNew->value(qcbSystem->currentText());
-		QVariant current = air->getDeviceChoice();
-		choices          = air->getDeviceChoices();
-
-		for (int i = 0; i < choices.size(); ++i) {
-			auto &choice = choices.at(i);
-			qcbDevice->addItem(choice.first, choice.second);
-			qcbDevice->setItemData(i, choice.first.toHtmlEscaped(), Qt::ToolTipRole);
-
-			if (choice.second == current) {
-				qcbDevice->setCurrentIndex(i);
-			}
-		}
+		auto air = AudioInputRegistrar::qmNew->value(qcbSystem->currentText());
+		fillDeviceComboBox(qcbDevice, air->getDeviceChoices(), air->getDeviceChoice());
 
 		updateEchoEnableState();
 
 		qcbExclusive->setEnabled(air->canExclusive());
 	}
 
-	qcbDevice->setEnabled(!choices.isEmpty());
 	verifyMicrophonePermission();
+}
+
+void AudioInputDialog::refreshDeviceList() {
+	if (!AudioInputRegistrar::qmNew) {
+		return;
+	}
+	AudioInputRegistrar *air = AudioInputRegistrar::qmNew->value(qcbSystem->currentText());
+	if (!air) {
+		return;
+	}
+
+	// Keep whatever is selected on screen, even if not applied yet.
+	const QVariant selected = qcbDevice->currentIndex() >= 0 ? qcbDevice->currentData() : air->getDeviceChoice();
+	fillDeviceComboBox(qcbDevice, air->getDeviceChoices(), selected);
 }
 
 void AudioInputDialog::updateEchoEnableState() {
@@ -823,6 +848,9 @@ void AudioOutputDialog::enablePulseAudioAttenuationOptionsFor(const QString &out
 AudioOutputDialog::AudioOutputDialog(Settings &st) : ConfigWidget(st) {
 	setupUi(this);
 
+	connect(&AudioDeviceMonitor::instance(), &AudioDeviceMonitor::deviceListsChanged, this,
+			&AudioOutputDialog::refreshDeviceList);
+
 	if (AudioOutputRegistrar::qmNew) {
 		QList< QString > keys = AudioOutputRegistrar::qmNew->keys();
 		for (const QString &key : keys) {
@@ -986,25 +1014,27 @@ void AudioOutputDialog::save() const {
 	}
 }
 
+void AudioOutputDialog::refreshDeviceList() {
+	if (!AudioOutputRegistrar::qmNew) {
+		return;
+	}
+	AudioOutputRegistrar *aor = AudioOutputRegistrar::qmNew->value(qcbSystem->currentText());
+	if (!aor) {
+		return;
+	}
+
+	// Keep whatever is selected on screen, even if not applied yet.
+	const QVariant selected = qcbDevice->currentIndex() >= 0 ? qcbDevice->currentData() : aor->getDeviceChoice();
+	fillDeviceComboBox(qcbDevice, aor->getDeviceChoices(), selected);
+}
+
 void AudioOutputDialog::on_qcbSystem_currentIndexChanged(int) {
 	qcbDevice->clear();
-
-	QList< audioDevice > choices;
+	qcbDevice->setEnabled(false);
 
 	if (AudioOutputRegistrar::qmNew) {
-		auto aor         = AudioOutputRegistrar::qmNew->value(qcbSystem->currentText());
-		QVariant current = aor->getDeviceChoice();
-		choices          = aor->getDeviceChoices();
-
-		for (int i = 0; i < choices.size(); ++i) {
-			auto &choice = choices.at(i);
-			qcbDevice->addItem(choice.first, choice.second);
-			qcbDevice->setItemData(i, choice.first.toHtmlEscaped(), Qt::ToolTipRole);
-
-			if (choice.second == current) {
-				qcbDevice->setCurrentIndex(i);
-			}
-		}
+		auto aor = AudioOutputRegistrar::qmNew->value(qcbSystem->currentText());
+		fillDeviceComboBox(qcbDevice, aor->getDeviceChoices(), aor->getDeviceChoice());
 
 		bool canmute = aor->canMuteOthers();
 		qsOtherVolume->setEnabled(canmute);
@@ -1021,8 +1051,6 @@ void AudioOutputDialog::on_qcbSystem_currentIndexChanged(int) {
 
 		qcbExclusive->setEnabled(aor->canExclusive());
 	}
-
-	qcbDevice->setEnabled(!choices.isEmpty());
 }
 
 void AudioOutputDialog::on_qsJitter_valueChanged(int v) {

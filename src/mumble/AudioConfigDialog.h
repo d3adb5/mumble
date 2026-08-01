@@ -79,6 +79,9 @@ public slots:
 	void on_Tick_timeout();
 	void on_qcbIdleAction_currentIndexChanged(int v);
 	void on_qcbNoiseSup_currentIndexChanged(int index);
+
+	/// Refills the device list after a hotplug, keeping the on-screen selection.
+	void refreshDeviceList();
 };
 
 class AudioOutputDialog : public ConfigWidget, public Ui::AudioOutput {
@@ -123,6 +126,9 @@ public slots:
 	void on_qcbAttenuateOthersOnTalk_clicked(bool checked);
 	void on_qcbAttenuateOthers_clicked(bool checked);
 	void on_qcbOnlyAttenuateSameOutput_clicked(bool checked);
+
+	/// Refills the device list after a hotplug, keeping the on-screen selection.
+	void refreshDeviceList();
 };
 
 #endif
