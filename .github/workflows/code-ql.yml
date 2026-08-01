@@ -5,8 +5,10 @@ on: [push, pull_request]
 env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
   BUILD_TYPE: Release
+  # Client only, like the release builds: the server (and its Ice/SOCI
+  # dependencies) is not built on this fork.
   CMAKE_OPTIONS: |
-      -Dtests=OFF -Dsymbols=ON -Dwarnings-as-errors=OFF
+      -Dtests=OFF -Dsymbols=ON -Dwarnings-as-errors=OFF -Dserver=OFF -Doverlay-xcompile=OFF
 
 jobs:
   pre_run:
@@ -46,11 +48,21 @@ jobs:
       with:
           languages: python, cpp
 
-    - uses: ./.github/actions/install-dependencies
-      with:
-          type: shared
-          os: ${{ matrix.os }}
-          arch: x86_64
+      # The install-dependencies action only covers the release platforms
+      # (Windows, macOS); install the distribution packages directly here,
+      # mirroring the .deb packaging job.
+    - name: Install dependencies
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          cmake ninja-build pkg-config build-essential \
+          qt6-base-dev qt6-svg-dev qt6-tools-dev qt6-tools-dev-tools qt6-l10n-tools libgl-dev \
+          libboost-dev libssl-dev \
+          libprotobuf-dev protobuf-compiler libprotoc-dev \
+          libcap-dev libxi-dev libpoco-dev \
+          libasound2-dev libogg-dev libsndfile1-dev libopus-dev \
+          libspeechd-dev libavahi-compat-libdnssd-dev
 
     - name: Create build dir
       run: cmake -E make_directory ${{runner.workspace}}/build
