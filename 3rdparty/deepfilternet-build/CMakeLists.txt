@@ -45,3 +45,14 @@ corrosion_import_crate(
 # The resulting static library links into the (potentially shared) Mumble client,
 # so make sure it is position independent.
 corrosion_add_target_local_rustflags(mumble_deepfilter "-Crelocation-model=pic")
+
+if(WIN32)
+	# A Rust static library carries no record of the native libraries its crate graph
+	# needs, so every consumer has to link them itself. The client gets away without
+	# doing so only because Qt and OpenSSL happen to pull the same system libraries in;
+	# anything linking this library on its own (the tests) fails on, for instance,
+	# BCryptGenRandom from the getrandom crate.
+	set_property(TARGET mumble_deepfilter APPEND PROPERTY
+		INTERFACE_LINK_LIBRARIES advapi32 bcrypt dbghelp ntdll userenv ws2_32
+	)
+endif()
