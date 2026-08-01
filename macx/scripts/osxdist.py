@@ -291,15 +291,35 @@ class DiskImage(FolderObject):
 		print(' * Creating diskimage. Please wait...')
 		if os.path.exists(self.filename):
 			os.remove(self.filename)
-		# The image size is deliberately left for hdiutil to compute from the source
-		# folder: a fixed size silently breaks as soon as the bundle outgrows it.
+
+		# Size the image from the payload rather than hardcoding a value that the bundle
+		# eventually outgrows, but do not leave the decision to hdiutil either: left to
+		# itself it has been observed to pick a size that the copy then runs out of,
+		# failing with "No space left on device" on a machine with plenty to spare.
+		# Half again the payload, and never less than 512 MB, covers the filesystem
+		# overhead comfortably. It costs nothing in the finished product, as the
+		# compressed image only stores the blocks that are actually used.
+		payload = 0
+		for root, _, files in os.walk(self.tmp):
+			for name in files:
+				path = os.path.join(root, name)
+				if not os.path.islink(path):
+					payload += os.path.getsize(path)
+		megabytes = max(512, int(payload / (1024 * 1024) * 1.5))
+		print(' * Payload is %d MB, creating a %d MB image' % (payload / (1024 * 1024), megabytes))
+
+		# Pin the filesystem as well: what hdiutil defaults to depends on the macOS
+		# version it runs on, and HFS+ is what a distribution image wants in any case.
 		p = Popen(['hdiutil', 'create',
 		           '-srcfolder', self.tmp,
 		           '-format', 'UDBZ',
+		           '-fs', 'HFS+',
 		           '-volname', self.volname,
+		           '-megabytes', str(megabytes),
 		           self.filename])
 		retval = p.wait()
-		assert retval == 0
+		if retval != 0:
+			raise Exception('hdiutil failed to create the disk image (exit code %d)' % retval)
 		print(' * Removing temporary directory.')
 		shutil.rmtree(self.tmp)
 		print(' * Done!')
