@@ -11,6 +11,8 @@
 #include "User.h"
 #include "Global.h"
 
+#include <QtCore/QTimer>
+
 #include <cstdint>
 #include <vector>
 
@@ -102,19 +104,7 @@ PulseAudioSystem::PulseAudioSystem() {
 	pam                  = m_pulseAudio.threaded_mainloop_new();
 	pa_mainloop_api *api = m_pulseAudio.threaded_mainloop_get_api(pam);
 
-	pa_proplist *proplist = m_pulseAudio.proplist_new();
-	m_pulseAudio.proplist_sets(proplist, PA_PROP_APPLICATION_NAME, "Mumble");
-	m_pulseAudio.proplist_sets(proplist, PA_PROP_APPLICATION_ID, "info.mumble.mumble");
-	m_pulseAudio.proplist_sets(proplist, PA_PROP_APPLICATION_ICON_NAME, "mumble");
-	m_pulseAudio.proplist_sets(proplist, PA_PROP_MEDIA_ROLE, "game");
-
-	pacContext = m_pulseAudio.context_new_with_proplist(api, nullptr, proplist);
-	m_pulseAudio.proplist_free(proplist);
-
-	m_pulseAudio.context_set_subscribe_callback(pacContext, subscribe_callback, this);
-
-	m_pulseAudio.context_set_state_callback(pacContext, context_state_callback, this);
-	m_pulseAudio.context_connect(pacContext, nullptr, PA_CONTEXT_NOAUTOSPAWN, nullptr);
+	createContext();
 
 	pade = api->defer_new(api, defer_event_callback, this);
 	api->defer_enable(pade, false);
@@ -147,6 +137,69 @@ PulseAudioSystem::~PulseAudioSystem() {
 	m_pulseAudio.context_disconnect(pacContext);
 	m_pulseAudio.context_unref(pacContext);
 	m_pulseAudio.threaded_mainloop_free(pam);
+}
+
+void PulseAudioSystem::createContext() {
+	pa_mainloop_api *api = m_pulseAudio.threaded_mainloop_get_api(pam);
+
+	pa_proplist *proplist = m_pulseAudio.proplist_new();
+	m_pulseAudio.proplist_sets(proplist, PA_PROP_APPLICATION_NAME, "Mumble");
+	m_pulseAudio.proplist_sets(proplist, PA_PROP_APPLICATION_ID, "info.mumble.mumble");
+	m_pulseAudio.proplist_sets(proplist, PA_PROP_APPLICATION_ICON_NAME, "mumble");
+	m_pulseAudio.proplist_sets(proplist, PA_PROP_MEDIA_ROLE, "game");
+
+	pacContext = m_pulseAudio.context_new_with_proplist(api, nullptr, proplist);
+	m_pulseAudio.proplist_free(proplist);
+
+	m_pulseAudio.context_set_subscribe_callback(pacContext, subscribe_callback, this);
+
+	m_pulseAudio.context_set_state_callback(pacContext, context_state_callback, this);
+	m_pulseAudio.context_connect(pacContext, nullptr, PA_CONTEXT_NOAUTOSPAWN, nullptr);
+}
+
+void PulseAudioSystem::scheduleReconnect() {
+	if (!bRunning) {
+		return;
+	}
+
+	// The delay paces the retries while the sound server is still gone; the
+	// timer fires on this object's (the main) thread and dies with it.
+	QTimer::singleShot(2000, this, &PulseAudioSystem::reconnectContext);
+}
+
+void PulseAudioSystem::reconnectContext() {
+	if (!bRunning) {
+		return;
+	}
+
+	qWarning("PulseAudio: Reconnecting to the sound server");
+
+	m_pulseAudio.threaded_mainloop_lock(pam);
+
+	// The old streams died with the context; drop them so the event callback
+	// recreates them once the new context is ready.
+	if (pasInput) {
+		m_pulseAudio.stream_unref(pasInput);
+		pasInput = nullptr;
+	}
+	if (pasOutput) {
+		m_pulseAudio.stream_unref(pasOutput);
+		pasOutput = nullptr;
+	}
+	if (pasSpeaker) {
+		m_pulseAudio.stream_unref(pasSpeaker);
+		pasSpeaker = nullptr;
+	}
+
+	if (pacContext) {
+		m_pulseAudio.context_disconnect(pacContext);
+		m_pulseAudio.context_unref(pacContext);
+		pacContext = nullptr;
+	}
+
+	createContext();
+
+	m_pulseAudio.threaded_mainloop_unlock(pam);
 }
 
 QString PulseAudioSystem::outputDevice() const {
@@ -191,6 +244,11 @@ void PulseAudioSystem::defer_event_callback(pa_mainloop_api *a, pa_defer_event *
 void PulseAudioSystem::eventCallback(pa_mainloop_api *api, pa_defer_event *) {
 	api->defer_enable(pade, false);
 
+	// Without a live context no stream can be created or torn down; a dead one
+	// is replaced by reconnectContext() and this runs again once it is ready.
+	if (!pacContext || m_pulseAudio.context_get_state(pacContext) != PA_CONTEXT_READY)
+		return;
+
 	if (!bSourceDone || !bSinkDone || !bServerDone)
 		return;
 
@@ -211,6 +269,14 @@ void PulseAudioSystem::eventCallback(pa_mainloop_api *api, pa_defer_event *) {
 			do_stop = true;
 		} else if (pao) {
 			switch (ost) {
+				case PA_STREAM_FAILED:
+					// The stream died (e.g. the device vanished); drop it and
+					// come back around to recreate it from scratch.
+					qWarning("PulseAudio: Output stream failed");
+					m_pulseAudio.stream_unref(pasOutput);
+					pasOutput = nullptr;
+					wakeup();
+					break;
 				case PA_STREAM_TERMINATED: {
 					if (pasOutput)
 						m_pulseAudio.stream_unref(pasOutput);
@@ -279,6 +345,12 @@ void PulseAudioSystem::eventCallback(pa_mainloop_api *api, pa_defer_event *) {
 			do_stop = true;
 		} else if (pai) {
 			switch (ist) {
+				case PA_STREAM_FAILED:
+					qWarning("PulseAudio: Input stream failed");
+					m_pulseAudio.stream_unref(pasInput);
+					pasInput = nullptr;
+					wakeup();
+					break;
 				case PA_STREAM_TERMINATED: {
 					if (pasInput)
 						m_pulseAudio.stream_unref(pasInput);
@@ -349,6 +421,12 @@ void PulseAudioSystem::eventCallback(pa_mainloop_api *api, pa_defer_event *) {
 			do_stop = true;
 		} else if (pai && Global::get().s.echoOption != EchoCancelOptionID::DISABLED) {
 			switch (est) {
+				case PA_STREAM_FAILED:
+					qWarning("PulseAudio: Echo stream failed");
+					m_pulseAudio.stream_unref(pasSpeaker);
+					pasSpeaker = nullptr;
+					wakeup();
+					break;
 				case PA_STREAM_TERMINATED: {
 					if (pasSpeaker)
 						m_pulseAudio.stream_unref(pasSpeaker);
@@ -939,9 +1017,11 @@ void PulseAudioSystem::contextCallback(pa_context *c) {
 		}
 		case PA_CONTEXT_TERMINATED:
 			qWarning("PulseAudio: Forcibly disconnected from PulseAudio");
+			scheduleReconnect();
 			break;
 		case PA_CONTEXT_FAILED:
 			qWarning("PulseAudio: Connection failure: %s", m_pulseAudio.strerror(m_pulseAudio.context_errno(c)));
+			scheduleReconnect();
 			break;
 		default:
 			// These are other status callbacks we don't care about. However we explicitly want to wait until

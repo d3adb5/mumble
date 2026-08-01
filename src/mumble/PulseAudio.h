@@ -173,6 +173,15 @@ protected:
 	void contextCallback(pa_context *c);
 	void eventCallback(pa_mainloop_api *a, pa_defer_event *e);
 
+	/// Creates and connects the context. The mainloop must not be running yet
+	/// or must be locked by the caller.
+	void createContext();
+	/// Replaces a dead context (sound server restart) with a fresh one.
+	void reconnectContext();
+	/// Schedules reconnectContext() on the main thread. Safe to call from the
+	/// mainloop thread.
+	void scheduleReconnect();
+
 	void query();
 
 	QString outputDevice() const;
