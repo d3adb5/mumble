@@ -471,6 +471,38 @@ void MainWindow::createActions() {
 	gsAdaptivePush->qsToolTip = tr("When using the push-to-talk transmission mode, this will act as the push-to-talk "
 								   "action. Otherwise, it will act as a push-to-mute action.",
 								   "Global Shortcut");
+
+	gsCycleInputDevice =
+		new GlobalShortcut(this, GlobalShortcutType::CycleInputDevice, tr("Cycle input device", "Global Shortcut"));
+	gsCycleInputDevice->setObjectName("gsCycleInputDevice");
+	gsCycleInputDevice->qsWhatsThis = tr("This will switch to the next available audio input device");
+
+	gsCycleOutputDevice =
+		new GlobalShortcut(this, GlobalShortcutType::CycleOutputDevice, tr("Cycle output device", "Global Shortcut"));
+	gsCycleOutputDevice->setObjectName("gsCycleOutputDevice");
+	gsCycleOutputDevice->qsWhatsThis = tr("This will switch to the next available audio output device");
+
+	gsToggleNoiseCancel = new GlobalShortcut(this, GlobalShortcutType::ToggleNoiseCancel,
+											 tr("Toggle noise suppression", "Global Shortcut"));
+	gsToggleNoiseCancel->setObjectName("gsToggleNoiseCancel");
+	gsToggleNoiseCancel->qsWhatsThis =
+		tr("This will toggle noise suppression between off and the configured method");
+
+	gsToggleEchoCancel = new GlobalShortcut(this, GlobalShortcutType::ToggleEchoCancel,
+											tr("Toggle echo cancellation", "Global Shortcut"));
+	gsToggleEchoCancel->setObjectName("gsToggleEchoCancel");
+	gsToggleEchoCancel->qsWhatsThis =
+		tr("This will toggle echo cancellation between off and the configured method");
+
+	gsCycleNoiseCancel = new GlobalShortcut(this, GlobalShortcutType::CycleNoiseCancel,
+											tr("Cycle noise suppression method", "Global Shortcut"));
+	gsCycleNoiseCancel->setObjectName("gsCycleNoiseCancel");
+	gsCycleNoiseCancel->qsWhatsThis = tr("This will switch to the next available noise-suppression method");
+
+	gsServerReconnect =
+		new GlobalShortcut(this, GlobalShortcutType::ServerReconnect, tr("Reconnect to server", "Global Shortcut"));
+	gsServerReconnect->setObjectName("gsServerReconnect");
+	gsServerReconnect->qsWhatsThis = tr("This will disconnect from and immediately reconnect to the current server");
 }
 
 void MainWindow::setupGui() {
@@ -1358,6 +1390,199 @@ void MainWindow::setEchoCancel(EchoCancelOptionID option) {
 	Audio::start();
 
 	populateEchoCancelComboBox();
+}
+
+void MainWindow::setOutputDevice(const QVariant &deviceChoice) {
+	if (!AudioOutputRegistrar::qmNew) {
+		return;
+	}
+	AudioOutputRegistrar *aor = AudioOutputRegistrar::qmNew->value(AudioOutputRegistrar::current);
+	if (!aor) {
+		return;
+	}
+
+	aor->setDeviceChoice(deviceChoice, Global::get().s);
+
+	Audio::stop();
+	Audio::start();
+}
+
+/// Returns the choice following the current one, wrapping around; invalid when
+/// there is nothing to switch to.
+static QVariant nextDeviceChoice(const QList< audioDevice > &choices, const QVariant &current, QString &name) {
+	if (choices.size() < 2) {
+		return QVariant();
+	}
+
+	int index = 0;
+	for (int i = 0; i < choices.size(); ++i) {
+		if (choices.at(i).second == current) {
+			index = (i + 1) % static_cast< int >(choices.size());
+			break;
+		}
+	}
+
+	name = choices.at(index).first;
+	return choices.at(index).second;
+}
+
+void MainWindow::cycleInputDevice() {
+	if (!AudioInputRegistrar::qmNew) {
+		return;
+	}
+	AudioInputRegistrar *air = AudioInputRegistrar::qmNew->value(AudioInputRegistrar::current);
+	if (!air) {
+		return;
+	}
+
+	QString name;
+	const QVariant next = nextDeviceChoice(air->getDeviceChoices(), air->getDeviceChoice(), name);
+	if (!next.isValid()) {
+		return;
+	}
+
+	setInputDevice(next);
+	Global::get().l->log(Log::Information, tr("Input device switched to %1").arg(name.toHtmlEscaped()));
+}
+
+void MainWindow::cycleOutputDevice() {
+	if (!AudioOutputRegistrar::qmNew) {
+		return;
+	}
+	AudioOutputRegistrar *aor = AudioOutputRegistrar::qmNew->value(AudioOutputRegistrar::current);
+	if (!aor) {
+		return;
+	}
+
+	QString name;
+	const QVariant next = nextDeviceChoice(aor->getDeviceChoices(), aor->getDeviceChoice(), name);
+	if (!next.isValid()) {
+		return;
+	}
+
+	setOutputDevice(next);
+	Global::get().l->log(Log::Information, tr("Output device switched to %1").arg(name.toHtmlEscaped()));
+}
+
+void MainWindow::toggleNoiseCancel() {
+	Settings &s = Global::get().s;
+
+	if (s.noiseCancelMode != Settings::NoiseCancelOff) {
+		s.noiseCancelRestoreMode = s.noiseCancelMode;
+		setNoiseCancel(Settings::NoiseCancelOff);
+		return;
+	}
+
+	Settings::NoiseCancel mode = s.noiseCancelRestoreMode;
+	// Fall back if the remembered method is off or not compiled in (the
+	// toolbar dropdown lists exactly the built ones).
+	if (mode == Settings::NoiseCancelOff || qcbNoiseCancel->findData(static_cast< int >(mode)) < 0) {
+#ifdef USE_RNNOISE
+		mode = Settings::NoiseCancelRNN;
+#else
+		mode = Settings::NoiseCancelSpeex;
+#endif
+	}
+
+	setNoiseCancel(mode);
+}
+
+void MainWindow::toggleEchoCancel() {
+	Settings &s = Global::get().s;
+
+	if (s.echoOption != EchoCancelOptionID::DISABLED) {
+		s.echoOptionRestore = s.echoOption;
+		setEchoCancel(EchoCancelOptionID::DISABLED);
+		Global::get().l->log(Log::Information, tr("Echo cancellation disabled"));
+		return;
+	}
+
+	if (!AudioInputRegistrar::qmNew) {
+		return;
+	}
+	AudioInputRegistrar *air = AudioInputRegistrar::qmNew->value(AudioInputRegistrar::current);
+	if (!air) {
+		return;
+	}
+
+	// See populateEchoCancelComboBox for why the running output system is used.
+	QString outputInterface = AudioOutputRegistrar::current;
+	if (outputInterface.isEmpty()) {
+		outputInterface = s.qsAudioOutput;
+	}
+
+	EchoCancelOptionID option = EchoCancelOptionID::DISABLED;
+	if (s.echoOptionRestore != EchoCancelOptionID::DISABLED && air->canEcho(s.echoOptionRestore, outputInterface)) {
+		option = s.echoOptionRestore;
+	} else {
+		for (EchoCancelOptionID candidate : air->echoOptions) {
+			if (air->canEcho(candidate, outputInterface)) {
+				option = candidate;
+				break;
+			}
+		}
+	}
+
+	if (option == EchoCancelOptionID::DISABLED) {
+		Global::get().l->log(Log::Warning,
+							 tr("Echo cancellation is not supported for the current audio backend combination"));
+		return;
+	}
+
+	setEchoCancel(option);
+	Global::get().l->log(Log::Information, tr("Echo cancellation enabled"));
+}
+
+void MainWindow::cycleNoiseCancel() {
+	const int count = qcbNoiseCancel->count();
+	if (count < 2) {
+		return;
+	}
+
+	// A missing entry yields -1, making the cycle start at the first method.
+	const int index = qcbNoiseCancel->findData(static_cast< int >(Global::get().s.noiseCancelMode));
+	const int next  = (index + 1) % count;
+
+	setNoiseCancel(static_cast< Settings::NoiseCancel >(qcbNoiseCancel->itemData(next).toInt()));
+}
+
+void MainWindow::reconnectToServer() {
+	ServerHandlerPtr sh = Global::get().sh;
+	if (!sh) {
+		return;
+	}
+
+	QString host, user, pw;
+	unsigned short port;
+	sh->getConnectionInfo(host, port, user, pw);
+	if (host.isEmpty()) {
+		// Never connected anywhere yet, so there is nothing to reconnect to.
+		return;
+	}
+
+	if (!sh->isRunning()) {
+		on_Reconnect_timeout();
+		return;
+	}
+
+	// The disconnect is intentional, so keep the disconnect notification quiet.
+	// on_Reconnect_timeout logs the reconnect once it starts.
+	if (!m_reconnectSoundBlocker) {
+		m_reconnectSoundBlocker = std::make_unique< NotificationSoundBlocker >(Log::MsgType::ServerDisconnected);
+	}
+
+	sh->disconnect();
+	startReconnectWhenReady();
+}
+
+void MainWindow::startReconnectWhenReady() {
+	if (Global::get().sh && Global::get().sh->isRunning()) {
+		// The old connection thread is still winding down; check again shortly.
+		QTimer::singleShot(50, this, &MainWindow::startReconnectWhenReady);
+		return;
+	}
+
+	on_Reconnect_timeout();
 }
 
 void MainWindow::on_qaSearch_triggered() {
@@ -3781,6 +4006,54 @@ void MainWindow::on_gsAdaptivePush_triggered(bool down, QVariant variant) {
 	} else {
 		on_PushToMute_triggered(down, std::move(variant));
 	}
+}
+
+void MainWindow::on_gsCycleInputDevice_triggered(bool down, QVariant) {
+	if (!down) {
+		return;
+	}
+
+	cycleInputDevice();
+}
+
+void MainWindow::on_gsCycleOutputDevice_triggered(bool down, QVariant) {
+	if (!down) {
+		return;
+	}
+
+	cycleOutputDevice();
+}
+
+void MainWindow::on_gsToggleNoiseCancel_triggered(bool down, QVariant) {
+	if (!down) {
+		return;
+	}
+
+	toggleNoiseCancel();
+}
+
+void MainWindow::on_gsToggleEchoCancel_triggered(bool down, QVariant) {
+	if (!down) {
+		return;
+	}
+
+	toggleEchoCancel();
+}
+
+void MainWindow::on_gsCycleNoiseCancel_triggered(bool down, QVariant) {
+	if (!down) {
+		return;
+	}
+
+	cycleNoiseCancel();
+}
+
+void MainWindow::on_gsServerReconnect_triggered(bool down, QVariant) {
+	if (!down) {
+		return;
+	}
+
+	reconnectToServer();
 }
 
 void MainWindow::whisperReleased(QVariant scdata) {

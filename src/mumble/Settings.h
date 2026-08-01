@@ -341,6 +341,8 @@ struct Settings {
 	/// in this mode.
 	bool bStereoInput               = false;
 	NoiseCancel noiseCancelMode     = NoiseCancelSpeex;
+	/// The method the "toggle noise suppression" action restores when re-enabling.
+	NoiseCancel noiseCancelRestoreMode = NoiseCancelSpeex;
 	int iSpeexNoiseCancelStrength   = -30;
 	/// Aggressiveness of the WebRTC noise suppressor (when noiseCancelMode is NoiseCancelWebRTC).
 	WebRTCNoiseLevel webrtcNoiseLevel = WebRTCNoiseHigh;
@@ -431,6 +433,9 @@ struct Settings {
 	bool bExclusiveInput          = false;
 	bool bExclusiveOutput         = false;
 	EchoCancelOptionID echoOption = EchoCancelOptionID::SPEEX_MIXED;
+	/// The option the "toggle echo cancellation" action restores when re-enabling;
+	/// DISABLED means "pick the first usable option".
+	EchoCancelOptionID echoOptionRestore = EchoCancelOptionID::DISABLED;
 	bool bPositionalAudio         = false;
 	bool bPositionalHeadphone     = false;
 	float fAudioMinDistance       = 1.0f;

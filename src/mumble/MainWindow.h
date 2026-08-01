@@ -118,6 +118,9 @@ public:
 	GlobalShortcut *gsMoveBack;
 	GlobalShortcut *gsCycleListenerAttenuationMode, *gsListenerAttenuationUp, *gsListenerAttenuationDown;
 	GlobalShortcut *gsAdaptivePush;
+	GlobalShortcut *gsCycleInputDevice, *gsCycleOutputDevice;
+	GlobalShortcut *gsToggleNoiseCancel, *gsToggleEchoCancel, *gsCycleNoiseCancel;
+	GlobalShortcut *gsServerReconnect;
 
 	DockTitleBar *dtbLogDockTitle, *dtbChatDockTitle;
 
@@ -383,6 +386,12 @@ public slots:
 	void on_gsListenerAttenuationUp_triggered(bool, QVariant);
 	void on_gsListenerAttenuationDown_triggered(bool, QVariant);
 	void on_gsAdaptivePush_triggered(bool, QVariant);
+	void on_gsCycleInputDevice_triggered(bool, QVariant);
+	void on_gsCycleOutputDevice_triggered(bool, QVariant);
+	void on_gsToggleNoiseCancel_triggered(bool, QVariant);
+	void on_gsToggleEchoCancel_triggered(bool, QVariant);
+	void on_gsCycleNoiseCancel_triggered(bool, QVariant);
+	void on_gsServerReconnect_triggered(bool, QVariant);
 
 	void on_Reconnect_timeout();
 	void on_qaTalkingUIToggle_triggered();
@@ -425,8 +434,24 @@ public slots:
 	void setNoiseCancel(Settings::NoiseCancel mode);
 	/// Selects the audio input device and restarts the audio streams to apply it.
 	void setInputDevice(const QVariant &deviceChoice);
+	/// Selects the audio output device and restarts the audio streams to apply it.
+	void setOutputDevice(const QVariant &deviceChoice);
 	/// Sets the echo-cancellation option and restarts the audio streams to apply it.
 	void setEchoCancel(EchoCancelOptionID option);
+	/// Switches to the next device the active input backend offers.
+	void cycleInputDevice();
+	/// Switches to the next device the active output backend offers.
+	void cycleOutputDevice();
+	/// Toggles noise suppression between off and the last used method.
+	void toggleNoiseCancel();
+	/// Toggles echo cancellation between off and the last used (or first usable) option.
+	void toggleEchoCancel();
+	/// Switches to the next available noise-suppression method.
+	void cycleNoiseCancel();
+	/// Disconnects from the current server and immediately reconnects to it.
+	void reconnectToServer();
+	/// Starts the reconnect as soon as the old connection thread has wound down.
+	void startReconnectWhenReady();
 	/// Sets the local user's mute state
 	///
 	/// @param mute Whether to mute the user

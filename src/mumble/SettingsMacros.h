@@ -55,6 +55,7 @@
 	PROCESS(audio, VAD_MIN_KEY, fVADmin)                                                    \
 	PROCESS(audio, VAD_MAX_KEY, fVADmax)                                                    \
 	PROCESS(audio, NOISE_CANCEL_MODE_KEY, noiseCancelMode)                                  \
+	PROCESS(audio, NOISE_CANCEL_RESTORE_MODE_KEY, noiseCancelRestoreMode)                   \
 	PROCESS(audio, SPEEX_NOISE_CANCEL_STRENGTH_KEY, iSpeexNoiseCancelStrength)              \
 	PROCESS(audio, WEBRTC_NOISE_LEVEL_KEY, webrtcNoiseLevel)                                \
 	PROCESS(audio, WEBRTC_GAIN_CONTROL_KEY, bWebRTCGainControl)                             \
@@ -70,6 +71,7 @@
 	PROCESS(audio, VOICE_HOLD_KEY, iVoiceHold)                                              \
 	PROCESS(audio, OUTPUT_DELAY_KEY, iOutputDelay)                                          \
 	PROCESS(audio, ECHO_CANCEL_MODE_KEY, echoOption)                                        \
+	PROCESS(audio, ECHO_CANCEL_RESTORE_MODE_KEY, echoOptionRestore)                         \
 	PROCESS(audio, EXCLUSIVE_INPUT_KEY, bExclusiveInput)                                    \
 	PROCESS(audio, EXCLUSIVE_OUTPUT_KEY, bExclusiveOutput)                                  \
 	PROCESS(audio, INPUT_SYSTEM_KEY, qsAudioInput)                                          \
