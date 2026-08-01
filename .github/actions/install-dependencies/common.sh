@@ -138,6 +138,10 @@ make_build_env_available() {
 			exit 1
 		fi
 
+		# Nothing reads the archive again, and the runners - the macOS ones in
+		# particular - do not have the disk space to keep it around for nothing.
+		rm -f "$env_archive"
+
 		# Only server builds invoke the slice compiler, and not every environment
 		# ships one, so make it executable if and only if it is there.
 		local slice2cpp="$env_dir/installed/$MUMBLE_VCPKG_TRIPLET/tools/Ice/slice2cpp"

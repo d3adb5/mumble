@@ -121,6 +121,24 @@ jobs:
       shell: bash
       run: ctest --output-on-failure -C $BUILD_TYPE
 
+      # The arm64 runners ship with little free disk, and a static build leaves several
+      # gigabytes of intermediates behind - enough that hdiutil is left with nowhere to
+      # build the image ("No space left on device"). Past this point nothing is needed
+      # but the app bundle and the plugins that go into it.
+    - if: ${{ startsWith(matrix.os, 'macos') }}
+      name: Free disk space
+      shell: bash
+      run: |
+        df -h /
+        du -sh build build_env 2> /dev/null || true
+
+        # The Rust target directory and the (statically linked, hence large) test
+        # binaries are the bulk of it; both have served their purpose by now.
+        rm -rf build/cargo build/tests
+        find build -name '*.o' -delete
+
+        df -h /
+
       # Turn the built .app into an installable disk image: the plugins and the icon are
       # copied into the bundle, its Info.plist gets the real version, and the result is
       # ad-hoc signed (Apple Silicon refuses to run binaries carrying no signature at
