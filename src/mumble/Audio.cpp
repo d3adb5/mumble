@@ -12,6 +12,7 @@
 #include "PluginManager.h"
 #include "Global.h"
 
+#include <QtCore/QCoreApplication>
 #include <QtCore/QObject>
 
 #include <cstring>
@@ -155,8 +156,20 @@ void Audio::stopOutput() {
 }
 
 AudioDeviceMonitor &AudioDeviceMonitor::instance() {
-	static AudioDeviceMonitor monitor;
-	return monitor;
+	// The first notification usually comes from a backend's own thread (the
+	// PulseAudio mainloop, the PipeWire registry monitor), which would leave the
+	// object living on an adopted thread that outlives it. Pin it to the main
+	// thread instead, and let it live for the process: destroying it from a
+	// thread other than its own is not allowed.
+	static AudioDeviceMonitor *monitor = []() {
+		auto *instance = new AudioDeviceMonitor();
+		if (QCoreApplication::instance()) {
+			instance->moveToThread(QCoreApplication::instance()->thread());
+		}
+		return instance;
+	}();
+
+	return *monitor;
 }
 
 void AudioDeviceMonitor::notifyChanged() {

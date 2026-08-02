@@ -88,11 +88,12 @@ protected:
 
 	// Registry monitor: a connection of its own that tracks the audio nodes
 	// coming and going, feeding the device dropdowns.
-	pw_loop *m_monitorLoop           = nullptr;
-	pw_thread_loop *m_monitorThread  = nullptr;
-	pw_context *m_monitorContext     = nullptr;
-	pw_core *m_monitorCore           = nullptr;
-	pw_registry *m_registry          = nullptr;
+	pw_loop *m_monitorLoop          = nullptr;
+	pw_thread_loop *m_monitorThread = nullptr;
+	pw_context *m_monitorContext    = nullptr;
+	pw_core *m_monitorCore          = nullptr;
+	pw_registry *m_registry         = nullptr;
+	bool m_monitorRunning           = false;
 	std::unique_ptr< spa_hook > m_registryListener;
 
 	/// Guards m_nodes: written by the monitor thread, read by the UI thread.

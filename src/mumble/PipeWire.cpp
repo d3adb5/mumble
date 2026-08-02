@@ -243,6 +243,7 @@ void PipeWireSystem::startMonitor() {
 	if (pw_thread_loop_start(m_monitorThread) != 0) {
 		return;
 	}
+	m_monitorRunning = true;
 
 	pw_thread_loop_lock(m_monitorThread);
 
@@ -264,8 +265,10 @@ void PipeWireSystem::startMonitor() {
 }
 
 void PipeWireSystem::stopMonitor() {
-	if (m_monitorThread) {
+	// Only a loop that was actually started may be stopped.
+	if (m_monitorRunning) {
 		pw_thread_loop_stop(m_monitorThread);
+		m_monitorRunning = false;
 	}
 
 	if (m_registry) {
