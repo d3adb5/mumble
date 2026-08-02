@@ -988,10 +988,11 @@ void MainWindow::populateInputDeviceComboBox() {
 			const auto model =
 				Mumble::AudioDeviceSelection::buildComboModel(air->getDeviceChoices(), air->getDeviceChoice());
 			for (int i = 0; i < model.entries.size(); ++i) {
-				const auto &entry   = model.entries.at(i);
-				const QString label = entry.unavailable ? tr("%1 (unavailable)").arg(entry.label) : entry.label;
-				qcbInputDevice->addItem(label, entry.value);
-				qcbInputDevice->setItemData(i, label.toHtmlEscaped(), Qt::ToolTipRole);
+				const auto &entry = model.entries.at(i);
+				// Not named "label": Ui_MainWindow has a member of that name.
+				const QString entryLabel = entry.unavailable ? tr("%1 (unavailable)").arg(entry.label) : entry.label;
+				qcbInputDevice->addItem(entryLabel, entry.value);
+				qcbInputDevice->setItemData(i, entryLabel.toHtmlEscaped(), Qt::ToolTipRole);
 			}
 			if (model.currentIndex >= 0) {
 				qcbInputDevice->setCurrentIndex(model.currentIndex);
