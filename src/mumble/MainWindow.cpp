@@ -1601,6 +1601,11 @@ void MainWindow::startReconnectWhenReady() {
 		return;
 	}
 
+	// The clean disconnect left the action disabled; re-enable it so an attempt
+	// against an unreachable server can still be aborted (the automatic
+	// reconnect path does the same before arming its timer).
+	qaServerDisconnect->setEnabled(true);
+
 	on_Reconnect_timeout();
 }
 
