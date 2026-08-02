@@ -216,8 +216,13 @@ void AudioWizard::on_qcbInput_activated(int) {
 	AudioInputRegistrar *air = AudioInputRegistrar::qmNew->value(qcbInput->currentText());
 	QList< audioDevice > ql  = air->getDeviceChoices();
 
+	const QVariant current = air->getDeviceChoice();
 	for (const audioDevice &d : ql) {
 		qcbInputDevice->addItem(d.first, d.second);
+		// Show the device actually in use rather than the first of the list.
+		if (d.second == current) {
+			qcbInputDevice->setCurrentIndex(qcbInputDevice->count() - 1);
+		}
 	}
 
 	qcbInputDevice->setEnabled(ql.count() > 1);
@@ -255,8 +260,13 @@ void AudioWizard::on_qcbOutput_activated(int) {
 	AudioOutputRegistrar *aor = AudioOutputRegistrar::qmNew->value(qcbOutput->currentText());
 	QList< audioDevice > ql   = aor->getDeviceChoices();
 
+	const QVariant current = aor->getDeviceChoice();
 	for (const audioDevice &d : ql) {
 		qcbOutputDevice->addItem(d.first, d.second);
+		// Show the device actually in use rather than the first of the list.
+		if (d.second == current) {
+			qcbOutputDevice->setCurrentIndex(qcbOutputDevice->count() - 1);
+		}
 	}
 
 	qcbAttenuateOthers->setEnabled(aor->canMuteOthers());
