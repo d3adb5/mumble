@@ -162,9 +162,13 @@ void PulseAudioSystem::scheduleReconnect() {
 		return;
 	}
 
-	// The delay paces the retries while the sound server is still gone; the
-	// timer fires on this object's (the main) thread and dies with it.
-	QTimer::singleShot(2000, this, &PulseAudioSystem::reconnectContext);
+	// Called from the PulseAudio mainloop thread, which has no Qt event
+	// dispatcher: a timer armed there would never fire. Hop to this object's
+	// thread (the main one) first, and only arm the timer there. The delay
+	// paces the retries while the sound server is still gone.
+	QMetaObject::invokeMethod(
+		this, [this]() { QTimer::singleShot(2000, this, &PulseAudioSystem::reconnectContext); },
+		Qt::QueuedConnection);
 }
 
 void PulseAudioSystem::reconnectContext() {
