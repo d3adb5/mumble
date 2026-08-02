@@ -314,16 +314,17 @@ jobs:
       with:
           path: artifacts
 
-      # The two .deb artifacts contain identically named packages (the distribution is
-      # not part of CPack's file name), so they are renamed after their artifact's
-      # label. Debug symbols (.pdb) stay available through the build artifacts and are
-      # left out of the release itself.
+      # Only the installable packages are published: the Windows artifact also carries
+      # the raw binaries (mumble.exe, the overlay helpers) and the debug symbols, which
+      # stay available through the build artifacts. The two .deb artifacts contain
+      # identically named packages (the distribution is not part of CPack's file name),
+      # so they are renamed after their artifact's label.
     - name: Collect release files
       shell: bash
       run: |
         mkdir release
         find artifacts -name '*.dmg' -exec cp {} release/ \;
-        find artifacts \( -name 'mumble*.msi' -o -name 'mumble*.exe' \) -exec cp {} release/ \;
+        find artifacts \( -name 'mumble_client-*.msi' -o -name 'mumble_client-*.exe' \) -exec cp {} release/ \;
         for deb in artifacts/Mumble-ubuntu-*-deb/*.deb; do
           label="$(basename "$(dirname "$deb")")"
           label="${label#Mumble-}"; label="${label%-deb}"
