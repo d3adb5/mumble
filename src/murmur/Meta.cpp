@@ -127,6 +127,8 @@ MetaParams::MetaParams() {
 
 	rollingStatsWindow = 300;
 
+	udpStaleTimeout = 15;
+
 	qsSettings = nullptr;
 }
 
@@ -345,6 +347,8 @@ void MetaParams::read(QString fname) {
 	allowRecording = typeCheckedFromSettings("allowRecording", allowRecording);
 
 	rollingStatsWindow = typeCheckedFromSettings("rollingStatsWindow", rollingStatsWindow);
+
+	udpStaleTimeout = typeCheckedFromSettings("udpStaleTimeout", udpStaleTimeout);
 
 	iOpusThreshold = typeCheckedFromSettings("opusthreshold", iOpusThreshold);
 

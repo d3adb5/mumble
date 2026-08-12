@@ -2088,28 +2088,35 @@ void Server::msgPing(ServerUser *uSource, MumbleProto::Ping &msg) {
 
 	MSG_SETUP_NO_UNIDLE(ServerUser::Authenticated);
 
-	QMutexLocker l(&uSource->qmCrypt);
+	{
+		QMutexLocker l(&uSource->qmCrypt);
 
-	uSource->csCrypt->m_statsRemote.good   = msg.good();
-	uSource->csCrypt->m_statsRemote.late   = msg.late();
-	uSource->csCrypt->m_statsRemote.lost   = msg.lost();
-	uSource->csCrypt->m_statsRemote.resync = msg.resync();
+		uSource->csCrypt->m_statsRemote.good   = msg.good();
+		uSource->csCrypt->m_statsRemote.late   = msg.late();
+		uSource->csCrypt->m_statsRemote.lost   = msg.lost();
+		uSource->csCrypt->m_statsRemote.resync = msg.resync();
 
-	uSource->dUDPPingAvg  = msg.udp_ping_avg();
-	uSource->dUDPPingVar  = msg.udp_ping_var();
-	uSource->uiUDPPackets = msg.udp_packets();
-	uSource->dTCPPingAvg  = msg.tcp_ping_avg();
-	uSource->dTCPPingVar  = msg.tcp_ping_var();
-	uSource->uiTCPPackets = msg.tcp_packets();
+		uSource->dUDPPingAvg  = msg.udp_ping_avg();
+		uSource->dUDPPingVar  = msg.udp_ping_var();
+		uSource->uiUDPPackets = msg.udp_packets();
+		uSource->dTCPPingAvg  = msg.tcp_ping_avg();
+		uSource->dTCPPingVar  = msg.tcp_ping_var();
+		uSource->uiTCPPackets = msg.tcp_packets();
 
-	quint64 ts = msg.timestamp();
+		quint64 ts = msg.timestamp();
 
-	msg.Clear();
-	msg.set_timestamp(ts);
-	msg.set_good(uSource->csCrypt->m_statsLocal.good);
-	msg.set_late(uSource->csCrypt->m_statsLocal.late);
-	msg.set_lost(uSource->csCrypt->m_statsLocal.lost);
-	msg.set_resync(uSource->csCrypt->m_statsLocal.resync);
+		msg.Clear();
+		msg.set_timestamp(ts);
+		msg.set_good(uSource->csCrypt->m_statsLocal.good);
+		msg.set_late(uSource->csCrypt->m_statsLocal.late);
+		msg.set_lost(uSource->csCrypt->m_statsLocal.lost);
+		msg.set_resync(uSource->csCrypt->m_statsLocal.resync);
+	}
+
+	// A ping is the one thing every client sends on a fixed schedule, so it is also our
+	// cue to check whether their UDP path is still carrying anything. Must run outside the
+	// crypt lock above: updateUdpStaleness takes it itself, and QMutex is not recursive.
+	updateUdpStaleness(uSource);
 
 	sendMessage(uSource, msg);
 }

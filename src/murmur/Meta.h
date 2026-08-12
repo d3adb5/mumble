@@ -161,6 +161,11 @@ public:
 	/// The number of seconds to keep rolling stats for per client
 	unsigned int rollingStatsWindow;
 
+	/// The number of seconds without a valid UDP packet from a client after which the server
+	/// stops sending that client's audio over UDP and tunnels it through TCP instead. Set to
+	/// 0 to disable the check and keep the pre-existing behaviour.
+	unsigned int udpStaleTimeout;
+
 	/// qsAbsSettingsFilePath is the absolute path to
 	/// the murmur.ini used by this Meta instance.
 	QString qsAbsSettingsFilePath;

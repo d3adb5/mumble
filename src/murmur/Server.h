@@ -143,6 +143,7 @@ public:
 	bool bAllowPing;
 	bool allowRecording;
 	unsigned int rollingStatsWindow;
+	unsigned int udpStaleTimeout;
 
 	QRegularExpression qrUserName;
 	QRegularExpression qrChannelName;
@@ -335,6 +336,22 @@ public:
 	bool validateUserName(const QString &name);
 
 	bool checkDecrypt(ServerUser *u, const unsigned char *encrypted, unsigned char *plain, unsigned int cryptlen);
+
+	/// Associates a user with the UDP source address their packets are currently arriving
+	/// from, replacing any previous association. Caller must hold qrwlVoiceThread for
+	/// writing.
+#ifdef Q_OS_UNIX
+	void setUdpPeer(ServerUser *u, const struct sockaddr_storage &from, int sock);
+#else
+	void setUdpPeer(ServerUser *u, const struct sockaddr_storage &from, SOCKET sock);
+#endif
+	/// Drops every UDP address association held for the given user. Caller must hold
+	/// qrwlVoiceThread for writing.
+	void removeUdpPeer(ServerUser *u);
+	/// Demotes a user to TCP tunnelling once their UDP path has been quiet for longer than
+	/// udpStaleTimeout, and promotes them back when it recovers. Called from the main
+	/// thread whenever that user pings.
+	void updateUdpStaleness(ServerUser *u);
 
 	bool hasPermission(ServerUser *p, Channel *c, QFlags< ChanACL::Perm > perm);
 	QFlags< ChanACL::Perm > effectivePermissions(ServerUser *p, Channel *c);

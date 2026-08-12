@@ -131,6 +131,17 @@ public:
 	/// UDP.
 	QAtomicInt aiUdpFlag;
 
+	/// Holds whether aiUdpFlag was cleared by the
+	/// server itself, because no valid UDP packet
+	/// arrived from this user for udpStaleTimeout
+	/// seconds, rather than at the client's own
+	/// request.
+	///
+	/// Only a server-initiated demotion is undone
+	/// automatically once UDP recovers; a client
+	/// that asked for tunnelling keeps it.
+	QAtomicInt aiUdpStaleDemotion;
+
 	QList< int > qlCodecs;
 	bool bOpus;
 

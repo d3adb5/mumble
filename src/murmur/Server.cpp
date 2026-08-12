@@ -360,6 +360,7 @@ void Server::readParams() {
 	bAllowPing                         = Meta::mp->bAllowPing;
 	allowRecording                     = Meta::mp->allowRecording;
 	rollingStatsWindow                 = Meta::mp->rollingStatsWindow;
+	udpStaleTimeout                    = Meta::mp->udpStaleTimeout;
 	bCertRequired                      = Meta::mp->bCertRequired;
 	bForceExternalAuth                 = Meta::mp->bForceExternalAuth;
 	qrUserName                         = Meta::mp->qrUserName;
@@ -459,6 +460,7 @@ void Server::readParams() {
 	m_dbWrapper.getConfigurationTo(iServerNum, "suggestpositional", m_suggestPositional);
 	m_dbWrapper.getConfigurationTo(iServerNum, "suggestpushtotalk", m_suggestPushToTalk);
 	m_dbWrapper.getConfigurationTo(iServerNum, "rollingStatsWindow", rollingStatsWindow);
+	m_dbWrapper.getConfigurationTo(iServerNum, "udpStaleTimeout", udpStaleTimeout);
 
 	m_dbWrapper.getConfigurationTo(iServerNum, "opusthreshold", iOpusThreshold);
 
@@ -600,6 +602,8 @@ void Server::setLiveConf(const QString &key, const QString &value) {
 		allowRecording = !v.isNull() ? QVariant(v).toBool() : Meta::mp->allowRecording;
 	else if (key == "rollingStatsWindow")
 		rollingStatsWindow = i ? static_cast< unsigned int >(i) : Meta::mp->rollingStatsWindow;
+	else if (key == "udpStaleTimeout")
+		udpStaleTimeout = !v.isNull() ? static_cast< unsigned int >(i) : Meta::mp->udpStaleTimeout;
 	else if (key == "username")
 		qrUserName = !v.isNull() ? QRegularExpression(v) : Meta::mp->qrUserName;
 	else if (key == "channelname")
@@ -971,11 +975,8 @@ void Server::run() {
 							rl.unlock();
 							qrwlVoiceThread.lockForWrite();
 							if (qhUsers.contains(uiSession)) {
-								u             = usr;
-								u->sUdpSocket = sock;
-								memcpy(&u->saiUdpAddress, &from, sizeof(from));
-								qhHostUsers[from].remove(u);
-								qhPeerUsers.insert(key, u);
+								u = usr;
+								setUdpPeer(u, from, sock);
 							}
 							qrwlVoiceThread.unlock();
 							rl.relock();
@@ -1003,7 +1004,11 @@ void Server::run() {
 							}
 
 							if (ok) {
-								u->aiUdpFlag = 1;
+								// The client is actively speaking UDP at us, so it clearly wants UDP.
+								// That also retires any demotion we made on its behalf while its UDP
+								// path was quiet.
+								u->aiUdpFlag          = 1;
+								u->aiUdpStaleDemotion = 0;
 
 								// Add session id
 								audioData.senderSession = u->uiSession;
@@ -1041,6 +1046,103 @@ void Server::run() {
 		CloseHandle(events[i]);
 	}
 #endif
+}
+
+namespace {
+/// Builds the (host, port) key under which a UDP source address is tracked in qhPeerUsers.
+QPair< HostAddress, quint16 > udpPeerKey(const struct sockaddr_storage &addr) {
+	const quint16 port = (addr.ss_family == AF_INET6)
+							 ? reinterpret_cast< const struct sockaddr_in6 * >(&addr)->sin6_port
+							 : reinterpret_cast< const struct sockaddr_in * >(&addr)->sin_port;
+
+	return QPair< HostAddress, quint16 >(HostAddress(addr), port);
+}
+} // namespace
+
+#ifdef Q_OS_UNIX
+void Server::setUdpPeer(ServerUser *u, const struct sockaddr_storage &from, int sock) {
+#else
+void Server::setUdpPeer(ServerUser *u, const struct sockaddr_storage &from, SOCKET sock) {
+#endif
+	// Forget the address we previously knew this user by, so a stale (host, port) pair can
+	// never keep resolving to them.
+	if (u->sUdpSocket != INVALID_SOCKET) {
+		const QPair< HostAddress, quint16 > oldKey = udpPeerKey(u->saiUdpAddress);
+		if (qhPeerUsers.value(oldKey) == u) {
+			qhPeerUsers.remove(oldKey);
+		}
+	}
+
+	u->sUdpSocket = sock;
+	memcpy(&u->saiUdpAddress, &from, sizeof(from));
+
+	qhPeerUsers.insert(udpPeerKey(from), u);
+
+	// Deliberately keep the user resolvable by host address alone, for the whole session.
+	// Consumer and carrier NAT re-bind UDP mappings far more aggressively than TCP ones, so
+	// the source port is expected to change mid-session; the host bucket is the only thing
+	// that lets us find the user again when it does. Dropping them from it here — which is
+	// what this code used to do — made the very first re-bind fatal for the rest of the
+	// session, since the bucket is otherwise only ever filled at authentication time.
+	qhHostUsers[HostAddress(from)].insert(u);
+}
+
+void Server::removeUdpPeer(ServerUser *u) {
+	QSet< ServerUser * > &tcpBucket = qhHostUsers[u->haAddress];
+	tcpBucket.remove(u);
+	if (tcpBucket.isEmpty()) {
+		qhHostUsers.remove(u->haAddress);
+	}
+
+	if (u->sUdpSocket == INVALID_SOCKET) {
+		return;
+	}
+
+	const HostAddress udpHost = HostAddress(u->saiUdpAddress);
+
+	QSet< ServerUser * > &udpBucket = qhHostUsers[udpHost];
+	udpBucket.remove(u);
+	if (udpBucket.isEmpty()) {
+		qhHostUsers.remove(udpHost);
+	}
+
+	const QPair< HostAddress, quint16 > key = udpPeerKey(u->saiUdpAddress);
+	if (qhPeerUsers.value(key) == u) {
+		qhPeerUsers.remove(key);
+	}
+}
+
+void Server::updateUdpStaleness(ServerUser *u) {
+	if (udpStaleTimeout == 0 || u->sUdpSocket == INVALID_SOCKET) {
+		// Either the check is disabled, or we have never heard UDP from this user in the
+		// first place — in which case we aren't sending them any either.
+		return;
+	}
+
+	bool stale;
+	{
+		QMutexLocker l(&u->qmCrypt);
+		stale = u->csCrypt->tLastGood.elapsed() > std::chrono::seconds(udpStaleTimeout);
+	}
+
+	if (stale) {
+		// Their UDP path has gone quiet. Clients ping over UDP every few seconds, so this
+		// means their packets are no longer reaching us — and ours are almost certainly no
+		// longer reaching them either, typically because a NAT mapping expired or moved.
+		// Tunnel their audio over the TCP connection, which demonstrably still works, until
+		// UDP comes back. Without this the server keeps sending to a dead address forever,
+		// because only the client can otherwise clear aiUdpFlag.
+		if (u->aiUdpFlag.loadRelaxed() == 1) {
+			u->aiUdpFlag          = 0;
+			u->aiUdpStaleDemotion = 1;
+			log(u, QString::fromLatin1("No valid UDP packet for %1s, tunnelling audio over TCP")
+					   .arg(udpStaleTimeout));
+		}
+	} else if (u->aiUdpStaleDemotion.loadRelaxed() == 1) {
+		u->aiUdpStaleDemotion = 0;
+		u->aiUdpFlag          = 1;
+		log(u, QString::fromLatin1("UDP packets are arriving again, resuming UDP audio"));
+	}
 }
 
 bool Server::checkDecrypt(ServerUser *u, const unsigned char *encrypt, unsigned char *plain, unsigned int len) {
@@ -1683,13 +1785,7 @@ void Server::connectionClosed(QAbstractSocket::SocketError err, const QString &r
 		QWriteLocker wl(&qrwlVoiceThread);
 
 		qhUsers.remove(u->uiSession);
-		qhHostUsers[u->haAddress].remove(u);
-
-		quint16 port = (u->saiUdpAddress.ss_family == AF_INET6)
-						   ? (reinterpret_cast< sockaddr_in6 * >(&u->saiUdpAddress)->sin6_port)
-						   : (reinterpret_cast< sockaddr_in * >(&u->saiUdpAddress)->sin_port);
-		const QPair< HostAddress, quint16 > &key = QPair< HostAddress, quint16 >(u->haAddress, port);
-		qhPeerUsers.remove(key);
+		removeUdpPeer(u);
 
 		if (old)
 			old->removeUser(u);
@@ -1734,7 +1830,11 @@ void Server::message(Mumble::Protocol::TCPMessageType type, const QByteArray &qb
 
 		QReadLocker rl(&qrwlVoiceThread);
 
-		u->aiUdpFlag = 0;
+		// The client asked for tunnelling explicitly. Record that, so a later UDP recovery
+		// does not silently override the client's own choice — only demotions we made on
+		// its behalf are undone automatically.
+		u->aiUdpFlag          = 0;
+		u->aiUdpStaleDemotion = 0;
 
 		m_tcpTunnelDecoder.setProtocolVersion(u->m_version);
 
