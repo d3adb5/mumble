@@ -144,6 +144,7 @@ public:
 	bool allowRecording;
 	unsigned int rollingStatsWindow;
 	unsigned int udpStaleTimeout;
+	bool udpRehomeAcrossHosts;
 
 	QRegularExpression qrUserName;
 	QRegularExpression qrChannelName;
@@ -348,6 +349,14 @@ public:
 	/// Drops every UDP address association held for the given user. Caller must hold
 	/// qrwlVoiceThread for writing.
 	void removeUdpPeer(ServerUser *u);
+	/// Tries to attribute a datagram from an entirely unknown address to a user whose UDP flow
+	/// has gone quiet, by authenticating it against their session key. Voice thread only; the
+	/// caller must hold qrwlVoiceThread for reading.
+	ServerUser *resolveOrphanUdpPacket(const unsigned char *encrypt, unsigned char *plain, unsigned int len);
+
+	/// Token bucket limiting how often the orphan path above may run. Voice thread only.
+	Timer m_orphanBucketRefill;
+	unsigned int m_orphanBucketTokens = 0;
 	/// Demotes a user to TCP tunnelling once their UDP path has been quiet for longer than
 	/// udpStaleTimeout, and promotes them back when it recovers. Called from the main
 	/// thread whenever that user pings.

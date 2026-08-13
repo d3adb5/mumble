@@ -901,6 +901,18 @@ void ServerHandler::message(Mumble::Protocol::TCPMessageType type, const QByteAr
 			accTCP(static_cast< double >(static_cast< std::uint64_t >(tTimestamp.elapsed().count()) - msg.timestamp())
 				   / 1000.0);
 
+			// A server that implements it tells us outright how long since it last decrypted UDP
+			// from us, which beats inferring it from counter deltas: authoritative, and with no
+			// detection latency. Servers that do not set it fall back to the inference in
+			// updateVoiceLink(), which is why that stays.
+			if (msg.has_udp_recv_age_ms()) {
+				const auto age = std::chrono::milliseconds(msg.udp_recv_age_ms());
+				const auto now = std::chrono::duration_cast< std::chrono::milliseconds >(tTimestamp.elapsed());
+				if (age < now) {
+					m_lastUdpAcknowledged = std::max(m_lastUdpAcknowledged, now - age);
+				}
+			}
+
 			updateVoiceLink(connection);
 		}
 	} else {

@@ -361,6 +361,7 @@ void Server::readParams() {
 	allowRecording                     = Meta::mp->allowRecording;
 	rollingStatsWindow                 = Meta::mp->rollingStatsWindow;
 	udpStaleTimeout                    = Meta::mp->udpStaleTimeout;
+	udpRehomeAcrossHosts               = Meta::mp->udpRehomeAcrossHosts;
 	bCertRequired                      = Meta::mp->bCertRequired;
 	bForceExternalAuth                 = Meta::mp->bForceExternalAuth;
 	qrUserName                         = Meta::mp->qrUserName;
@@ -461,6 +462,7 @@ void Server::readParams() {
 	m_dbWrapper.getConfigurationTo(iServerNum, "suggestpushtotalk", m_suggestPushToTalk);
 	m_dbWrapper.getConfigurationTo(iServerNum, "rollingStatsWindow", rollingStatsWindow);
 	m_dbWrapper.getConfigurationTo(iServerNum, "udpStaleTimeout", udpStaleTimeout);
+	m_dbWrapper.getConfigurationTo(iServerNum, "udpRehomeAcrossHosts", udpRehomeAcrossHosts);
 
 	m_dbWrapper.getConfigurationTo(iServerNum, "opusthreshold", iOpusThreshold);
 
@@ -604,6 +606,8 @@ void Server::setLiveConf(const QString &key, const QString &value) {
 		rollingStatsWindow = i ? static_cast< unsigned int >(i) : Meta::mp->rollingStatsWindow;
 	else if (key == "udpStaleTimeout")
 		udpStaleTimeout = !v.isNull() ? static_cast< unsigned int >(i) : Meta::mp->udpStaleTimeout;
+	else if (key == "udpRehomeAcrossHosts")
+		udpRehomeAcrossHosts = !v.isNull() ? QVariant(v).toBool() : Meta::mp->udpRehomeAcrossHosts;
 	else if (key == "username")
 		qrUserName = !v.isNull() ? QRegularExpression(v) : Meta::mp->qrUserName;
 	else if (key == "channelname")
@@ -985,6 +989,26 @@ void Server::run() {
 							break;
 						}
 					}
+					if (!u && udpRehomeAcrossHosts) {
+						// The address is not merely a new port on a known host, it is entirely
+						// unknown. That is a client whose egress IP moved - a dual-stack flip, a
+						// CGNAT reassignment, a VPN coming up. Try to place it against the users
+						// we have stopped hearing from.
+						ServerUser *usr = resolveOrphanUdpPacket(encrypt, buffer, static_cast< unsigned int >(len));
+						if (usr) {
+							unsigned int uiSession = usr->uiSession;
+							rl.unlock();
+							qrwlVoiceThread.lockForWrite();
+							if (qhUsers.contains(uiSession)) {
+								u = usr;
+								setUdpPeer(u, from, sock);
+							}
+							qrwlVoiceThread.unlock();
+							rl.relock();
+							if (u && !qhUsers.contains(uiSession))
+								u = nullptr;
+						}
+					}
 					if (!u) {
 						continue;
 					}
@@ -1141,6 +1165,58 @@ void Server::logUdpMigrations(ServerUser *u) {
 			   .arg(address)
 			   .arg(port)
 			   .arg(migrations));
+}
+
+ServerUser *Server::resolveOrphanUdpPacket(const unsigned char *encrypt, unsigned char *plain,
+										   unsigned int len) {
+	// How many session keys we are willing to try per packet, and how many packets per second may
+	// reach this path at all. Both exist because attribution here costs a decryption attempt for
+	// every candidate, and the packets that get here are by definition unattributable - so
+	// without a ceiling they would be a free way to spend the voice thread's time.
+	constexpr unsigned int MAX_CANDIDATES     = 8;
+	constexpr unsigned int BUCKET_CAPACITY    = 16;
+	constexpr unsigned int BUCKET_REFILL_RATE = 8; // per second
+
+	if (m_orphanBucketRefill.elapsed() >= std::chrono::seconds(1)) {
+		const auto seconds = static_cast< unsigned int >(
+			std::chrono::duration_cast< std::chrono::seconds >(m_orphanBucketRefill.elapsed()).count());
+		m_orphanBucketTokens = std::min(BUCKET_CAPACITY, m_orphanBucketTokens + seconds * BUCKET_REFILL_RATE);
+		m_orphanBucketRefill.restart();
+	}
+	if (m_orphanBucketTokens == 0) {
+		return nullptr;
+	}
+	m_orphanBucketTokens--;
+
+	// Only users whose UDP flow has actually gone quiet are candidates. Anyone still being heard
+	// from is, by definition, not the sender of a packet we cannot place.
+	const std::chrono::seconds quiet(udpStaleTimeout > 0 ? udpStaleTimeout : 15);
+	unsigned int tried = 0;
+
+	for (ServerUser *usr : qhUsers) {
+		if (tried >= MAX_CANDIDATES) {
+			break;
+		}
+		if (usr->sState != ServerUser::Authenticated || usr->sUdpSocket == INVALID_SOCKET) {
+			continue;
+		}
+		{
+			QMutexLocker l(&usr->qmCrypt);
+			if (!usr->csCrypt->isValid() || usr->csCrypt->tLastGood.elapsed() < quiet) {
+				continue;
+			}
+		}
+
+		tried++;
+		// A successful decrypt authenticates the packet under that user's session key, so this
+		// is proof of identity rather than a guess - the same property that makes re-homing safe
+		// at all.
+		if (checkDecrypt(usr, encrypt, plain, len)) {
+			return usr;
+		}
+	}
+
+	return nullptr;
 }
 
 void Server::updateUdpStaleness(ServerUser *u) {

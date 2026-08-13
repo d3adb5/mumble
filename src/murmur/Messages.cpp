@@ -2119,6 +2119,19 @@ void Server::msgPing(ServerUser *uSource, MumbleProto::Ping &msg) {
 	updateUdpStaleness(uSource);
 	logUdpMigrations(uSource);
 
+	// Tell the client what we actually see, so it does not have to work it out from the
+	// deltas of cumulative counters. Old clients ignore the fields; old servers never set
+	// them, which is why clients must keep the inference as their fallback.
+	{
+		QMutexLocker l(&uSource->qmCrypt);
+		if (uSource->csCrypt->m_statsLocal.good > 0) {
+			msg.set_udp_recv_age_ms(static_cast< unsigned int >(
+				std::chrono::duration_cast< std::chrono::milliseconds >(uSource->csCrypt->tLastGood.elapsed())
+					.count()));
+		}
+	}
+	msg.set_server_using_udp(uSource->aiUdpFlag.loadRelaxed() == 1);
+
 	sendMessage(uSource, msg);
 }
 

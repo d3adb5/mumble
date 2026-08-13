@@ -166,6 +166,12 @@ public:
 	/// 0 to disable the check and keep the pre-existing behaviour.
 	unsigned int udpStaleTimeout;
 
+	/// Whether to let a client's UDP flow move to a different host address mid-session, not just
+	/// to a different port on the same one. Off by default: it is safe, since a packet has to
+	/// authenticate under the client's own session key to be accepted, but it puts a bounded
+	/// try-decrypt loop in the path of otherwise unattributable datagrams.
+	bool udpRehomeAcrossHosts;
+
 	/// qsAbsSettingsFilePath is the absolute path to
 	/// the murmur.ini used by this Meta instance.
 	QString qsAbsSettingsFilePath;

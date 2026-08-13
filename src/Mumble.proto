@@ -71,6 +71,14 @@ message Ping {
 	optional float tcp_ping_avg = 10;
 	// TCP ping variance.
 	optional float tcp_ping_var = 11;
+	// Server -> client only. Milliseconds since the server last successfully decrypted a
+	// UDP packet from this client. Absent if it has never received one, or if the server
+	// does not implement this. Lets a client tell "my UDP is not arriving" from "the
+	// server has nothing to say" without inferring it from counter arithmetic.
+	optional uint32 udp_recv_age_ms = 12;
+	// Server -> client only. Whether the server is currently sending this client's audio
+	// over UDP rather than tunnelling it through the TCP connection.
+	optional bool server_using_udp = 13;
 }
 
 // Sent by the server when it rejects the user connection.

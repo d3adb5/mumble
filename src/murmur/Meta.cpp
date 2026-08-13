@@ -129,6 +129,8 @@ MetaParams::MetaParams() {
 
 	udpStaleTimeout = 15;
 
+	udpRehomeAcrossHosts = false;
+
 	qsSettings = nullptr;
 }
 
@@ -349,6 +351,8 @@ void MetaParams::read(QString fname) {
 	rollingStatsWindow = typeCheckedFromSettings("rollingStatsWindow", rollingStatsWindow);
 
 	udpStaleTimeout = typeCheckedFromSettings("udpStaleTimeout", udpStaleTimeout);
+
+	udpRehomeAcrossHosts = typeCheckedFromSettings("udpRehomeAcrossHosts", udpRehomeAcrossHosts);
 
 	iOpusThreshold = typeCheckedFromSettings("opusthreshold", iOpusThreshold);
 
