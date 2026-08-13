@@ -2117,6 +2117,7 @@ void Server::msgPing(ServerUser *uSource, MumbleProto::Ping &msg) {
 	// cue to check whether their UDP path is still carrying anything. Must run outside the
 	// crypt lock above: updateUdpStaleness takes it itself, and QMutex is not recursive.
 	updateUdpStaleness(uSource);
+	logUdpMigrations(uSource);
 
 	sendMessage(uSource, msg);
 }

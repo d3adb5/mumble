@@ -142,6 +142,16 @@ public:
 	/// that asked for tunnelling keeps it.
 	QAtomicInt aiUdpStaleDemotion;
 
+	/// Counts how many times this user's UDP source address has moved
+	/// mid-session. Incremented by the voice thread; the main thread
+	/// logs the change on the next ping, since logging writes to the
+	/// database and must not happen under the voice thread's lock.
+	QAtomicInt aiUdpMigrations;
+
+	/// The migration count the main thread has already reported.
+	/// Main thread only.
+	int iLoggedUdpMigrations;
+
 	QList< int > qlCodecs;
 	bool bOpus;
 

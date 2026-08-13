@@ -351,7 +351,10 @@ public:
 	/// Demotes a user to TCP tunnelling once their UDP path has been quiet for longer than
 	/// udpStaleTimeout, and promotes them back when it recovers. Called from the main
 	/// thread whenever that user pings.
-	void updateUdpStaleness(ServerUser *u);
+/// Reports any UDP address migrations the voice thread recorded for this user. Called
+	/// from the main thread, because logging writes to the database.
+	void logUdpMigrations(ServerUser *u);
+		void updateUdpStaleness(ServerUser *u);
 
 	bool hasPermission(ServerUser *p, Channel *c, QFlags< ChanACL::Perm > perm);
 	QFlags< ChanACL::Perm > effectivePermissions(ServerUser *p, Channel *c);

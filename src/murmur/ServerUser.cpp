@@ -31,6 +31,8 @@ ServerUser::ServerUser(Server *p, QSslSocket *socket)
 
 	aiUdpFlag            = 1;
 	aiUdpStaleDemotion   = 0;
+	aiUdpMigrations      = 0;
+	iLoggedUdpMigrations = 0;
 	m_version            = Version::UNKNOWN;
 	bVerified            = true;
 	iLastPermissionCheck = -1;

@@ -1071,6 +1071,12 @@ void Server::setUdpPeer(ServerUser *u, const struct sockaddr_storage &from, SOCK
 		if (qhPeerUsers.value(oldKey) == u) {
 			qhPeerUsers.remove(oldKey);
 		}
+		if (oldKey != udpPeerKey(from)) {
+			// The address moved mid-session, which is worth knowing about: it is the event this
+			// whole code path exists to survive. Only count it here - logging writes to the
+			// database, and this runs on the voice thread under a write lock.
+			u->aiUdpMigrations.fetchAndAddRelaxed(1);
+		}
 	}
 
 	u->sUdpSocket = sock;
@@ -1110,6 +1116,31 @@ void Server::removeUdpPeer(ServerUser *u) {
 	if (qhPeerUsers.value(key) == u) {
 		qhPeerUsers.remove(key);
 	}
+}
+
+void Server::logUdpMigrations(ServerUser *u) {
+	const int migrations = u->aiUdpMigrations.loadRelaxed();
+	if (migrations == u->iLoggedUdpMigrations) {
+		return;
+	}
+	u->iLoggedUdpMigrations = migrations;
+
+	QString address;
+	quint16 port;
+	{
+		// saiUdpAddress belongs to the voice thread.
+		QReadLocker rl(&qrwlVoiceThread);
+		address = HostAddress(u->saiUdpAddress).toString();
+		port    = qFromBigEndian< quint16 >(
+            static_cast< quint16 >((u->saiUdpAddress.ss_family == AF_INET6)
+									   ? reinterpret_cast< sockaddr_in6 * >(&u->saiUdpAddress)->sin6_port
+									   : reinterpret_cast< sockaddr_in * >(&u->saiUdpAddress)->sin_port));
+	}
+
+	log(u, QString::fromLatin1("UDP source address moved to %1:%2 (%3 so far this session)")
+			   .arg(address)
+			   .arg(port)
+			   .arg(migrations));
 }
 
 void Server::updateUdpStaleness(ServerUser *u) {
