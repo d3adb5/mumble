@@ -20,6 +20,7 @@
 #endif
 
 #include <QtCore/QEvent>
+#include <chrono>
 #include <QtCore/QMutex>
 #include <QtCore/QObject>
 #include <QtCore/QStringList>
@@ -111,6 +112,36 @@ protected:
 	QMutex qmUdp;
 
 	void handleVoicePacket(const Mumble::Protocol::AudioData &audioData);
+
+	/// Which transport is currently carrying voice, and whether we are still trying to get UDP
+	/// back. Mirrors Humla's VoiceLinkState so both clients behave the same way.
+	enum class VoiceLinkState { UDP, Probing, Tunnel };
+
+	VoiceLinkState m_voiceLinkState = VoiceLinkState::UDP;
+	/// Last time we decrypted a UDP datagram from the server, ping or audio.
+	std::chrono::milliseconds m_lastUdpReceived{ 0 };
+	/// Last time the server reported having received more UDP from us.
+	std::chrono::milliseconds m_lastUdpAcknowledged{ 0 };
+	unsigned int m_prevLocalGood     = 0;
+	unsigned int m_prevRemoteGood    = 0;
+	int m_udpRecoveryStreak          = 0;
+	int m_udpRebindCount             = 0;
+	std::chrono::milliseconds m_udpProbeDeadline{ 0 };
+	std::chrono::milliseconds m_tunnellingSince{ 0 };
+	bool m_lastResortApplied         = false;
+
+	/// Re-evaluates whether the UDP path is still carrying traffic, from the change in the
+	/// crypt counters since the previous ping rather than their absolute values.
+	void updateVoiceLink(const ConnectionPtr &connection);
+	/// Switches voice between the UDP socket and the TCP tunnel, telling the server about it.
+	void setUdpMode(bool useUdp, const QString &warning);
+	/// Re-opens the UDP socket, giving us a new source port. Returns false when re-binding is
+	/// disabled or the attempts are spent.
+	bool beginUdpProbe(std::chrono::milliseconds now);
+	/// Throws the UDP socket away and opens a replacement.
+	bool rebindUdpSocket();
+	/// Binds a freshly constructed UDP socket and wires it up. Caller holds qmUdp.
+	bool bindUdpSocket();
 
 public:
 	Timer tTimestamp;

@@ -1008,6 +1008,12 @@ void Settings::legacyLoad(const QString &path) {
 	LOAD(iPingIntervalMsec, "net/pingintervalmsec");
 	LOAD(iConnectionTimeoutDurationMsec, "net/connectiontimeoutdurationmsec");
 	LOAD(bUdpForceTcpAddr, "net/udpforcetcpaddr");
+	LOAD(bVoiceLinkWatchdog, "net/voicelinkwatchdog");
+	LOAD(iVoiceLinkDeadWindowMsec, "net/voicelinkdeadwindowmsec");
+	LOAD(bVoiceLinkRebind, "net/voicelinkrebind");
+	LOAD(iVoiceLinkRebindAttempts, "net/voicelinkrebindattempts");
+	LOAD(bVoiceLinkReconnect, "net/voicelinkreconnect");
+	LOAD(iVoiceLinkReconnectDelayMsec, "net/voicelinkreconnectdelaymsec");
 
 	// Network settings - SSL
 	LOAD(qsSslCiphers, "net/sslciphers");

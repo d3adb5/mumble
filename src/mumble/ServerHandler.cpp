@@ -278,6 +278,11 @@ void ServerHandler::udpReady() {
 			continue;
 		}
 
+			// Anything that decrypted is proof the downstream UDP path is alive right now. The ping
+		// reply in particular keeps working when nobody is talking, which makes it the cleanest
+		// liveness signal we have - it used to be measured for latency and then discarded.
+		m_lastUdpReceived = std::chrono::duration_cast< std::chrono::milliseconds >(tTimestamp.elapsed());
+
 		if (m_udpDecoder.decode(buffer.subspan(0, buflen - 4))) {
 			switch (m_udpDecoder.getMessageType()) {
 				case Mumble::Protocol::UDPMessageType::Ping: {
@@ -474,7 +479,15 @@ void ServerHandler::run() {
 			QObject::connect(connection.get(), &Connection::message, this, &ServerHandler::message);
 			QObject::connect(connection.get(), &Connection::handleSslErrors, this, &ServerHandler::setSslErrors);
 		}
-		bUdp = false;
+		bUdp                  = false;
+		m_voiceLinkState      = VoiceLinkState::UDP;
+		m_lastUdpReceived     = std::chrono::milliseconds(0);
+		m_lastUdpAcknowledged = std::chrono::milliseconds(0);
+		m_prevLocalGood       = 0;
+		m_prevRemoteGood      = 0;
+		m_udpRecoveryStreak   = 0;
+		m_udpRebindCount      = 0;
+		m_lastResortApplied   = false;
 
 #if QT_VERSION >= QT_VERSION_CHECK(6, 3, 0)
 		qtsSock->setProtocol(QSsl::TlsV1_2OrLater);
@@ -656,6 +669,206 @@ void ServerHandler::sendPingInternal() {
 	iInFlightTCPPings += 1;
 }
 
+bool ServerHandler::bindUdpSocket() {
+	qusUdp = new QUdpSocket(this);
+	if (!qusUdp) {
+		qFatal("ServerHandler: qusUdp is unexpectedly a null addr");
+	}
+	if (Global::get().s.bUdpForceTcpAddr) {
+		qusUdp->bind(qhaLocal, 0);
+	} else {
+		if (qhaRemote.protocol() == QAbstractSocket::IPv6Protocol) {
+			qusUdp->bind(QHostAddress(QHostAddress::AnyIPv6), 0);
+		} else {
+			qusUdp->bind(QHostAddress(QHostAddress::Any), 0);
+		}
+	}
+
+	QObject::connect(qusUdp, &QUdpSocket::readyRead, this, &ServerHandler::udpReady);
+
+	if (Global::get().s.bQoS) {
+#if defined(Q_OS_UNIX)
+		int val = 0xe0;
+		if (setsockopt(static_cast< int >(qusUdp->socketDescriptor()), IPPROTO_IP, IP_TOS, &val, sizeof(val))) {
+			val = 0x80;
+			if (setsockopt(static_cast< int >(qusUdp->socketDescriptor()), IPPROTO_IP, IP_TOS, &val, sizeof(val)))
+				qWarning("ServerHandler: Failed to set TOS for UDP Socket");
+		}
+#	if defined(SO_PRIORITY)
+		socklen_t optlen = sizeof(val);
+		if (getsockopt(static_cast< int >(qusUdp->socketDescriptor()), SOL_SOCKET, SO_PRIORITY, &val, &optlen)
+			== 0) {
+			if (val == 0) {
+				val = 6;
+				setsockopt(static_cast< int >(qusUdp->socketDescriptor()), SOL_SOCKET, SO_PRIORITY, &val,
+						   sizeof(val));
+			}
+		}
+#	endif
+#elif defined(Q_OS_WIN)
+		if (hQoS) {
+			struct sockaddr_in addr;
+			memset(&addr, 0, sizeof(addr));
+			addr.sin_family      = AF_INET;
+			addr.sin_port        = htons(usPort);
+			addr.sin_addr.s_addr = htonl(qhaRemote.toIPv4Address());
+
+			dwFlowUDP = 0;
+			if (!QOSAddSocketToFlow(hQoS, qusUdp->socketDescriptor(), reinterpret_cast< sockaddr * >(&addr),
+									QOSTrafficTypeVoice, QOS_NON_ADAPTIVE_FLOW,
+									reinterpret_cast< PQOS_FLOWID >(&dwFlowUDP)))
+				qWarning("ServerHandler: Failed to add UDP to QOS");
+		}
+#endif
+	}
+
+	return qusUdp->state() == QAbstractSocket::BoundState;
+}
+
+void ServerHandler::updateVoiceLink(const ConnectionPtr &connection) {
+	const std::chrono::milliseconds now = std::chrono::duration_cast< std::chrono::milliseconds >(
+		tTimestamp.elapsed());
+
+	const unsigned int localGood  = connection->csCrypt->m_statsLocal.good;
+	const unsigned int remoteGood = connection->csCrypt->m_statsRemote.good;
+
+	// The server counted more good packets from us than last time, so our UDP is getting
+	// through. This used to be a test for zero on counters that are cumulative for the whole
+	// session, which could only ever detect "UDP never worked at all": a single successful
+	// packet at connect time pinned them for good, so a path that worked and then died was
+	// invisible. The switch-back test had the same flaw in reverse.
+	if (remoteGood > m_prevRemoteGood) {
+		m_lastUdpAcknowledged = now;
+	}
+	if (localGood > m_prevLocalGood) {
+		m_lastUdpReceived = now;
+	}
+	m_prevRemoteGood = remoteGood;
+	m_prevLocalGood  = localGood;
+
+	if (NetworkConfig::TcpModeEnabled() || !Global::get().s.bVoiceLinkWatchdog) {
+		return;
+	}
+
+	const std::chrono::milliseconds deadWindow(Global::get().s.iVoiceLinkDeadWindowMsec);
+	const bool canSend    = (now - m_lastUdpAcknowledged) <= deadWindow;
+	const bool canReceive = (now - m_lastUdpReceived) <= deadWindow;
+
+	if (canSend && canReceive) {
+		// Require a few consecutive healthy samples before trusting the path again, so a single
+		// stray packet cannot start a flap between transports.
+		if (m_voiceLinkState != VoiceLinkState::UDP && ++m_udpRecoveryStreak >= 2) {
+			m_udpRebindCount   = 0;
+			m_lastResortApplied = false;
+			m_voiceLinkState   = VoiceLinkState::UDP;
+			setUdpMode(true,
+					   tr("UDP packets can be sent to and received from the server. Switching back to UDP mode."));
+			database->setUdp(qbaDigest, true);
+		}
+		return;
+	}
+
+	m_udpRecoveryStreak = 0;
+
+	switch (m_voiceLinkState) {
+		case VoiceLinkState::UDP: {
+			QString warning;
+			if (!canSend && !canReceive) {
+				warning = tr("UDP packets cannot be sent to or received from the server. Switching to TCP mode.");
+			} else if (!canSend) {
+				warning = tr("UDP packets cannot be sent to the server. Switching to TCP mode.");
+			} else {
+				warning = tr("UDP packets cannot be received from the server. Switching to TCP mode.");
+			}
+			// Tunnel first so voice keeps working, then start trying to get UDP back.
+			setUdpMode(false, warning);
+			database->setUdp(qbaDigest, false);
+			if (!beginUdpProbe(now)) {
+				m_tunnellingSince = now;
+				m_voiceLinkState  = VoiceLinkState::Tunnel;
+			}
+			break;
+		}
+		case VoiceLinkState::Probing:
+			if (now >= m_udpProbeDeadline && !beginUdpProbe(now)) {
+				m_tunnellingSince = now;
+				m_voiceLinkState  = VoiceLinkState::Tunnel;
+			}
+			break;
+		case VoiceLinkState::Tunnel:
+			// Staying tunnelled keeps voice working at the cost of latency; reconnecting
+			// negotiates a path from scratch, which is the one thing that reliably works. Which
+			// of those is preferable is the user's call, so it is a setting.
+			if (!m_lastResortApplied && Global::get().s.bVoiceLinkReconnect
+				&& (now - m_tunnellingSince)
+					   >= std::chrono::milliseconds(Global::get().s.iVoiceLinkReconnectDelayMsec)) {
+				m_lastResortApplied = true;
+				Global::get().mw->msgBox(tr("Could not restore the UDP voice connection. Reconnecting."));
+				serverConnectionClosed(QAbstractSocket::UnknownSocketError,
+									   tr("Could not restore the UDP voice connection"));
+			}
+			break;
+	}
+}
+
+void ServerHandler::setUdpMode(bool useUdp, const QString &warning) {
+	if (bUdp == useUdp) {
+		return;
+	}
+	bUdp = useUdp;
+
+	if (!useUdp) {
+		// Announcing the switch matters as much as making it. The server only learns that a
+		// client wants tunnelling when it receives a UDPTunnel message, which otherwise happens
+		// only when that client next transmits - so someone who is listening rather than
+		// talking would keep having their incoming audio sent over the path we just gave up on.
+		MumbleProto::UDPTunnel mput;
+		mput.set_packet(std::string(3, '\0'));
+		sendMessage(mput);
+	}
+
+	if (!NetworkConfig::TcpModeEnabled() && !warning.isEmpty()) {
+		Global::get().mw->msgBox(warning);
+	}
+}
+
+bool ServerHandler::beginUdpProbe(std::chrono::milliseconds now) {
+	if (!Global::get().s.bVoiceLinkRebind || m_udpRebindCount >= Global::get().s.iVoiceLinkRebindAttempts) {
+		return false;
+	}
+
+	m_udpRebindCount++;
+	if (!rebindUdpSocket()) {
+		return false;
+	}
+
+	// Whatever we knew about the old socket says nothing about the new one, so make the path
+	// look dead until traffic actually arrives on it. Otherwise a re-bind performed while the
+	// timestamps were still fresh would report success on the next ping without anything having
+	// been proven.
+	const std::chrono::milliseconds deadWindow(Global::get().s.iVoiceLinkDeadWindowMsec);
+	m_lastUdpReceived     = now - deadWindow - std::chrono::milliseconds(1);
+	m_lastUdpAcknowledged = m_lastUdpReceived;
+	m_udpProbeDeadline    = now + std::max(deadWindow / 2, std::chrono::milliseconds(3000));
+	m_voiceLinkState      = VoiceLinkState::Probing;
+	qWarning("ServerHandler: re-binding the UDP socket (attempt %d of %d)", m_udpRebindCount,
+			 Global::get().s.iVoiceLinkRebindAttempts);
+	return true;
+}
+
+bool ServerHandler::rebindUdpSocket() {
+	QMutexLocker qml(&qmUdp);
+
+	if (qusUdp) {
+		QObject::disconnect(qusUdp, nullptr, this, nullptr);
+		qusUdp->close();
+		qusUdp->deleteLater();
+		qusUdp = nullptr;
+	}
+
+	return bindUdpSocket();
+}
+
 void ServerHandler::message(Mumble::Protocol::TCPMessageType type, const QByteArray &qbaMsg) {
 	const char *ptr = qbaMsg.constData();
 	if (type == Mumble::Protocol::TCPMessageType::UDPTunnel) {
@@ -688,32 +901,7 @@ void ServerHandler::message(Mumble::Protocol::TCPMessageType type, const QByteAr
 			accTCP(static_cast< double >(static_cast< std::uint64_t >(tTimestamp.elapsed().count()) - msg.timestamp())
 				   / 1000.0);
 
-			if (((connection->csCrypt->m_statsRemote.good == 0) || (connection->csCrypt->m_statsLocal.good == 0))
-				&& bUdp && (tTimestamp.elapsed() > std::chrono::seconds(20))) {
-				bUdp = false;
-				if (!NetworkConfig::TcpModeEnabled()) {
-					if ((connection->csCrypt->m_statsRemote.good == 0) && (connection->csCrypt->m_statsLocal.good == 0))
-						Global::get().mw->msgBox(
-							tr("UDP packets cannot be sent to or received from the server. Switching to TCP mode."));
-					else if (connection->csCrypt->m_statsRemote.good == 0)
-						Global::get().mw->msgBox(
-							tr("UDP packets cannot be sent to the server. Switching to TCP mode."));
-					else
-						Global::get().mw->msgBox(
-							tr("UDP packets cannot be received from the server. Switching to TCP mode."));
-
-					database->setUdp(qbaDigest, false);
-				}
-			} else if (!bUdp && (connection->csCrypt->m_statsRemote.good > 3)
-					   && (connection->csCrypt->m_statsLocal.good > 3)) {
-				bUdp = true;
-				if (!NetworkConfig::TcpModeEnabled()) {
-					Global::get().mw->msgBox(
-						tr("UDP packets can be sent to and received from the server. Switching back to UDP mode."));
-
-					database->setUdp(qbaDigest, true);
-				}
-			}
+			updateVoiceLink(connection);
 		}
 	} else {
 		ServerHandlerMessageEvent *shme = new ServerHandlerMessageEvent(qbaMsg, type, false);
@@ -858,57 +1046,7 @@ void ServerHandler::serverConnectionConnected() {
 			qFatal("ServerHandler: qhaLocal is unexpectedly a null addr");
 		}
 
-		qusUdp = new QUdpSocket(this);
-		if (!qusUdp) {
-			qFatal("ServerHandler: qusUdp is unexpectedly a null addr");
-		}
-		if (Global::get().s.bUdpForceTcpAddr) {
-			qusUdp->bind(qhaLocal, 0);
-		} else {
-			if (qhaRemote.protocol() == QAbstractSocket::IPv6Protocol) {
-				qusUdp->bind(QHostAddress(QHostAddress::AnyIPv6), 0);
-			} else {
-				qusUdp->bind(QHostAddress(QHostAddress::Any), 0);
-			}
-		}
-
-		QObject::connect(qusUdp, &QUdpSocket::readyRead, this, &ServerHandler::udpReady);
-
-		if (Global::get().s.bQoS) {
-#if defined(Q_OS_UNIX)
-			int val = 0xe0;
-			if (setsockopt(static_cast< int >(qusUdp->socketDescriptor()), IPPROTO_IP, IP_TOS, &val, sizeof(val))) {
-				val = 0x80;
-				if (setsockopt(static_cast< int >(qusUdp->socketDescriptor()), IPPROTO_IP, IP_TOS, &val, sizeof(val)))
-					qWarning("ServerHandler: Failed to set TOS for UDP Socket");
-			}
-#	if defined(SO_PRIORITY)
-			socklen_t optlen = sizeof(val);
-			if (getsockopt(static_cast< int >(qusUdp->socketDescriptor()), SOL_SOCKET, SO_PRIORITY, &val, &optlen)
-				== 0) {
-				if (val == 0) {
-					val = 6;
-					setsockopt(static_cast< int >(qusUdp->socketDescriptor()), SOL_SOCKET, SO_PRIORITY, &val,
-							   sizeof(val));
-				}
-			}
-#	endif
-#elif defined(Q_OS_WIN)
-			if (hQoS) {
-				struct sockaddr_in addr;
-				memset(&addr, 0, sizeof(addr));
-				addr.sin_family      = AF_INET;
-				addr.sin_port        = htons(usPort);
-				addr.sin_addr.s_addr = htonl(qhaRemote.toIPv4Address());
-
-				dwFlowUDP = 0;
-				if (!QOSAddSocketToFlow(hQoS, qusUdp->socketDescriptor(), reinterpret_cast< sockaddr * >(&addr),
-										QOSTrafficTypeVoice, QOS_NON_ADAPTIVE_FLOW,
-										reinterpret_cast< PQOS_FLOWID >(&dwFlowUDP)))
-					qWarning("ServerHandler: Failed to add UDP to QOS");
-			}
-#endif
-		}
+		bindUdpSocket();
 	}
 
 	emit connected();

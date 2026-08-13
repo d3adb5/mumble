@@ -604,6 +604,42 @@ struct Settings {
 	/// disabled.
 	int iMaxInFlightTCPPings = 4;
 
+	/// Whether to watch the UDP voice path and fall back to
+	/// tunnelling over TCP when it stops carrying traffic.
+	/// Disabling this restores the historical behaviour, in
+	/// which a UDP path that worked and then died was never
+	/// detected at all.
+	bool bVoiceLinkWatchdog = true;
+
+	/// How long the UDP path may carry nothing before it is
+	/// treated as dead, in milliseconds. Both ends exchange a
+	/// UDP ping every iPingIntervalMsec, so a healthy path
+	/// produces traffic well inside this window regardless of
+	/// whether anyone is speaking.
+	int iVoiceLinkDeadWindowMsec = 12000;
+
+	/// Whether to re-bind the local UDP socket when the path
+	/// dies. A fresh socket means a fresh source port, which is
+	/// what makes a NAT hand out a new mapping - usually the
+	/// actual cause of the failure.
+	bool bVoiceLinkRebind = true;
+
+	/// How many times to re-bind before settling for the TCP
+	/// tunnel.
+	int iVoiceLinkRebindAttempts = 3;
+
+	/// Whether to reconnect when UDP could not be recovered,
+	/// rather than staying on the TCP tunnel. Off by default:
+	/// the tunnel keeps voice working, and dropping a desktop
+	/// session to chase lower latency is the more disruptive
+	/// choice. Mumla defaults the other way, where the
+	/// underlying network moves far more often.
+	bool bVoiceLinkReconnect = false;
+
+	/// How long to stay tunnelled before applying
+	/// bVoiceLinkReconnect, in milliseconds.
+	int iVoiceLinkReconnectDelayMsec = 60000;
+
 	/// The service prefix that the WebFetch class will use
 	/// when it constructs its fully-qualified URL. If this
 	/// is empty, no prefix is used.

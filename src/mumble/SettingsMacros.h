@@ -119,6 +119,13 @@
 	PROCESS(network, PING_INTERVAL_KEY, iPingIntervalMsec)                     \
 	PROCESS(network, CONNECTION_TIMEOUT_KEY, iConnectionTimeoutDurationMsec)   \
 	PROCESS(network, FORCE_UDP_BIND_TO_TCP_ADDRESS_KEY, bUdpForceTcpAddr)      \
+	PROCESS(network, VOICE_LINK_WATCHDOG_KEY, bVoiceLinkWatchdog)             \
+	PROCESS(network, VOICE_LINK_DEAD_WINDOW_KEY, iVoiceLinkDeadWindowMsec)     \
+	PROCESS(network, VOICE_LINK_REBIND_KEY, bVoiceLinkRebind)                  \
+	PROCESS(network, VOICE_LINK_REBIND_ATTEMPTS_KEY, iVoiceLinkRebindAttempts) \
+	PROCESS(network, VOICE_LINK_RECONNECT_KEY, bVoiceLinkReconnect)            \
+	PROCESS(network, VOICE_LINK_RECONNECT_DELAY_KEY,                           \
+			iVoiceLinkReconnectDelayMsec)                                      \
 	PROCESS(network, SSL_CIPHERS_KEY, qsSslCiphers)
 
 

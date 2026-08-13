@@ -132,6 +132,12 @@ const SettingsKey MAX_IN_FLIGHT_TCP_PINGS_KEY       = { "max_in_flight_tcp_pings
 const SettingsKey PING_INTERVAL_KEY                 = { "ping_interval" };
 const SettingsKey CONNECTION_TIMEOUT_KEY            = { "connection_timeout" };
 const SettingsKey FORCE_UDP_BIND_TO_TCP_ADDRESS_KEY = { "force_udp_bind_to_tcp_address" };
+const SettingsKey VOICE_LINK_WATCHDOG_KEY           = { "voice_link_watchdog" };
+const SettingsKey VOICE_LINK_DEAD_WINDOW_KEY        = { "voice_link_dead_window" };
+const SettingsKey VOICE_LINK_REBIND_KEY             = { "voice_link_rebind" };
+const SettingsKey VOICE_LINK_REBIND_ATTEMPTS_KEY    = { "voice_link_rebind_attempts" };
+const SettingsKey VOICE_LINK_RECONNECT_KEY          = { "voice_link_reconnect" };
+const SettingsKey VOICE_LINK_RECONNECT_DELAY_KEY    = { "voice_link_reconnect_delay" };
 const SettingsKey SSL_CIPHERS_KEY                   = { "ssl_ciphers" };
 
 // ASIO
