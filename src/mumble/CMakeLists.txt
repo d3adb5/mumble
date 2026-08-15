@@ -707,9 +707,6 @@ else()
 		find_library(LIB_APPKIT "AppKit")
 		find_library(LIB_APPLICATIONSERVICES "ApplicationServices")
 		find_library(LIB_CARBON "Carbon")
-		find_library(LIB_SCRIPTINGBRIDGE "ScriptingBridge")
-		find_library(LIB_SECURITY "Security")
-		find_library(LIB_XAR "xar")
 
 		target_sources(mumble_client_object_lib
 			PRIVATE
@@ -733,9 +730,6 @@ else()
 				${LIB_APPKIT}
 				${LIB_APPLICATIONSERVICES}
 				${LIB_CARBON}
-				${LIB_SCRIPTINGBRIDGE}
-				${LIB_SECURITY}
-				${LIB_XAR}
 		)
 	endif()
 endif()
@@ -866,6 +860,9 @@ elseif(WIN32)
 	endif()
 elseif(APPLE)
 	target_sources(mumble_client_object_lib PRIVATE "TextToSpeech_macx.mm")
+	target_link_libraries(mumble_client_object_lib
+		PUBLIC "-framework AVFoundation"
+	)
 else()
 	target_sources(mumble_client_object_lib PRIVATE "TextToSpeech_unix.cpp")
 
@@ -936,6 +933,10 @@ elseif(bundle-qt-translations)
 endif()
 
 if(overlay)
+	if (APPLE)
+		message(FATAL_ERROR "The overlay on macOS has been removed - you have to disable it via -Doverlay=OFF")
+	endif()
+
 	target_sources(mumble_client_object_lib
 		PRIVATE
 			"Overlay.cpp"
@@ -971,13 +972,9 @@ if(overlay)
 
 		add_dependencies(mumble overlay)
 	else()
-		if(APPLE)
-			target_sources(mumble_client_object_lib PRIVATE "Overlay_macx.mm")
-		else()
-			target_sources(mumble_client_object_lib PRIVATE "Overlay_unix.cpp")
-		endif()
+		target_sources(mumble_client_object_lib PRIVATE "Overlay_unix.cpp")
 
-                if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "arm|aarch64")
+		if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "arm|aarch64")
 			add_dependencies(mumble overlay_gl)
 		endif()
 	endif()
@@ -1202,7 +1199,6 @@ if(${CMAKE_VERSION} VERSION_GREATER_EQUAL "3.16.0")
 			"GlobalShortcut_macx.mm"
 			"os_macx.mm"
 			"TextToSpeech_macx.mm"
-			"Overlay_macx.mm"
 			"CoreAudio.mm"
 			"TouchBar_macx.mm"
 			PROPERTIES

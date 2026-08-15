@@ -75,6 +75,7 @@ jobs:
               - { os: windows-2025-vs2026, type: static, arch: x86_64 }
               - { os: macos-26, type: static, arch: arm64 }
 
+
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -144,14 +145,13 @@ jobs:
       # ad-hoc signed (Apple Silicon refuses to run binaries carrying no signature at
       # all). Signing it with a Developer ID instead needs a paid Apple account, so the
       # image is installed through the Homebrew cask rather than by hand - see
-      # docs/dev/maintenance/signing-ci-builds.md. The overlay is not built on ARM macOS,
-      # hence --no-overlay.
+      # docs/dev/maintenance/signing-ci-builds.md.
     - if: ${{ startsWith(matrix.os, 'macos') }}
       name: Create disk image
       shell: bash
       run: |
-        ./macx/scripts/osxdist.py --source-dir . --binary-dir build --no-overlay --ad-hoc-sign \
-          --min-macos-version "11.0.0" \
+        ./macx/scripts/osxdist.py --source-dir . --binary-dir build --ad-hoc-sign \
+          --min-macos-version "15.0.0" \
           --version "$( ./scripts/mumble-version.py ).${MUMBLE_BUILD_NUMBER}"
       env:
           MUMBLE_BUILD_NUMBER: ${{ needs.fetch_build_number.outputs.build_number }}

@@ -38,16 +38,11 @@ if(NOT DEFINED CMAKE_CXX_STANDARD OR CMAKE_CXX_STANDARD LESS 20)
 endif()
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Apple Silicon does not exist on anything older than macOS 11, so targeting an earlier
-# version there is meaningless (the toolchain bumps it to 11.0 regardless). Only provide
-# a default: an explicitly requested deployment target always wins.
+# macOS 15 is the baseline: the overlay (the one piece that tied us to older releases)
+# is gone and the TTS backend is AVFoundation now. Only provide a default here, so that
+# an explicitly requested deployment target always wins.
 if(NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET OR CMAKE_OSX_DEPLOYMENT_TARGET STREQUAL "")
-	if(CMAKE_OSX_ARCHITECTURES MATCHES "arm64"
-			OR (NOT CMAKE_OSX_ARCHITECTURES AND CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "arm64"))
-		set(CMAKE_OSX_DEPLOYMENT_TARGET 11.0)
-	else()
-		set(CMAKE_OSX_DEPLOYMENT_TARGET 10.15)
-	endif()
+	set(CMAKE_OSX_DEPLOYMENT_TARGET 15)
 endif()
 
 
@@ -115,7 +110,7 @@ if(APPLE AND MUMBLE_TARGET_ARCH MATCHES ";")
 	set(MUMBLE_TARGET_ARCH "universal")
 endif()
 
-if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "OpenBSD")
+if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "OpenBSD" AND NOT APPLE)
 	option(overlay "Build overlay." ${client})
 	if(64_BIT AND NOT MUMBLE_TARGET_ARCH STREQUAL "arm64")
 		option(overlay-xcompile "Build 32 bit overlay library, necessary for the overlay to work with 32 bit processes." ${client})
@@ -197,23 +192,12 @@ if(g15 AND WIN32)
 	add_subdirectory("helpers/g15helper")
 endif()
 
-if(APPLE AND MUMBLE_TARGET_ARCH MATCHES "arm.*")
-	# mach_override doesn't support ARM
-	# https://github.com/rentzsch/mach_override/issues/6
-	set(overlay OFF CACHE BOOL "" FORCE)
-	message(STATUS "Disabling the overlay on ARM macOS")
-endif()
-
 if(overlay)
         if(WIN32)
                 add_subdirectory(overlay)
         else()
                 if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "arm|aarch64")
                         add_subdirectory(overlay_gl)
-                endif()
-
-                if(APPLE)
-                        add_subdirectory(macx/osax)
                 endif()
         endif()
 endif()
