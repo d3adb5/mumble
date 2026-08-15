@@ -21,7 +21,9 @@
 #endif
 
 #include <cassert>
+#include <climits>
 #include <cstdint>
+#include <limits>
 #include <utility>
 
 HostAddress::HostAddress(ipv6_bytes ipv6_address) : m_byteRepresentation(std::move(ipv6_address)) {
