@@ -24,7 +24,7 @@ option(bundled-speex "Build the included version of Speex instead of looking for
 option(rnnoise "Use RNNoise for machine learning noise reduction." ON)
 option(bundled-rnnoise "Build the included version of RNNoise instead of looking for one on the system." ${rnnoise})
 option(webrtc-audio-processing "Use the WebRTC audio processing library (AEC3 echo cancellation and noise suppression)." ON)
-option(deepfilternet "Use DeepFilterNet3 for deep-learning noise suppression (requires a Rust toolchain to build)." OFF)
+option(deepfilternet "Use DeepFilterNet3 for deep-learning noise suppression (requires a Rust toolchain to build)." ON)
 
 option(manual-plugin "Include the built-in \"manual\" positional audio plugin." ON)
 
