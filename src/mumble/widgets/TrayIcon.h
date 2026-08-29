@@ -81,6 +81,7 @@ private:
 	void showNotification(const QString &title, const QString &body, QSystemTrayIcon::MessageIcon icon);
 
 private slots:
+	void on_contextMenu_aboutToShow();
 	void on_contextMenu_aboutToHide();
 	void on_icon_clicked(QSystemTrayIcon::ActivationReason reason);
 	void on_windowMinimized();

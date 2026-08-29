@@ -194,7 +194,7 @@ TrayIcon::TrayIcon() : QSystemTrayIcon(Global::get().mw), m_statusIcon(Global::g
 	m_outputDeviceMenu = new QMenu(tr("Output Device"), Global::get().mw);
 
 	m_contextMenu = new QMenu(Global::get().mw);
-	QObject::connect(m_contextMenu, &QMenu::aboutToShow, this, &TrayIcon::updateContextMenu);
+	QObject::connect(m_contextMenu, &QMenu::aboutToShow, this, &TrayIcon::on_contextMenu_aboutToShow);
 	QObject::connect(m_contextMenu, &QMenu::aboutToHide, this, &TrayIcon::on_contextMenu_aboutToHide);
 
 	// Some window managers hate it when a tray icon sets an empty context menu...
@@ -285,8 +285,6 @@ void TrayIcon::updateContextMenu() {
 		updateChannelMenu();
 		m_contextMenu->addMenu(m_channelMenu);
 		m_contextMenu->addSeparator();
-
-		m_channelViewTimer->start();
 	}
 
 	m_contextMenu->addAction(Global::get().mw->qaAudioMute);
@@ -340,6 +338,15 @@ void TrayIcon::updateRecordAction() {
 	m_recordAction->setText(recording ? tr("Stop Recording") : tr("Start Recording"));
 	// Recording needs a server that allows it, just like the main window's entry does
 	m_recordAction->setEnabled(recording || Global::get().mw->qaRecording->isEnabled());
+}
+
+void TrayIcon::on_contextMenu_aboutToShow() {
+	updateContextMenu();
+
+	if (Global::get().s.bTrayShowChannel) {
+		// Follow the channel for as long as the menu is on screen, and no longer
+		m_channelViewTimer->start();
+	}
 }
 
 void TrayIcon::on_contextMenu_aboutToHide() {
