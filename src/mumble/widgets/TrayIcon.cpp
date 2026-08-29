@@ -8,6 +8,7 @@
 #include "ClientUser.h"
 #include "Log.h"
 #include "MainWindow.h"
+#include "TrayMenuModel.h"
 #include "UserModel.h"
 #include "X11WindowState.h"
 #include "Global.h"
@@ -55,6 +56,13 @@ TrayIcon::TrayIcon() : QSystemTrayIcon(Global::get().mw), m_statusIcon(Global::g
 	QObject::connect(m_hideAction, &QAction::triggered, this, &TrayIcon::on_hideAction_triggered);
 
 	QObject::connect(Global::get().mw->qaTalkingUIToggle, &QAction::triggered, this, &TrayIcon::updateContextMenu);
+
+	// Submenus mirroring the main window's toolbar dropdowns. They are filled in
+	// whenever the context menu is about to be shown, as their entries depend on
+	// what the audio backend currently offers.
+	m_transmitModeMenu = new QMenu(tr("Transmit Mode"), Global::get().mw);
+	m_noiseCancelMenu  = new QMenu(tr("Noise Suppression"), Global::get().mw);
+	m_outputDeviceMenu = new QMenu(tr("Output Device"), Global::get().mw);
 
 	m_contextMenu = new QMenu(Global::get().mw);
 	QObject::connect(m_contextMenu, &QMenu::aboutToShow, this, &TrayIcon::updateContextMenu);
@@ -146,8 +154,57 @@ void TrayIcon::updateContextMenu() {
 	m_contextMenu->addAction(Global::get().mw->qaAudioMute);
 	m_contextMenu->addAction(Global::get().mw->qaAudioDeaf);
 	m_contextMenu->addAction(Global::get().mw->qaTalkingUIToggle);
+
+	const Settings &settings = Global::get().s;
+
+	if (settings.bTrayShowTransmitMode || settings.bTrayShowNoiseCancel || settings.bTrayShowOutputDevice) {
+		m_contextMenu->addSeparator();
+	}
+
+	if (settings.bTrayShowTransmitMode) {
+		populateChoiceMenu(m_transmitModeMenu, Global::get().mw->transmitModeChoices(),
+						   static_cast< int >(settings.atTransmit), [](const QVariant &value) {
+							   Global::get().mw->setTransmissionMode(
+								   static_cast< Settings::AudioTransmit >(value.toInt()));
+						   });
+		m_contextMenu->addMenu(m_transmitModeMenu);
+	}
+
+	if (settings.bTrayShowNoiseCancel) {
+		populateChoiceMenu(m_noiseCancelMenu, Global::get().mw->noiseCancelChoices(),
+						   static_cast< int >(settings.noiseCancelMode), [](const QVariant &value) {
+							   Global::get().mw->setNoiseCancel(static_cast< Settings::NoiseCancel >(value.toInt()));
+						   });
+		m_contextMenu->addMenu(m_noiseCancelMenu);
+	}
+
+	if (settings.bTrayShowOutputDevice) {
+		populateChoiceMenu(m_outputDeviceMenu, Global::get().mw->outputDeviceChoices(),
+						   Global::get().mw->currentOutputDevice(),
+						   [](const QVariant &value) { Global::get().mw->setOutputDevice(value); });
+		m_contextMenu->addMenu(m_outputDeviceMenu);
+	}
+
 	m_contextMenu->addSeparator();
 	m_contextMenu->addAction(Global::get().mw->qaQuit);
+}
+
+void TrayIcon::populateChoiceMenu(QMenu *menu, const QList< QPair< QString, QVariant > > &choices,
+								  const QVariant &current, std::function< void(const QVariant &) > onPicked) {
+	menu->clear();
+
+	for (const Mumble::TrayMenu::Choice &choice : Mumble::TrayMenu::buildChoices(choices, current)) {
+		QAction *action = menu->addAction(Mumble::TrayMenu::escapeMenuText(choice.label));
+		action->setCheckable(true);
+		action->setChecked(choice.checked);
+
+		const QVariant value = choice.value;
+		QObject::connect(action, &QAction::triggered, this, [onPicked, value]() { onPicked(value); });
+	}
+
+	// A backend that offers nothing to pick from (or none being available at all)
+	// would leave an empty submenu behind, which is only confusing.
+	menu->setEnabled(!menu->isEmpty());
 }
 
 void TrayIcon::on_toggleShowHide() {

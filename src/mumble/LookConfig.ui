@@ -324,6 +324,36 @@
         </property>
        </widget>
       </item>
+      <item>
+       <widget class="QCheckBox" name="qcbTrayShowTransmitMode">
+        <property name="toolTip">
+         <string>Offer the transmit mode in the tray icon's menu</string>
+        </property>
+        <property name="text">
+         <string>Show transmit mode in tray menu</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="qcbTrayShowNoiseCancel">
+        <property name="toolTip">
+         <string>Offer the noise suppression method in the tray icon's menu</string>
+        </property>
+        <property name="text">
+         <string>Show noise suppression in tray menu</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="qcbTrayShowOutputDevice">
+        <property name="toolTip">
+         <string>Offer the audio output device in the tray icon's menu</string>
+        </property>
+        <property name="text">
+         <string>Show output device in tray menu</string>
+        </property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>
@@ -1409,6 +1439,9 @@
   <tabstop>qcbRestoreWindowState</tabstop>
   <tabstop>qcbHideTray</tabstop>
   <tabstop>qcbStateInTray</tabstop>
+  <tabstop>qcbTrayShowTransmitMode</tabstop>
+  <tabstop>qcbTrayShowNoiseCancel</tabstop>
+  <tabstop>qcbTrayShowOutputDevice</tabstop>
   <tabstop>qcbSearchUserAction</tabstop>
   <tabstop>qcbSearchChannelAction</tabstop>
   <tabstop>qcbChannelDrag</tabstop>

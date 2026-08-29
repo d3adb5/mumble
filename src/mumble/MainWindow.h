@@ -522,6 +522,17 @@ public:
 	void openServerBanListDialog();
 	void toggleSelfPrioritySpeaker();
 	void recording();
+	/// @returns The transmit modes the toolbar dropdown offers, each label paired
+	/// 	with the Settings::AudioTransmit value it stands for.
+	QList< QPair< QString, QVariant > > transmitModeChoices() const;
+	/// @returns The noise-suppression methods this build offers, each label paired
+	/// 	with the Settings::NoiseCancel value it stands for.
+	QList< QPair< QString, QVariant > > noiseCancelChoices() const;
+	/// @returns The devices the active audio output backend offers, each label
+	/// 	paired with the backend-specific device identifier.
+	QList< QPair< QString, QVariant > > outputDeviceChoices() const;
+	/// @returns The device the active audio output backend is configured to use.
+	QVariant currentOutputDevice() const;
 	void openSelfCommentDialog();
 	void changeServerTexture();
 	void removeServerTexture();

@@ -614,9 +614,11 @@ void MainWindow::setupGui() {
 	// such as a MUComboBox to a QToolbar, even though they are supported.
 	qcbTransmitMode = new MUComboBox(qtIconToolbar);
 	qcbTransmitMode->setObjectName(QLatin1String("qcbTransmitMode"));
-	qcbTransmitMode->addItem(tr("Continuous"));
-	qcbTransmitMode->addItem(tr("Voice Activity"));
-	qcbTransmitMode->addItem(tr("Push-to-Talk"));
+	// Each item carries its Settings::AudioTransmit value as data, so that the entries
+	// can be offered elsewhere (the tray icon's menu) without spelling them out again.
+	qcbTransmitMode->addItem(tr("Continuous"), static_cast< int >(Settings::Continuous));
+	qcbTransmitMode->addItem(tr("Voice Activity"), static_cast< int >(Settings::VAD));
+	qcbTransmitMode->addItem(tr("Push-to-Talk"), static_cast< int >(Settings::PushToTalk));
 
 	qaTransmitModeSeparator = qtIconToolbar->insertSeparator(qaConfigDialog);
 	qaTransmitMode          = qtIconToolbar->insertWidget(qaTransmitModeSeparator, qcbTransmitMode);
@@ -1006,6 +1008,52 @@ void MainWindow::populateInputDeviceComboBox() {
 
 void MainWindow::qcbInputDevice_activated(int index) {
 	setInputDevice(qcbInputDevice->itemData(index));
+}
+
+QList< QPair< QString, QVariant > > MainWindow::transmitModeChoices() const {
+	QList< QPair< QString, QVariant > > choices;
+
+	for (int i = 0; i < qcbTransmitMode->count(); ++i) {
+		choices.append(qMakePair(qcbTransmitMode->itemText(i), qcbTransmitMode->itemData(i)));
+	}
+
+	return choices;
+}
+
+QList< QPair< QString, QVariant > > MainWindow::noiseCancelChoices() const {
+	QList< QPair< QString, QVariant > > choices;
+
+	for (int i = 0; i < qcbNoiseCancel->count(); ++i) {
+		choices.append(qMakePair(qcbNoiseCancel->itemText(i), qcbNoiseCancel->itemData(i)));
+	}
+
+	return choices;
+}
+
+QList< QPair< QString, QVariant > > MainWindow::outputDeviceChoices() const {
+	if (!AudioOutputRegistrar::qmNew) {
+		return {};
+	}
+
+	AudioOutputRegistrar *aor = AudioOutputRegistrar::qmNew->value(AudioOutputRegistrar::current);
+	if (!aor) {
+		return {};
+	}
+
+	return aor->getDeviceChoices();
+}
+
+QVariant MainWindow::currentOutputDevice() const {
+	if (!AudioOutputRegistrar::qmNew) {
+		return QVariant();
+	}
+
+	AudioOutputRegistrar *aor = AudioOutputRegistrar::qmNew->value(AudioOutputRegistrar::current);
+	if (!aor) {
+		return QVariant();
+	}
+
+	return aor->getDeviceChoice();
 }
 
 void MainWindow::populateEchoCancelComboBox() {
