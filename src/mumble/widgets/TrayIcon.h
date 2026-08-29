@@ -16,6 +16,8 @@
 #include <QtWidgets/QMenu>
 #include <QtWidgets/QSystemTrayIcon>
 
+#include "TrayMenuModel.h"
+
 class TrayIcon : public QSystemTrayIcon {
 	Q_OBJECT
 
@@ -40,12 +42,17 @@ private:
 	BlinkState m_blinkState   = BlinkState::RegularIcon;
 	bool m_blinkingIcon       = false;
 	QMenu *m_contextMenu      = nullptr;
+	QMenu *m_channelMenu      = nullptr;
 	QMenu *m_transmitModeMenu = nullptr;
 	QMenu *m_noiseCancelMenu  = nullptr;
 	QMenu *m_outputDeviceMenu = nullptr;
 	QAction *m_showAction     = nullptr;
 	QAction *m_hideAction     = nullptr;
 	QTimer *m_highlightTimer  = nullptr;
+	/// Keeps the channel view up to date for as long as the context menu is open
+	QTimer *m_channelViewTimer = nullptr;
+	/// The users the channel view currently lists, in the order they are shown
+	QList< Mumble::TrayMenu::UserEntry > m_channelEntries;
 #ifdef USE_DBUS
 	/// ID of the last notification posted via org.freedesktop.Notifications, so that
 	/// a new notification replaces the previous one instead of stacking up
@@ -59,11 +66,17 @@ private:
 	void populateChoiceMenu(QMenu *menu, const QList< QPair< QString, QVariant > > &choices, const QVariant &current,
 							std::function< void(const QVariant &) > onPicked);
 
+	/// Brings the view of the local user's channel in line with the current state of
+	/// that channel. Entries are only recreated when the users themselves changed, so
+	/// that talking states can be followed while the menu stays open.
+	void updateChannelMenu();
+
 	/// Shows a pop-up notification, preferring the freedesktop.org notification
 	/// service over the Qt tray icon balloon
 	void showNotification(const QString &title, const QString &body, QSystemTrayIcon::MessageIcon icon);
 
 private slots:
+	void on_contextMenu_aboutToHide();
 	void on_icon_clicked(QSystemTrayIcon::ActivationReason reason);
 	void on_windowMinimized();
 	void on_timer_triggered();

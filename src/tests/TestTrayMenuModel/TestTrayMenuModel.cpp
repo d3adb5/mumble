@@ -23,6 +23,14 @@ private slots:
 	void checksOnlyFirstOfDuplicateValues();
 	void noChoicesAtAll();
 	void escapesAmpersands();
+
+	void listenersComeFirst();
+	void sortsUsersByName();
+	void sortsEqualNamesCaseSensitively();
+	void keepsTalkingStateApart();
+	void silentTransmissionHasOwnIcon();
+	void beingUnheardBeatsTalkingState();
+	void listenerIconWinsOverEverything();
 };
 
 static ChoiceList someModes() {
@@ -87,6 +95,124 @@ void TestTrayMenuModel::escapesAmpersands() {
 	QCOMPARE(escapeMenuText(QStringLiteral("&&")), QStringLiteral("&&&&"));
 	QCOMPARE(escapeMenuText(QStringLiteral("Speex & RNNoise")), QStringLiteral("Speex && RNNoise"));
 	QCOMPARE(escapeMenuText(QStringLiteral("no ampersand")), QStringLiteral("no ampersand"));
+}
+
+static UserEntry user(const QString &name, const UserState &state = UserState()) {
+	UserEntry entry;
+	entry.name  = name;
+	entry.label = name;
+	entry.state = state;
+
+	return entry;
+}
+
+static UserEntry listener(const QString &name) {
+	UserState state;
+	state.listener = true;
+
+	return user(name, state);
+}
+
+static QStringList names(const QList< UserEntry > &entries) {
+	QStringList result;
+	for (const UserEntry &entry : entries) {
+		result << entry.name;
+	}
+
+	return result;
+}
+
+void TestTrayMenuModel::listenersComeFirst() {
+	// Mirrors the user list, which groups listeners directly above the regular users
+	QList< UserEntry > entries = { user(QStringLiteral("Alice")), listener(QStringLiteral("Zoe")),
+								   user(QStringLiteral("Bob")), listener(QStringLiteral("Adam")) };
+
+	sortEntries(entries);
+
+	QCOMPARE(names(entries), QStringList({ QStringLiteral("Adam"), QStringLiteral("Zoe"), QStringLiteral("Alice"),
+										   QStringLiteral("Bob") }));
+}
+
+void TestTrayMenuModel::sortsUsersByName() {
+	QList< UserEntry > entries = { user(QStringLiteral("charlie")), user(QStringLiteral("Bob")),
+								   user(QStringLiteral("alice")) };
+
+	sortEntries(entries);
+
+	QCOMPARE(names(entries),
+			 QStringList({ QStringLiteral("alice"), QStringLiteral("Bob"), QStringLiteral("charlie") }));
+}
+
+void TestTrayMenuModel::sortsEqualNamesCaseSensitively() {
+	// Names that only differ in casing still need a stable order
+	QList< UserEntry > entries = { user(QStringLiteral("bob")), user(QStringLiteral("Bob")) };
+
+	sortEntries(entries);
+
+	QCOMPARE(names(entries), QStringList({ QStringLiteral("Bob"), QStringLiteral("bob") }));
+}
+
+void TestTrayMenuModel::keepsTalkingStateApart() {
+	UserState state;
+
+	state.talkState = TalkState::Passive;
+	QCOMPARE(iconFor(state), UserIcon::TalkingOff);
+
+	state.talkState = TalkState::Talking;
+	QCOMPARE(iconFor(state), UserIcon::TalkingOn);
+
+	state.talkState = TalkState::MutedTalking;
+	QCOMPARE(iconFor(state), UserIcon::TalkingMuted);
+
+	state.talkState = TalkState::Whispering;
+	QCOMPARE(iconFor(state), UserIcon::TalkingWhisper);
+
+	state.talkState = TalkState::Shouting;
+	QCOMPARE(iconFor(state), UserIcon::TalkingShout);
+}
+
+void TestTrayMenuModel::silentTransmissionHasOwnIcon() {
+	UserState state;
+	state.talkState = TalkState::Talking;
+	state.audible   = false;
+
+	QCOMPARE(iconFor(state), UserIcon::TalkingSilent);
+
+	// Only an actual transmission can be silent
+	state.talkState = TalkState::Passive;
+	QCOMPARE(iconFor(state), UserIcon::TalkingOff);
+}
+
+void TestTrayMenuModel::beingUnheardBeatsTalkingState() {
+	UserState state;
+	state.talkState = TalkState::Talking;
+
+	state.localMuted = true;
+	QCOMPARE(iconFor(state), UserIcon::MutedLocal);
+
+	state.suppressed = true;
+	QCOMPARE(iconFor(state), UserIcon::MutedSuppressed);
+
+	state.serverMuted = true;
+	QCOMPARE(iconFor(state), UserIcon::MutedServer);
+
+	state.selfMuted = true;
+	QCOMPARE(iconFor(state), UserIcon::MutedSelf);
+
+	state.serverDeafened = true;
+	QCOMPARE(iconFor(state), UserIcon::DeafenedServer);
+
+	state.selfDeafened = true;
+	QCOMPARE(iconFor(state), UserIcon::DeafenedSelf);
+}
+
+void TestTrayMenuModel::listenerIconWinsOverEverything() {
+	UserState state;
+	state.listener     = true;
+	state.selfDeafened = true;
+	state.talkState    = TalkState::Talking;
+
+	QCOMPARE(iconFor(state), UserIcon::Listener);
 }
 
 QTEST_MAIN(TestTrayMenuModel)

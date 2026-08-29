@@ -5,6 +5,8 @@
 
 #include "TrayIcon.h"
 
+#include "Channel.h"
+#include "ChannelListenerManager.h"
 #include "ClientUser.h"
 #include "Log.h"
 #include "MainWindow.h"
@@ -14,11 +16,123 @@
 #include "Global.h"
 
 #include <QApplication>
+#include <QtGui/QFont>
 
 #ifdef USE_DBUS
 #	include <QtDBus/QDBusInterface>
 #	include <QtDBus/QDBusMessage>
 #endif
+
+namespace {
+
+/// Interval at which the channel view follows the state of the channel while the
+/// context menu is open. Matches the one the recorder dialog polls with.
+constexpr int channelViewUpdateInterval = 200;
+
+Mumble::TrayMenu::TalkState talkStateOf(Settings::TalkState state) {
+	switch (state) {
+		case Settings::Talking:
+			return Mumble::TrayMenu::TalkState::Talking;
+		case Settings::MutedTalking:
+			return Mumble::TrayMenu::TalkState::MutedTalking;
+		case Settings::Whispering:
+			return Mumble::TrayMenu::TalkState::Whispering;
+		case Settings::Shouting:
+			return Mumble::TrayMenu::TalkState::Shouting;
+		case Settings::Passive:
+			break;
+	}
+
+	return Mumble::TrayMenu::TalkState::Passive;
+}
+
+/// The symbols of the user list, which the channel view borrows so that a user
+/// looks the same in the tray as they do in the main window.
+const QIcon &iconOf(Mumble::TrayMenu::UserIcon icon) {
+	static const QIcon listener(QLatin1String("skin:ear.svg"));
+	static const QIcon deafenedSelf(QLatin1String("skin:deafened_self.svg"));
+	static const QIcon deafenedServer(QLatin1String("skin:deafened_server.svg"));
+	static const QIcon mutedSelf(QLatin1String("skin:muted_self.svg"));
+	static const QIcon mutedServer(QLatin1String("skin:muted_server.svg"));
+	static const QIcon mutedSuppressed(QLatin1String("skin:muted_suppressed.svg"));
+	static const QIcon mutedLocal(QLatin1String("skin:muted_local.svg"));
+	static const QIcon talkingOn(QLatin1String("skin:talking_on.svg"));
+	static const QIcon talkingMuted(QLatin1String("skin:talking_muted.svg"));
+	static const QIcon talkingWhisper(QLatin1String("skin:talking_whisper.svg"));
+	static const QIcon talkingShout(QLatin1String("skin:talking_alt.svg"));
+	static const QIcon talkingOff(QLatin1String("skin:talking_off.svg"));
+
+	switch (icon) {
+		case Mumble::TrayMenu::UserIcon::Listener:
+			return listener;
+		case Mumble::TrayMenu::UserIcon::DeafenedSelf:
+			return deafenedSelf;
+		case Mumble::TrayMenu::UserIcon::DeafenedServer:
+			return deafenedServer;
+		case Mumble::TrayMenu::UserIcon::MutedSelf:
+			return mutedSelf;
+		case Mumble::TrayMenu::UserIcon::MutedServer:
+			return mutedServer;
+		case Mumble::TrayMenu::UserIcon::MutedSuppressed:
+			return mutedSuppressed;
+		case Mumble::TrayMenu::UserIcon::MutedLocal:
+			return mutedLocal;
+		case Mumble::TrayMenu::UserIcon::TalkingOn:
+			return talkingOn;
+		case Mumble::TrayMenu::UserIcon::TalkingSilent:
+			// Configurable, so it has to be taken from the user list itself
+			return Global::get().mw->pmModel->talkingSilentIcon();
+		case Mumble::TrayMenu::UserIcon::TalkingMuted:
+			return talkingMuted;
+		case Mumble::TrayMenu::UserIcon::TalkingWhisper:
+			return talkingWhisper;
+		case Mumble::TrayMenu::UserIcon::TalkingShout:
+			return talkingShout;
+		case Mumble::TrayMenu::UserIcon::TalkingOff:
+			break;
+	}
+
+	return talkingOff;
+}
+
+Mumble::TrayMenu::UserEntry entryFor(const ClientUser &user, bool isListener, const Channel &channel) {
+	Mumble::TrayMenu::UserEntry entry;
+
+	entry.name    = user.qsName;
+	entry.label   = Mumble::TrayMenu::escapeMenuText(UserModel::createDisplayString(user, isListener, &channel));
+	entry.session = user.uiSession;
+	entry.self    = user.uiSession == Global::get().uiSession;
+
+	entry.state.listener       = isListener;
+	entry.state.selfDeafened   = user.bSelfDeaf;
+	entry.state.serverDeafened = user.bDeaf;
+	entry.state.selfMuted      = user.bSelfMute;
+	entry.state.serverMuted    = user.bMute;
+	entry.state.suppressed     = user.bSuppress;
+	entry.state.localMuted     = user.bLocalMute;
+	entry.state.talkState      = talkStateOf(user.tsState);
+	entry.state.audible        = user.isAudible();
+
+	return entry;
+}
+
+/// Whether both lists show the same users in the same order, in which case the
+/// existing menu entries can be updated instead of being recreated.
+bool sameUsers(const QList< Mumble::TrayMenu::UserEntry > &first, const QList< Mumble::TrayMenu::UserEntry > &second) {
+	if (first.size() != second.size()) {
+		return false;
+	}
+
+	for (int i = 0; i < first.size(); ++i) {
+		if (first.at(i).session != second.at(i).session || first.at(i).state.listener != second.at(i).state.listener) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+} // namespace
 
 TrayIcon::TrayIcon() : QSystemTrayIcon(Global::get().mw), m_statusIcon(Global::get().mw->qiIcon) {
 	setIcon(m_statusIcon);
@@ -60,12 +174,22 @@ TrayIcon::TrayIcon() : QSystemTrayIcon(Global::get().mw), m_statusIcon(Global::g
 	// Submenus mirroring the main window's toolbar dropdowns. They are filled in
 	// whenever the context menu is about to be shown, as their entries depend on
 	// what the audio backend currently offers.
+	// A view of the channel the local user is in, which is kept up to date for as
+	// long as the context menu is open.
+	m_channelMenu = new QMenu(Global::get().mw);
+	m_channelMenu->setIcon(QIcon(QLatin1String("skin:channel_active.svg")));
+
+	m_channelViewTimer = new QTimer(this);
+	m_channelViewTimer->setInterval(channelViewUpdateInterval);
+	QObject::connect(m_channelViewTimer, &QTimer::timeout, this, &TrayIcon::updateChannelMenu);
+
 	m_transmitModeMenu = new QMenu(tr("Transmit Mode"), Global::get().mw);
 	m_noiseCancelMenu  = new QMenu(tr("Noise Suppression"), Global::get().mw);
 	m_outputDeviceMenu = new QMenu(tr("Output Device"), Global::get().mw);
 
 	m_contextMenu = new QMenu(Global::get().mw);
 	QObject::connect(m_contextMenu, &QMenu::aboutToShow, this, &TrayIcon::updateContextMenu);
+	QObject::connect(m_contextMenu, &QMenu::aboutToHide, this, &TrayIcon::on_contextMenu_aboutToHide);
 
 	// Some window managers hate it when a tray icon sets an empty context menu...
 	updateContextMenu();
@@ -151,6 +275,14 @@ void TrayIcon::updateContextMenu() {
 
 	m_contextMenu->addSeparator();
 
+	if (Global::get().s.bTrayShowChannel) {
+		updateChannelMenu();
+		m_contextMenu->addMenu(m_channelMenu);
+		m_contextMenu->addSeparator();
+
+		m_channelViewTimer->start();
+	}
+
 	m_contextMenu->addAction(Global::get().mw->qaAudioMute);
 	m_contextMenu->addAction(Global::get().mw->qaAudioDeaf);
 	m_contextMenu->addAction(Global::get().mw->qaTalkingUIToggle);
@@ -187,6 +319,79 @@ void TrayIcon::updateContextMenu() {
 
 	m_contextMenu->addSeparator();
 	m_contextMenu->addAction(Global::get().mw->qaQuit);
+}
+
+void TrayIcon::on_contextMenu_aboutToHide() {
+	m_channelViewTimer->stop();
+}
+
+void TrayIcon::updateChannelMenu() {
+	const ClientUser *self = ClientUser::get(Global::get().uiSession);
+	const Channel *channel = self ? self->cChannel : nullptr;
+
+	if (!channel) {
+		m_channelMenu->clear();
+		m_channelEntries.clear();
+
+		m_channelMenu->setTitle(tr("Not Connected"));
+		m_channelMenu->setEnabled(false);
+
+		return;
+	}
+
+	m_channelMenu->setTitle(Mumble::TrayMenu::escapeMenuText(channel->qsName));
+	m_channelMenu->setEnabled(true);
+
+	QList< Mumble::TrayMenu::UserEntry > entries;
+
+	for (const User *user : channel->qlUsers) {
+		entries.append(entryFor(*static_cast< const ClientUser * >(user), false, *channel));
+	}
+
+	if (Global::get().channelListenerManager) {
+		for (unsigned int session : Global::get().channelListenerManager->getListenersForChannel(channel->iId)) {
+			const ClientUser *listener = ClientUser::get(session);
+			if (listener) {
+				entries.append(entryFor(*listener, true, *channel));
+			}
+		}
+	}
+
+	Mumble::TrayMenu::sortEntries(entries);
+
+	if (sameUsers(entries, m_channelEntries)) {
+		// Only the users' states changed, so the entries can be updated in place. That
+		// keeps the menu from flickering (and from moving under the cursor) while it is
+		// open, which happens whenever its entries are recreated.
+		const QList< QAction * > actions = m_channelMenu->actions();
+
+		for (int i = 0; i < entries.size() && i < actions.size(); ++i) {
+			actions.at(i)->setIcon(iconOf(Mumble::TrayMenu::iconFor(entries.at(i).state)));
+			actions.at(i)->setText(entries.at(i).label);
+		}
+	} else {
+		m_channelMenu->clear();
+
+		for (const Mumble::TrayMenu::UserEntry &entry : entries) {
+			QAction *action = m_channelMenu->addAction(iconOf(Mumble::TrayMenu::iconFor(entry.state)), entry.label);
+
+			if (entry.self || entry.state.listener) {
+				// Emphasise the local user and set listeners apart, like the user list does
+				QFont font = m_channelMenu->font();
+				font.setBold(entry.self != font.bold());
+				font.setItalic(entry.state.listener);
+				action->setFont(font);
+			}
+
+			const unsigned int session = entry.session;
+			QObject::connect(action, &QAction::triggered, this, [this, session]() {
+				on_showAction_triggered();
+				Global::get().mw->pmModel->setSelectedUser(session);
+			});
+		}
+	}
+
+	m_channelEntries = entries;
 }
 
 void TrayIcon::populateChoiceMenu(QMenu *menu, const QList< QPair< QString, QVariant > > &choices,

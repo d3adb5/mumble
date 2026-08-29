@@ -239,6 +239,7 @@ void LookConfig::load(const Settings &r) {
 	loadCheckBox(qcbRestoreWindowState, !r.preventWindowStates);
 	loadCheckBox(qcbHideTray, r.bHideInTray);
 	loadCheckBox(qcbStateInTray, r.bStateInTray);
+	loadCheckBox(qcbTrayShowChannel, r.bTrayShowChannel);
 	loadCheckBox(qcbTrayShowTransmitMode, r.bTrayShowTransmitMode);
 	loadCheckBox(qcbTrayShowNoiseCancel, r.bTrayShowNoiseCancel);
 	loadCheckBox(qcbTrayShowOutputDevice, r.bTrayShowOutputDevice);
@@ -324,6 +325,7 @@ void LookConfig::save() const {
 	s.preventWindowStates       = !qcbRestoreWindowState->isChecked();
 	s.bHideInTray               = qcbHideTray->isChecked();
 	s.bStateInTray              = qcbStateInTray->isChecked();
+	s.bTrayShowChannel          = qcbTrayShowChannel->isChecked();
 	s.bTrayShowTransmitMode     = qcbTrayShowTransmitMode->isChecked();
 	s.bTrayShowNoiseCancel      = qcbTrayShowNoiseCancel->isChecked();
 	s.bTrayShowOutputDevice     = qcbTrayShowOutputDevice->isChecked();

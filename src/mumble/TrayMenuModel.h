@@ -11,6 +11,8 @@
 #include <QtCore/QString>
 #include <QtCore/QVariant>
 
+#include <algorithm>
+
 namespace Mumble {
 namespace TrayMenu {
 
@@ -45,6 +47,125 @@ namespace TrayMenu {
 		QString escaped = text;
 
 		return escaped.replace(QLatin1String("&"), QLatin1String("&&"));
+	}
+
+	/// Talking state of a user, mirroring Settings::TalkState. Kept separate so that
+	/// this helper stays independent of the client's settings.
+	enum class TalkState { Passive, Talking, MutedTalking, Whispering, Shouting };
+
+	/// The audio-related state the tray's channel view shows for a user.
+	struct UserState {
+		/// True for an entry standing for a channel listener rather than a user
+		/// that is actually in the channel.
+		bool listener       = false;
+		bool selfDeafened   = false;
+		bool serverDeafened = false;
+		bool selfMuted      = false;
+		bool serverMuted    = false;
+		bool suppressed     = false;
+		bool localMuted     = false;
+		TalkState talkState = TalkState::Passive;
+		/// False while the user transmits nothing but silence.
+		bool audible = true;
+	};
+
+	/// The symbol shown next to a user in the tray's channel view. A menu entry only
+	/// carries a single icon, so - unlike the main window's tree, which has a column
+	/// of status icons next to the talking one - the states have to be prioritised.
+	enum class UserIcon {
+		Listener,
+		DeafenedSelf,
+		DeafenedServer,
+		MutedSelf,
+		MutedServer,
+		MutedSuppressed,
+		MutedLocal,
+		TalkingOn,
+		TalkingSilent,
+		TalkingMuted,
+		TalkingWhisper,
+		TalkingShout,
+		TalkingOff,
+	};
+
+	/// Picks the symbol standing for a user's state, preferring the states that keep
+	/// the user from being heard over their talking state. The order matches the one
+	/// the tray icon itself uses for the local user: deafened before muted, and one's
+	/// own choice before what the server imposes.
+	inline UserIcon iconFor(const UserState &state) {
+		if (state.listener) {
+			return UserIcon::Listener;
+		}
+		if (state.selfDeafened) {
+			return UserIcon::DeafenedSelf;
+		}
+		if (state.serverDeafened) {
+			return UserIcon::DeafenedServer;
+		}
+		if (state.selfMuted) {
+			return UserIcon::MutedSelf;
+		}
+		if (state.serverMuted) {
+			return UserIcon::MutedServer;
+		}
+		if (state.suppressed) {
+			return UserIcon::MutedSuppressed;
+		}
+		if (state.localMuted) {
+			return UserIcon::MutedLocal;
+		}
+
+		switch (state.talkState) {
+			case TalkState::Talking:
+				// Hint at users that are transmitting nothing but silence, like the user list does
+				return state.audible ? UserIcon::TalkingOn : UserIcon::TalkingSilent;
+			case TalkState::MutedTalking:
+				return UserIcon::TalkingMuted;
+			case TalkState::Whispering:
+				return UserIcon::TalkingWhisper;
+			case TalkState::Shouting:
+				return UserIcon::TalkingShout;
+			case TalkState::Passive:
+				break;
+		}
+
+		return UserIcon::TalkingOff;
+	}
+
+	/// A user shown in the tray's channel view.
+	struct UserEntry {
+		/// The user's name as the server knows it, which the entries are ordered by
+		QString name;
+		/// The text the entry shows, which may differ from the name (local nicknames,
+		/// volume adjustments, ...)
+		QString label;
+		unsigned int session = 0;
+		/// True for the local user, whose entry is emphasised like it is in the user list
+		bool self = false;
+		UserState state;
+	};
+
+	/// Orders two entries the way the main window's user list does: listeners are
+	/// grouped directly above the regular users and both groups are sorted by name.
+	inline bool lessThan(const UserEntry &first, const UserEntry &second) {
+		if (first.state.listener != second.state.listener) {
+			return first.state.listener;
+		}
+
+		// Mirrors User::lessThan: compare case-insensitively for an intuitive order,
+		// falling back to a case-sensitive comparison so that names differing only in
+		// casing still get a stable order.
+		int result = QString::compare(first.name, second.name, Qt::CaseInsensitive);
+		if (result == 0) {
+			result = QString::compare(first.name, second.name, Qt::CaseSensitive);
+		}
+
+		return result < 0;
+	}
+
+	/// Sorts the entries of the channel view in place.
+	inline void sortEntries(QList< UserEntry > &entries) {
+		std::stable_sort(entries.begin(), entries.end(), lessThan);
 	}
 
 } // namespace TrayMenu

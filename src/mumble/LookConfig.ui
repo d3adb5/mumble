@@ -325,6 +325,16 @@
        </widget>
       </item>
       <item>
+       <widget class="QCheckBox" name="qcbTrayShowChannel">
+        <property name="toolTip">
+         <string>Show the users of the channel you are in in the tray icon's menu</string>
+        </property>
+        <property name="text">
+         <string>Show current channel in tray menu</string>
+        </property>
+       </widget>
+      </item>
+      <item>
        <widget class="QCheckBox" name="qcbTrayShowTransmitMode">
         <property name="toolTip">
          <string>Offer the transmit mode in the tray icon's menu</string>
@@ -1439,6 +1449,7 @@
   <tabstop>qcbRestoreWindowState</tabstop>
   <tabstop>qcbHideTray</tabstop>
   <tabstop>qcbStateInTray</tabstop>
+  <tabstop>qcbTrayShowChannel</tabstop>
   <tabstop>qcbTrayShowTransmitMode</tabstop>
   <tabstop>qcbTrayShowNoiseCancel</tabstop>
   <tabstop>qcbTrayShowOutputDevice</tabstop>

@@ -669,6 +669,7 @@ struct Settings {
 	bool bShowEchoCancelComboBox   = true;
 
 	// Sections of the tray icon's context menu
+	bool bTrayShowChannel      = true;
 	bool bTrayShowTransmitMode = true;
 	bool bTrayShowNoiseCancel  = true;
 	bool bTrayShowOutputDevice = true;

@@ -236,6 +236,7 @@ const SettingsKey DISPLAY_TRANSMIT_MODE_COMBOBOX_KEY   = { "display_transmit_mod
 const SettingsKey DISPLAY_NOISE_CANCEL_COMBOBOX_KEY    = { "display_noise_cancel_combobox" };
 const SettingsKey DISPLAY_INPUT_DEVICE_COMBOBOX_KEY    = { "display_input_device_combobox" };
 const SettingsKey DISPLAY_ECHO_CANCEL_COMBOBOX_KEY     = { "display_echo_cancel_combobox" };
+const SettingsKey TRAY_CHANNEL_MENU_KEY                = { "tray_menu_current_channel" };
 const SettingsKey TRAY_TRANSMIT_MODE_MENU_KEY          = { "tray_menu_transmit_mode" };
 const SettingsKey TRAY_NOISE_CANCEL_MENU_KEY           = { "tray_menu_noise_cancel" };
 const SettingsKey TRAY_OUTPUT_DEVICE_MENU_KEY          = { "tray_menu_output_device" };

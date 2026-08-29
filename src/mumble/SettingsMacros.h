@@ -207,6 +207,7 @@
 	PROCESS(ui, DISPLAY_NOISE_CANCEL_COMBOBOX_KEY, bShowNoiseCancelComboBox)     \
 	PROCESS(ui, DISPLAY_INPUT_DEVICE_COMBOBOX_KEY, bShowInputDeviceComboBox)     \
 	PROCESS(ui, DISPLAY_ECHO_CANCEL_COMBOBOX_KEY, bShowEchoCancelComboBox)       \
+	PROCESS(ui, TRAY_CHANNEL_MENU_KEY, bTrayShowChannel)                         \
 	PROCESS(ui, TRAY_TRANSMIT_MODE_MENU_KEY, bTrayShowTransmitMode)              \
 	PROCESS(ui, TRAY_NOISE_CANCEL_MENU_KEY, bTrayShowNoiseCancel)                \
 	PROCESS(ui, TRAY_OUTPUT_DEVICE_MENU_KEY, bTrayShowOutputDevice)              \
@@ -552,6 +553,7 @@
 	PROCESS(ui, DISPLAY_NOISE_CANCEL_COMBOBOX_KEY, bShowNoiseCancelComboBox)                       \
 	PROCESS(ui, DISPLAY_INPUT_DEVICE_COMBOBOX_KEY, bShowInputDeviceComboBox)                       \
 	PROCESS(ui, DISPLAY_ECHO_CANCEL_COMBOBOX_KEY, bShowEchoCancelComboBox)                         \
+	PROCESS(ui, TRAY_CHANNEL_MENU_KEY, bTrayShowChannel)                                           \
 	PROCESS(ui, TRAY_TRANSMIT_MODE_MENU_KEY, bTrayShowTransmitMode)                                \
 	PROCESS(ui, TRAY_NOISE_CANCEL_MENU_KEY, bTrayShowNoiseCancel)                                  \
 	PROCESS(ui, TRAY_OUTPUT_DEVICE_MENU_KEY, bTrayShowOutputDevice)                                \
