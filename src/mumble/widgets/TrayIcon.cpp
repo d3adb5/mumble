@@ -172,14 +172,12 @@ TrayIcon::TrayIcon() : QSystemTrayIcon(Global::get().mw), m_statusIcon(Global::g
 	m_recordAction =
 		new QAction(QIcon(QLatin1String("skin:actions/media-record.svg")), tr("Start Recording"), Global::get().mw);
 	QObject::connect(m_recordAction, &QAction::triggered, Global::get().mw, &MainWindow::toggleRecording);
-	// The menu is not open while a recording starts or stops from somewhere else
+	// A recording can also end on its own, which the entry has to reflect even when
+	// the menu happens to be open at that moment
 	QObject::connect(Global::get().mw, &MainWindow::recordingStateChanged, this, &TrayIcon::updateRecordAction);
 
 	QObject::connect(Global::get().mw->qaTalkingUIToggle, &QAction::triggered, this, &TrayIcon::updateContextMenu);
 
-	// Submenus mirroring the main window's toolbar dropdowns. They are filled in
-	// whenever the context menu is about to be shown, as their entries depend on
-	// what the audio backend currently offers.
 	// A view of the channel the local user is in, which is kept up to date for as
 	// long as the context menu is open.
 	m_channelMenu = new QMenu(Global::get().mw);
@@ -189,6 +187,9 @@ TrayIcon::TrayIcon() : QSystemTrayIcon(Global::get().mw), m_statusIcon(Global::g
 	m_channelViewTimer->setInterval(channelViewUpdateInterval);
 	QObject::connect(m_channelViewTimer, &QTimer::timeout, this, &TrayIcon::updateChannelMenu);
 
+	// Submenus mirroring the main window's toolbar dropdowns. They are filled in
+	// whenever the context menu is about to be shown, as their entries depend on
+	// what the audio backend currently offers.
 	m_transmitModeMenu = new QMenu(tr("Transmit Mode"), Global::get().mw);
 	m_noiseCancelMenu  = new QMenu(tr("Noise Suppression"), Global::get().mw);
 	m_outputDeviceMenu = new QMenu(tr("Output Device"), Global::get().mw);
