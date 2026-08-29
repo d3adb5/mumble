@@ -244,6 +244,7 @@ void LookConfig::load(const Settings &r) {
 	loadCheckBox(qcbTrayShowNoiseCancel, r.bTrayShowNoiseCancel);
 	loadCheckBox(qcbTrayShowOutputDevice, r.bTrayShowOutputDevice);
 	loadCheckBox(qcbTrayShowRecording, r.bTrayShowRecording);
+	loadCheckBox(qcbTrayShowTalkingUI, r.bTrayShowTalkingUI);
 	loadCheckBox(qcbShowUserCount, r.bShowUserCount);
 	loadCheckBox(qcbShowVolumeAdjustments, r.bShowVolumeAdjustments);
 	loadCheckBox(qcbShowNicknamesOnly, r.bShowNicknamesOnly);
@@ -331,6 +332,7 @@ void LookConfig::save() const {
 	s.bTrayShowNoiseCancel      = qcbTrayShowNoiseCancel->isChecked();
 	s.bTrayShowOutputDevice     = qcbTrayShowOutputDevice->isChecked();
 	s.bTrayShowRecording        = qcbTrayShowRecording->isChecked();
+	s.bTrayShowTalkingUI        = qcbTrayShowTalkingUI->isChecked();
 	s.bShowUserCount            = qcbShowUserCount->isChecked();
 	s.bShowVolumeAdjustments    = qcbShowVolumeAdjustments->isChecked();
 	s.bShowNicknamesOnly        = qcbShowNicknamesOnly->isChecked();

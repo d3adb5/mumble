@@ -374,6 +374,16 @@
         </property>
        </widget>
       </item>
+      <item>
+       <widget class="QCheckBox" name="qcbTrayShowTalkingUI">
+        <property name="toolTip">
+         <string>Offer toggling the Talking UI in the tray icon's menu</string>
+        </property>
+        <property name="text">
+         <string>Show Talking UI in tray menu</string>
+        </property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>
@@ -1464,6 +1474,7 @@
   <tabstop>qcbTrayShowNoiseCancel</tabstop>
   <tabstop>qcbTrayShowOutputDevice</tabstop>
   <tabstop>qcbTrayShowRecording</tabstop>
+  <tabstop>qcbTrayShowTalkingUI</tabstop>
   <tabstop>qcbSearchUserAction</tabstop>
   <tabstop>qcbSearchChannelAction</tabstop>
   <tabstop>qcbChannelDrag</tabstop>

@@ -15,6 +15,8 @@
 #include <QtCore/QVariant>
 #include <QtWidgets/QMenu>
 #include <QtWidgets/QSystemTrayIcon>
+#include <QtWidgets/QToolButton>
+#include <QtWidgets/QWidgetAction>
 
 #include "TrayMenuModel.h"
 
@@ -49,7 +51,11 @@ private:
 	QAction *m_showAction     = nullptr;
 	QAction *m_hideAction     = nullptr;
 	QAction *m_recordAction   = nullptr;
-	QTimer *m_highlightTimer  = nullptr;
+	/// Row of icon-only buttons for the toggles that would otherwise take up a menu
+	/// entry each, laid out like the main window's toolbar
+	QWidgetAction *m_controlsAction = nullptr;
+	QToolButton *m_recordButton     = nullptr;
+	QTimer *m_highlightTimer        = nullptr;
 	/// Keeps the channel view up to date for as long as the context menu is open
 	QTimer *m_channelViewTimer = nullptr;
 	/// The users the channel view currently lists, in the order they are shown
@@ -61,6 +67,19 @@ private:
 #endif
 
 	void updateContextMenu();
+
+	/// Adds the entry showing or hiding the main window.
+	/// @returns Whether anything was added
+	bool addWindowVisibilitySection();
+	/// Adds the view of the channel the local user is in.
+	/// @returns Whether anything was added
+	bool addChannelSection();
+	/// Adds the submenus mirroring the main window's audio dropdowns.
+	/// @returns Whether anything was added
+	bool addAudioDeviceSection();
+	/// Adds the row of toggles and the entries that go with them.
+	/// @returns Whether anything was added
+	bool addControlsSection();
 
 	/// Fills a submenu with one checkable entry per choice, checking the one that
 	/// is currently configured and invoking the callback with the picked value.

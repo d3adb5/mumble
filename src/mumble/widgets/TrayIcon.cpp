@@ -17,6 +17,7 @@
 
 #include <QApplication>
 #include <QtGui/QFont>
+#include <QtWidgets/QHBoxLayout>
 
 #ifdef USE_DBUS
 #	include <QtDBus/QDBusInterface>
@@ -28,6 +29,10 @@ namespace {
 /// Interval at which the channel view follows the state of the channel while the
 /// context menu is open. Matches the one the recorder dialog polls with.
 constexpr int channelViewUpdateInterval = 200;
+
+/// Margin left and right of the row of toggle buttons, roughly lining its icons up
+/// with the ones of the entries above and below it.
+constexpr int controlsMargin = 4;
 
 Mumble::TrayMenu::TalkState talkStateOf(Settings::TalkState state) {
 	switch (state) {
@@ -171,10 +176,45 @@ TrayIcon::TrayIcon() : QSystemTrayIcon(Global::get().mw), m_statusIcon(Global::g
 
 	m_recordAction =
 		new QAction(QIcon(QLatin1String("skin:actions/media-record.svg")), tr("Start Recording"), Global::get().mw);
-	QObject::connect(m_recordAction, &QAction::triggered, Global::get().mw, &MainWindow::toggleRecording);
+	m_recordAction->setCheckable(true);
+	QObject::connect(m_recordAction, &QAction::triggered, this, [this]() {
+		Global::get().mw->toggleRecording();
+		// Starting can fail (and stopping takes until the last samples are written),
+		// so the button follows what actually happened rather than the click
+		updateRecordAction();
+	});
 	// A recording can also end on its own, which the entry has to reflect even when
 	// the menu happens to be open at that moment
 	QObject::connect(Global::get().mw, &MainWindow::recordingStateChanged, this, &TrayIcon::updateRecordAction);
+
+	// The toggles share a single row of icon-only buttons: spelled out they would take
+	// up a third of the menu's height for what the toolbar fits into a few pixels.
+	QWidget *controls        = new QWidget();
+	QHBoxLayout *controlsBox = new QHBoxLayout(controls);
+	controlsBox->setContentsMargins(controlsMargin, 0, controlsMargin, 0);
+	controlsBox->setSpacing(0);
+
+	const auto addControlButton = [controls, controlsBox](QAction *action) {
+		QToolButton *button = new QToolButton(controls);
+		// Taking the action over gives the button its icon, its tool tip and - for the
+		// checkable ones - the icon of whichever state it is in
+		button->setDefaultAction(action);
+		button->setAutoRaise(true);
+		button->setToolButtonStyle(Qt::ToolButtonIconOnly);
+
+		controlsBox->addWidget(button);
+
+		return button;
+	};
+
+	addControlButton(Global::get().mw->qaAudioMute);
+	addControlButton(Global::get().mw->qaAudioDeaf);
+	m_recordButton = addControlButton(m_recordAction);
+
+	controlsBox->addStretch(1);
+
+	m_controlsAction = new QWidgetAction(this);
+	m_controlsAction->setDefaultWidget(controls);
 
 	QObject::connect(Global::get().mw->qaTalkingUIToggle, &QAction::triggered, this, &TrayIcon::updateContextMenu);
 
@@ -273,6 +313,23 @@ void TrayIcon::on_icon_clicked(QSystemTrayIcon::ActivationReason reason) {
 void TrayIcon::updateContextMenu() {
 	m_contextMenu->clear();
 
+	// Every section that added something is closed off with a separator, so that no
+	// section has to know whether the ones around it are shown at all
+	const auto closeSection = [this](bool added) {
+		if (added) {
+			m_contextMenu->addSeparator();
+		}
+	};
+
+	closeSection(addWindowVisibilitySection());
+	closeSection(addChannelSection());
+	closeSection(addAudioDeviceSection());
+	closeSection(addControlsSection());
+
+	m_contextMenu->addAction(Global::get().mw->qaQuit);
+}
+
+bool TrayIcon::addWindowVisibilitySection() {
 	if (Global::get().mw->isVisible() && !Global::get().mw->isMinimized()) {
 		m_hideAction->setEnabled(QSystemTrayIcon::isSystemTrayAvailable());
 		m_contextMenu->addAction(m_hideAction);
@@ -280,23 +337,22 @@ void TrayIcon::updateContextMenu() {
 		m_contextMenu->addAction(m_showAction);
 	}
 
-	m_contextMenu->addSeparator();
+	return true;
+}
 
-	if (Global::get().s.bTrayShowChannel) {
-		updateChannelMenu();
-		m_contextMenu->addMenu(m_channelMenu);
-		m_contextMenu->addSeparator();
+bool TrayIcon::addChannelSection() {
+	if (!Global::get().s.bTrayShowChannel) {
+		return false;
 	}
 
-	m_contextMenu->addAction(Global::get().mw->qaAudioMute);
-	m_contextMenu->addAction(Global::get().mw->qaAudioDeaf);
-	m_contextMenu->addAction(Global::get().mw->qaTalkingUIToggle);
+	updateChannelMenu();
+	m_contextMenu->addMenu(m_channelMenu);
 
+	return true;
+}
+
+bool TrayIcon::addAudioDeviceSection() {
 	const Settings &settings = Global::get().s;
-
-	if (settings.bTrayShowTransmitMode || settings.bTrayShowNoiseCancel || settings.bTrayShowOutputDevice) {
-		m_contextMenu->addSeparator();
-	}
 
 	if (settings.bTrayShowTransmitMode) {
 		populateChoiceMenu(m_transmitModeMenu, Global::get().mw->transmitModeChoices(),
@@ -322,21 +378,27 @@ void TrayIcon::updateContextMenu() {
 		m_contextMenu->addMenu(m_outputDeviceMenu);
 	}
 
-	if (Global::get().s.bTrayShowRecording) {
-		m_contextMenu->addSeparator();
+	return settings.bTrayShowTransmitMode || settings.bTrayShowNoiseCancel || settings.bTrayShowOutputDevice;
+}
 
-		updateRecordAction();
-		m_contextMenu->addAction(m_recordAction);
+bool TrayIcon::addControlsSection() {
+	m_recordButton->setVisible(Global::get().s.bTrayShowRecording);
+	updateRecordAction();
+
+	m_contextMenu->addAction(m_controlsAction);
+
+	if (Global::get().s.bTrayShowTalkingUI) {
+		m_contextMenu->addAction(Global::get().mw->qaTalkingUIToggle);
 	}
 
-	m_contextMenu->addSeparator();
-	m_contextMenu->addAction(Global::get().mw->qaQuit);
+	return true;
 }
 
 void TrayIcon::updateRecordAction() {
 	const bool recording = Global::get().mw->isRecording();
 
 	m_recordAction->setText(recording ? tr("Stop Recording") : tr("Start Recording"));
+	m_recordAction->setChecked(recording);
 	// Recording needs a server that allows it, just like the main window's entry does
 	m_recordAction->setEnabled(recording || Global::get().mw->qaRecording->isEnabled());
 }

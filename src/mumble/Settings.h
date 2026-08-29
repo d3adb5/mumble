@@ -674,6 +674,7 @@ struct Settings {
 	bool bTrayShowNoiseCancel  = true;
 	bool bTrayShowOutputDevice = true;
 	bool bTrayShowRecording    = true;
+	bool bTrayShowTalkingUI    = true;
 
 	// Accessibility
 	bool bHighContrast = false;
