@@ -219,8 +219,11 @@ TrayIcon::TrayIcon() : QSystemTrayIcon(Global::get().mw), m_statusIcon(Global::g
 		button->setDefaultAction(action);
 		button->setAutoRaise(true);
 		button->setToolButtonStyle(Qt::ToolButtonIconOnly);
+		// The row is handed the menu's full width, which the buttons share evenly -
+		// including when one of them is left out
+		button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
-		controlsBox->addWidget(button);
+		controlsBox->addWidget(button, 1);
 
 		return button;
 	};
@@ -228,8 +231,6 @@ TrayIcon::TrayIcon() : QSystemTrayIcon(Global::get().mw), m_statusIcon(Global::g
 	addControlButton(Global::get().mw->qaAudioMute);
 	addControlButton(Global::get().mw->qaAudioDeaf);
 	m_recordButton = addControlButton(m_recordAction);
-
-	controlsBox->addStretch(1);
 
 	m_controlsAction = new QWidgetAction(this);
 	m_controlsAction->setDefaultWidget(controls);
