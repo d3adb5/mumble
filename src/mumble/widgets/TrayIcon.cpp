@@ -19,6 +19,8 @@
 
 #include <QApplication>
 #include <QtGui/QFont>
+#include <QtGui/QKeyEvent>
+#include <QtGui/QMouseEvent>
 #include <QtWidgets/QHBoxLayout>
 
 #ifdef USE_DBUS
@@ -257,6 +259,13 @@ TrayIcon::TrayIcon() : QSystemTrayIcon(Global::get().mw), m_statusIcon(Global::g
 	QObject::connect(m_contextMenu, &QMenu::aboutToShow, this, &TrayIcon::on_contextMenu_aboutToShow);
 	QObject::connect(m_contextMenu, &QMenu::aboutToHide, this, &TrayIcon::on_contextMenu_aboutToHide);
 
+	// Once a context menu is done with, its entry goes back to carrying none. This has
+	// to wait for the menu to be gone, hence the queued connections.
+	QObject::connect(Global::get().mw->qmUser, &QMenu::aboutToHide, this, &TrayIcon::disarmUserContextMenu,
+					 Qt::QueuedConnection);
+	QObject::connect(Global::get().mw->qmListener, &QMenu::aboutToHide, this, &TrayIcon::disarmUserContextMenu,
+					 Qt::QueuedConnection);
+
 	// Some window managers hate it when a tray icon sets an empty context menu...
 	updateContextMenu();
 
@@ -444,6 +453,8 @@ void TrayIcon::on_contextMenu_aboutToShow() {
 
 void TrayIcon::on_contextMenu_aboutToHide() {
 	m_channelViewTimer->stop();
+
+	QMetaObject::invokeMethod(this, [this]() { disarmUserContextMenu(); }, Qt::QueuedConnection);
 }
 
 void TrayIcon::updateChannelMenu() {
@@ -487,6 +498,8 @@ QMenu *TrayIcon::channelMenu(unsigned int channelId) {
 
 	// Only the branches the user actually walks into are built
 	QObject::connect(record.menu, &QMenu::aboutToShow, this, [this, channelId]() { fillChannelMenu(channelId); });
+
+	record.menu->installEventFilter(this);
 
 	m_channelMenus.insert(channelId, record);
 
@@ -561,6 +574,10 @@ void TrayIcon::fillChannelMenu(unsigned int channelId, bool allowRebuild) {
 		return;
 	}
 
+	for (QAction *action : record.userActions) {
+		m_userContextMenus.remove(action);
+	}
+
 	menu->clear();
 	record.userActions.clear();
 
@@ -595,13 +612,15 @@ void TrayIcon::fillChannelMenu(unsigned int channelId, bool allowRebuild) {
 				action->setFont(font);
 			}
 
+			// The entry is handed its context menu when it is clicked, not before, so
+			// that pointing at a user does not open one
 			const unsigned int session = entry.session;
 			if (entry.state.listener) {
-				action->setMenu(Global::get().mw->qmListener);
+				m_userContextMenus.insert(action, Global::get().mw->qmListener);
 				QObject::connect(action, &QAction::hovered, this,
 								 [this, session, channelId]() { selectListener(session, channelId); });
 			} else {
-				action->setMenu(Global::get().mw->qmUser);
+				m_userContextMenus.insert(action, Global::get().mw->qmUser);
 				QObject::connect(action, &QAction::hovered, this, [this, session]() { selectUser(session); });
 			}
 
@@ -656,6 +675,9 @@ void TrayIcon::refreshChannelMenus() {
 }
 
 void TrayIcon::clearChannelMenus() {
+	disarmUserContextMenu();
+	m_userContextMenus.clear();
+
 	for (auto it = m_channelMenus.begin(); it != m_channelMenus.end(); ++it) {
 		if (it.key() == Mumble::ROOT_CHANNEL_ID) {
 			it->menu->clear();
@@ -665,6 +687,63 @@ void TrayIcon::clearChannelMenus() {
 	}
 
 	m_channelMenus.clear();
+}
+
+bool TrayIcon::eventFilter(QObject *object, QEvent *event) {
+	QMenu *menu = qobject_cast< QMenu * >(object);
+	if (!menu) {
+		return QSystemTrayIcon::eventFilter(object, event);
+	}
+
+	switch (event->type()) {
+		case QEvent::MouseButtonPress:
+			// Qt opens the entry's menu right after this, if it has one by then
+			armUserContextMenu(menu->actionAt(static_cast< QMouseEvent * >(event)->position().toPoint()));
+			break;
+		case QEvent::KeyPress: {
+			const int key = static_cast< QKeyEvent * >(event)->key();
+			if (key != Qt::Key_Right && key != Qt::Key_Return && key != Qt::Key_Enter) {
+				break;
+			}
+
+			QAction *action = menu->activeAction();
+			if (!m_userContextMenus.contains(action)) {
+				break;
+			}
+
+			armUserContextMenu(action);
+			// Opens what the key press would have opened by itself, had the entry
+			// been carrying its menu all along
+			menu->setActiveAction(action);
+
+			return true;
+		}
+		default:
+			break;
+	}
+
+	return QSystemTrayIcon::eventFilter(object, event);
+}
+
+void TrayIcon::armUserContextMenu(QAction *action) {
+	const auto it = m_userContextMenus.constFind(action);
+	if (it == m_userContextMenus.constEnd() || m_armedUserAction == action) {
+		// Clicking the entry whose menu is already open must not take that menu away
+		// from underneath it
+		return;
+	}
+
+	disarmUserContextMenu();
+
+	action->setMenu(*it);
+	m_armedUserAction = action;
+}
+
+void TrayIcon::disarmUserContextMenu() {
+	if (m_armedUserAction) {
+		m_armedUserAction->setMenu(nullptr);
+		m_armedUserAction.clear();
+	}
 }
 
 void TrayIcon::selectUser(unsigned int session) {

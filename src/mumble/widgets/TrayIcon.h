@@ -13,6 +13,7 @@
 #include <QtCore/QHash>
 #include <QtCore/QList>
 #include <QtCore/QPair>
+#include <QtCore/QPointer>
 #include <QtCore/QVariant>
 #include <QtWidgets/QMenu>
 #include <QtWidgets/QSystemTrayIcon>
@@ -76,6 +77,10 @@ private:
 	QTimer *m_channelViewTimer = nullptr;
 	/// The menus of the channel tree, by the ID of the channel they show
 	QHash< unsigned int, ChannelMenu > m_channelMenus;
+	/// The context menu every user entry of the channel tree opens
+	QHash< QAction *, QMenu * > m_userContextMenus;
+	/// The user entry that is currently carrying its context menu, if any
+	QPointer< QAction > m_armedUserAction;
 #ifdef USE_DBUS
 	/// ID of the last notification posted via org.freedesktop.Notifications, so that
 	/// a new notification replaces the previous one instead of stacking up
@@ -117,6 +122,13 @@ private:
 	/// Forgets every channel menu, which is what leaving a server calls for.
 	void clearChannelMenus();
 
+	/// Hands the given user entry its context menu, so that the click opening it can
+	/// go through. Entries carry no menu the rest of the time, which is what keeps a
+	/// cursor passing over them from opening one.
+	void armUserContextMenu(QAction *action);
+	/// Takes the context menu off the entry that is carrying it.
+	void disarmUserContextMenu();
+
 	/// Points the main window's context menus at the given user, channel or listener,
 	/// the way selecting them in its user list does.
 	void selectUser(unsigned int session);
@@ -130,6 +142,11 @@ private:
 	/// Shows a pop-up notification, preferring the freedesktop.org notification
 	/// service over the Qt tray icon balloon
 	void showNotification(const QString &title, const QString &body, QSystemTrayIcon::MessageIcon icon);
+
+protected:
+	/// Watches the channel tree's menus for the click (or key) that is supposed to
+	/// open a user's context menu.
+	bool eventFilter(QObject *object, QEvent *event) Q_DECL_OVERRIDE;
 
 private slots:
 	void on_contextMenu_aboutToShow();
