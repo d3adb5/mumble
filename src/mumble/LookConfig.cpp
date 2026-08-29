@@ -10,6 +10,7 @@
 #include "AudioOutput.h"
 #include "MainWindow.h"
 #include "SearchDialog.h"
+#include "TrayMenuModel.h"
 #include "UserModel.h"
 #include "Global.h"
 
@@ -192,6 +193,43 @@ void LookConfig::reloadThemes() {
 	}
 }
 
+/// The name a tray menu section goes by in the settings dialog.
+static QString trayMenuSectionLabel(Mumble::TrayMenu::Section section) {
+	switch (section) {
+		case Mumble::TrayMenu::Section::Channels:
+			return LookConfig::tr("Channel tree");
+		case Mumble::TrayMenu::Section::AudioDevices:
+			return LookConfig::tr("Audio settings");
+		case Mumble::TrayMenu::Section::Controls:
+			break;
+	}
+
+	return LookConfig::tr("Toggles");
+}
+
+void LookConfig::moveTrayMenuSection(int offset) {
+	const int row = qlwTrayMenuOrder->currentRow();
+	if (row < 0) {
+		return;
+	}
+
+	const int target = row + offset;
+	if (target < 0 || target >= qlwTrayMenuOrder->count()) {
+		return;
+	}
+
+	qlwTrayMenuOrder->insertItem(target, qlwTrayMenuOrder->takeItem(row));
+	qlwTrayMenuOrder->setCurrentRow(target);
+}
+
+void LookConfig::on_qtbTrayMenuOrderUp_clicked() {
+	moveTrayMenuSection(-1);
+}
+
+void LookConfig::on_qtbTrayMenuOrderDown_clicked() {
+	moveTrayMenuSection(1);
+}
+
 void LookConfig::load(const Settings &r) {
 	loadComboBox(qcbLanguage, 0);
 	loadComboBox(qcbChannelDrag, 0);
@@ -245,6 +283,12 @@ void LookConfig::load(const Settings &r) {
 	loadCheckBox(qcbTrayShowOutputDevice, r.bTrayShowOutputDevice);
 	loadCheckBox(qcbTrayShowRecording, r.bTrayShowRecording);
 	loadCheckBox(qcbTrayShowTalkingUI, r.bTrayShowTalkingUI);
+
+	qlwTrayMenuOrder->clear();
+	for (Mumble::TrayMenu::Section section : Mumble::TrayMenu::parseSectionOrder(r.qslTrayMenuOrder)) {
+		QListWidgetItem *item = new QListWidgetItem(trayMenuSectionLabel(section), qlwTrayMenuOrder);
+		item->setData(Qt::UserRole, Mumble::TrayMenu::sectionKey(section));
+	}
 	loadCheckBox(qcbShowUserCount, r.bShowUserCount);
 	loadCheckBox(qcbShowVolumeAdjustments, r.bShowVolumeAdjustments);
 	loadCheckBox(qcbShowNicknamesOnly, r.bShowNicknamesOnly);
@@ -320,19 +364,25 @@ void LookConfig::save() const {
 		s.requireRestartToApply = true;
 	}
 
-	s.aotbAlwaysOnTop           = static_cast< Settings::AlwaysOnTopBehaviour >(qcbAlwaysOnTop->currentIndex());
-	s.quitBehavior              = static_cast< QuitBehavior >(qcbQuitBehavior->currentIndex());
-	s.bEnableDeveloperMenu      = qcbEnableDeveloperMenu->isChecked();
-	s.bLockLayout               = qcbLockLayout->isChecked();
-	s.preventWindowStates       = !qcbRestoreWindowState->isChecked();
-	s.bHideInTray               = qcbHideTray->isChecked();
-	s.bStateInTray              = qcbStateInTray->isChecked();
-	s.bTrayShowChannel          = qcbTrayShowChannel->isChecked();
-	s.bTrayShowTransmitMode     = qcbTrayShowTransmitMode->isChecked();
-	s.bTrayShowNoiseCancel      = qcbTrayShowNoiseCancel->isChecked();
-	s.bTrayShowOutputDevice     = qcbTrayShowOutputDevice->isChecked();
-	s.bTrayShowRecording        = qcbTrayShowRecording->isChecked();
-	s.bTrayShowTalkingUI        = qcbTrayShowTalkingUI->isChecked();
+	s.aotbAlwaysOnTop       = static_cast< Settings::AlwaysOnTopBehaviour >(qcbAlwaysOnTop->currentIndex());
+	s.quitBehavior          = static_cast< QuitBehavior >(qcbQuitBehavior->currentIndex());
+	s.bEnableDeveloperMenu  = qcbEnableDeveloperMenu->isChecked();
+	s.bLockLayout           = qcbLockLayout->isChecked();
+	s.preventWindowStates   = !qcbRestoreWindowState->isChecked();
+	s.bHideInTray           = qcbHideTray->isChecked();
+	s.bStateInTray          = qcbStateInTray->isChecked();
+	s.bTrayShowChannel      = qcbTrayShowChannel->isChecked();
+	s.bTrayShowTransmitMode = qcbTrayShowTransmitMode->isChecked();
+	s.bTrayShowNoiseCancel  = qcbTrayShowNoiseCancel->isChecked();
+	s.bTrayShowOutputDevice = qcbTrayShowOutputDevice->isChecked();
+	s.bTrayShowRecording    = qcbTrayShowRecording->isChecked();
+	s.bTrayShowTalkingUI    = qcbTrayShowTalkingUI->isChecked();
+
+	QStringList trayMenuOrder;
+	for (int i = 0; i < qlwTrayMenuOrder->count(); ++i) {
+		trayMenuOrder.append(qlwTrayMenuOrder->item(i)->data(Qt::UserRole).toString());
+	}
+	s.qslTrayMenuOrder          = trayMenuOrder;
 	s.bShowUserCount            = qcbShowUserCount->isChecked();
 	s.bShowVolumeAdjustments    = qcbShowVolumeAdjustments->isChecked();
 	s.bShowNicknamesOnly        = qcbShowNicknamesOnly->isChecked();

@@ -213,6 +213,7 @@
 	PROCESS(ui, TRAY_OUTPUT_DEVICE_MENU_KEY, bTrayShowOutputDevice)              \
 	PROCESS(ui, TRAY_RECORDING_MENU_KEY, bTrayShowRecording)                     \
 	PROCESS(ui, TRAY_TALKING_UI_MENU_KEY, bTrayShowTalkingUI)                    \
+	PROCESS(ui, TRAY_MENU_SECTION_ORDER_KEY, qslTrayMenuOrder)                   \
 	PROCESS(ui, HIGH_CONTRAST_MODE_KEY, bHighContrast)                           \
 	PROCESS(ui, MAX_LOG_LENGTH_KEY, iMaxLogBlocks)                               \
 	PROCESS(ui, USE_24H_CLOCK_KEY, bLog24HourClock)                              \
@@ -561,6 +562,7 @@
 	PROCESS(ui, TRAY_OUTPUT_DEVICE_MENU_KEY, bTrayShowOutputDevice)                                \
 	PROCESS(ui, TRAY_RECORDING_MENU_KEY, bTrayShowRecording)                                       \
 	PROCESS(ui, TRAY_TALKING_UI_MENU_KEY, bTrayShowTalkingUI)                                      \
+	PROCESS(ui, TRAY_MENU_SECTION_ORDER_KEY, qslTrayMenuOrder)                                     \
 	PROCESS(ui, HIGH_CONTRAST_MODE_KEY, bHighContrast)                                             \
 	PROCESS(ui, SELECTED_ITEM_AS_CHATBAR_TARGET_KEY, bChatBarUseSelection)                         \
 	PROCESS(ui, FILTER_HIDES_EMPTY_CHANNEL_KEY, bFilterHidesEmptyChannels)                         \

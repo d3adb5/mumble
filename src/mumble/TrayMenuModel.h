@@ -9,6 +9,7 @@
 #include <QtCore/QList>
 #include <QtCore/QPair>
 #include <QtCore/QString>
+#include <QtCore/QStringList>
 #include <QtCore/QVariant>
 
 #include <algorithm>
@@ -47,6 +48,69 @@ namespace TrayMenu {
 		QString escaped = text;
 
 		return escaped.replace(QLatin1String("&"), QLatin1String("&&"));
+	}
+
+	/// A section of the tray icon's context menu that the user can move around. The
+	/// entry showing or hiding the main window stays at the top and the one quitting
+	/// at the bottom, where a tray menu is expected to have them.
+	enum class Section {
+		Channels,
+		AudioDevices,
+		Controls,
+	};
+
+	/// The sections in the order they are shown in unless configured otherwise.
+	inline QList< Section > defaultSectionOrder() {
+		return { Section::Channels, Section::AudioDevices, Section::Controls };
+	}
+
+	/// The name a section is stored under in the settings.
+	inline QString sectionKey(Section section) {
+		switch (section) {
+			case Section::Channels:
+				return QStringLiteral("channels");
+			case Section::AudioDevices:
+				return QStringLiteral("audio_devices");
+			case Section::Controls:
+				break;
+		}
+
+		return QStringLiteral("controls");
+	}
+
+	/// Reads the configured order of the menu's sections. Names that are not (or no
+	/// longer) known are dropped, as are repeated ones, and every section the setting
+	/// does not mention is appended in its default position - so a setting written by
+	/// an older or newer version still yields a complete menu.
+	inline QList< Section > parseSectionOrder(const QStringList &configured) {
+		QList< Section > order;
+
+		for (const QString &name : configured) {
+			for (Section section : defaultSectionOrder()) {
+				if (sectionKey(section) == name && !order.contains(section)) {
+					order.append(section);
+				}
+			}
+		}
+
+		for (Section section : defaultSectionOrder()) {
+			if (!order.contains(section)) {
+				order.append(section);
+			}
+		}
+
+		return order;
+	}
+
+	/// Writes an order back into the form it is stored in.
+	inline QStringList serializeSectionOrder(const QList< Section > &order) {
+		QStringList names;
+
+		for (Section section : order) {
+			names.append(sectionKey(section));
+		}
+
+		return names;
 	}
 
 	/// Talking state of a user, mirroring Settings::TalkState. Kept separate so that

@@ -322,9 +322,20 @@ void TrayIcon::updateContextMenu() {
 	};
 
 	closeSection(addWindowVisibilitySection());
-	closeSection(addChannelSection());
-	closeSection(addAudioDeviceSection());
-	closeSection(addControlsSection());
+
+	for (Mumble::TrayMenu::Section section : Mumble::TrayMenu::parseSectionOrder(Global::get().s.qslTrayMenuOrder)) {
+		switch (section) {
+			case Mumble::TrayMenu::Section::Channels:
+				closeSection(addChannelSection());
+				break;
+			case Mumble::TrayMenu::Section::AudioDevices:
+				closeSection(addAudioDeviceSection());
+				break;
+			case Mumble::TrayMenu::Section::Controls:
+				closeSection(addControlsSection());
+				break;
+		}
+	}
 
 	m_contextMenu->addAction(Global::get().mw->qaQuit);
 }

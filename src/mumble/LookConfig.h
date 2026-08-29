@@ -45,6 +45,8 @@ public slots:
 	void setStyleType(StyleType styleType) const;
 	StyleType getStyleType() const;
 	void themeDirectoryChanged();
+	void on_qtbTrayMenuOrderUp_clicked();
+	void on_qtbTrayMenuOrderDown_clicked();
 	void on_qcbAbbreviateChannelNames_stateChanged(int state);
 	void on_qcbUsersAlwaysVisible_stateChanged(int state);
 	void qbBackgroundColor_clicked();
@@ -52,6 +54,10 @@ public slots:
 private:
 	/// Reload themes combobox and select given configuredStyle in it
 	void reloadThemes();
+
+	/// Moves the selected tray menu section by the given number of places, keeping
+	/// it selected so that it can be moved on.
+	void moveTrayMenuSection(int offset);
 
 	/// Timer to prevent change event floods from triggering theme reloads
 	QTimer *m_themeDirectoryDebouncer;

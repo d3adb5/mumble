@@ -24,6 +24,13 @@ private slots:
 	void noChoicesAtAll();
 	void escapesAmpersands();
 
+	void keepsConfiguredSectionOrder();
+	void appendsUnmentionedSections();
+	void dropsUnknownSectionNames();
+	void dropsRepeatedSections();
+	void emptyOrderIsTheDefaultOne();
+	void sectionOrderRoundTrip();
+
 	void listenersComeFirst();
 	void sortsUsersByName();
 	void sortsEqualNamesCaseSensitively();
@@ -95,6 +102,48 @@ void TestTrayMenuModel::escapesAmpersands() {
 	QCOMPARE(escapeMenuText(QStringLiteral("&&")), QStringLiteral("&&&&"));
 	QCOMPARE(escapeMenuText(QStringLiteral("Speex & RNNoise")), QStringLiteral("Speex && RNNoise"));
 	QCOMPARE(escapeMenuText(QStringLiteral("no ampersand")), QStringLiteral("no ampersand"));
+}
+
+void TestTrayMenuModel::keepsConfiguredSectionOrder() {
+	const QList< Section > order =
+		parseSectionOrder({ QStringLiteral("controls"), QStringLiteral("channels"), QStringLiteral("audio_devices") });
+
+	QCOMPARE(order, QList< Section >({ Section::Controls, Section::Channels, Section::AudioDevices }));
+}
+
+void TestTrayMenuModel::appendsUnmentionedSections() {
+	// A setting written before a section existed must not lose it
+	const QList< Section > order = parseSectionOrder({ QStringLiteral("controls") });
+
+	QCOMPARE(order.size(), defaultSectionOrder().size());
+	QCOMPARE(order.at(0), Section::Controls);
+	QCOMPARE(order.at(1), Section::Channels);
+	QCOMPARE(order.at(2), Section::AudioDevices);
+}
+
+void TestTrayMenuModel::dropsUnknownSectionNames() {
+	// A setting written by a version that has a section this one does not
+	const QList< Section > order =
+		parseSectionOrder({ QStringLiteral("channels"), QStringLiteral("teleporter"), QStringLiteral("controls") });
+
+	QCOMPARE(order, QList< Section >({ Section::Channels, Section::Controls, Section::AudioDevices }));
+}
+
+void TestTrayMenuModel::dropsRepeatedSections() {
+	const QList< Section > order =
+		parseSectionOrder({ QStringLiteral("controls"), QStringLiteral("controls"), QStringLiteral("channels") });
+
+	QCOMPARE(order, QList< Section >({ Section::Controls, Section::Channels, Section::AudioDevices }));
+}
+
+void TestTrayMenuModel::emptyOrderIsTheDefaultOne() {
+	QCOMPARE(parseSectionOrder(QStringList()), defaultSectionOrder());
+}
+
+void TestTrayMenuModel::sectionOrderRoundTrip() {
+	const QList< Section > order = { Section::Controls, Section::AudioDevices, Section::Channels };
+
+	QCOMPARE(parseSectionOrder(serializeSectionOrder(order)), order);
 }
 
 static UserEntry user(const QString &name, const UserState &state = UserState()) {

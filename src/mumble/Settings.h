@@ -675,6 +675,9 @@ struct Settings {
 	bool bTrayShowOutputDevice = true;
 	bool bTrayShowRecording    = true;
 	bool bTrayShowTalkingUI    = true;
+	/// Order the tray menu's sections are shown in, by the names
+	/// Mumble::TrayMenu::sectionKey() gives them. Empty means the default order.
+	QStringList qslTrayMenuOrder = {};
 
 	// Accessibility
 	bool bHighContrast = false;

@@ -242,6 +242,7 @@ const SettingsKey TRAY_NOISE_CANCEL_MENU_KEY           = { "tray_menu_noise_canc
 const SettingsKey TRAY_OUTPUT_DEVICE_MENU_KEY          = { "tray_menu_output_device" };
 const SettingsKey TRAY_RECORDING_MENU_KEY              = { "tray_menu_recording" };
 const SettingsKey TRAY_TALKING_UI_MENU_KEY             = { "tray_menu_talking_ui" };
+const SettingsKey TRAY_MENU_SECTION_ORDER_KEY          = { "tray_menu_section_order" };
 const SettingsKey HIGH_CONTRAST_MODE_KEY               = { "high_contrast_mode" };
 const SettingsKey MAX_LOG_LENGTH_KEY                   = { "max_log_length" };
 const SettingsKey USE_24H_CLOCK_KEY                    = { "use_24h_clock_format" };

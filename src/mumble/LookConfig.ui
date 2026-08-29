@@ -384,6 +384,79 @@
         </property>
        </widget>
       </item>
+      <item>
+       <widget class="QLabel" name="qliTrayMenuOrder">
+        <property name="text">
+         <string>Order of the tray menu's sections</string>
+        </property>
+        <property name="buddy">
+         <cstring>qlwTrayMenuOrder</cstring>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="qhblTrayMenuOrder">
+        <item>
+         <widget class="QListWidget" name="qlwTrayMenuOrder">
+          <property name="toolTip">
+           <string>Order in which the sections of the tray icon's menu are shown, between showing the window and quitting</string>
+          </property>
+          <property name="accessibleName">
+           <string>Tray menu sections</string>
+          </property>
+          <property name="dragDropMode">
+           <enum>QAbstractItemView::InternalMove</enum>
+          </property>
+          <property name="maximumHeight">
+           <number>90</number>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <layout class="QVBoxLayout" name="qvblTrayMenuOrder">
+          <item>
+           <widget class="QToolButton" name="qtbTrayMenuOrderUp">
+            <property name="toolTip">
+             <string>Move the selected section up</string>
+            </property>
+            <property name="accessibleName">
+             <string>Move section up</string>
+            </property>
+            <property name="text">
+             <string>▲</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QToolButton" name="qtbTrayMenuOrderDown">
+            <property name="toolTip">
+             <string>Move the selected section down</string>
+            </property>
+            <property name="accessibleName">
+             <string>Move section down</string>
+            </property>
+            <property name="text">
+             <string>▼</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="qspTrayMenuOrder">
+            <property name="orientation">
+             <enum>Qt::Vertical</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>0</width>
+              <height>0</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </item>
      </layout>
     </widget>
    </item>
@@ -1475,6 +1548,9 @@
   <tabstop>qcbTrayShowOutputDevice</tabstop>
   <tabstop>qcbTrayShowRecording</tabstop>
   <tabstop>qcbTrayShowTalkingUI</tabstop>
+  <tabstop>qlwTrayMenuOrder</tabstop>
+  <tabstop>qtbTrayMenuOrderUp</tabstop>
+  <tabstop>qtbTrayMenuOrderDown</tabstop>
   <tabstop>qcbSearchUserAction</tabstop>
   <tabstop>qcbSearchChannelAction</tabstop>
   <tabstop>qcbChannelDrag</tabstop>
