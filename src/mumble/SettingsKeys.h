@@ -240,6 +240,7 @@ const SettingsKey TRAY_CHANNEL_MENU_KEY                = { "tray_menu_current_ch
 const SettingsKey TRAY_TRANSMIT_MODE_MENU_KEY          = { "tray_menu_transmit_mode" };
 const SettingsKey TRAY_NOISE_CANCEL_MENU_KEY           = { "tray_menu_noise_cancel" };
 const SettingsKey TRAY_OUTPUT_DEVICE_MENU_KEY          = { "tray_menu_output_device" };
+const SettingsKey TRAY_RECORDING_MENU_KEY              = { "tray_menu_recording" };
 const SettingsKey HIGH_CONTRAST_MODE_KEY               = { "high_contrast_mode" };
 const SettingsKey MAX_LOG_LENGTH_KEY                   = { "max_log_length" };
 const SettingsKey USE_24H_CLOCK_KEY                    = { "use_24h_clock_format" };

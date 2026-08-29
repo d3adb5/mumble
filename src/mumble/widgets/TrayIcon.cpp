@@ -169,6 +169,12 @@ TrayIcon::TrayIcon() : QSystemTrayIcon(Global::get().mw), m_statusIcon(Global::g
 	m_hideAction = new QAction(tr("Hide"), Global::get().mw);
 	QObject::connect(m_hideAction, &QAction::triggered, this, &TrayIcon::on_hideAction_triggered);
 
+	m_recordAction =
+		new QAction(QIcon(QLatin1String("skin:actions/media-record.svg")), tr("Start Recording"), Global::get().mw);
+	QObject::connect(m_recordAction, &QAction::triggered, Global::get().mw, &MainWindow::toggleRecording);
+	// The menu is not open while a recording starts or stops from somewhere else
+	QObject::connect(Global::get().mw, &MainWindow::recordingStateChanged, this, &TrayIcon::updateRecordAction);
+
 	QObject::connect(Global::get().mw->qaTalkingUIToggle, &QAction::triggered, this, &TrayIcon::updateContextMenu);
 
 	// Submenus mirroring the main window's toolbar dropdowns. They are filled in
@@ -317,8 +323,23 @@ void TrayIcon::updateContextMenu() {
 		m_contextMenu->addMenu(m_outputDeviceMenu);
 	}
 
+	if (Global::get().s.bTrayShowRecording) {
+		m_contextMenu->addSeparator();
+
+		updateRecordAction();
+		m_contextMenu->addAction(m_recordAction);
+	}
+
 	m_contextMenu->addSeparator();
 	m_contextMenu->addAction(Global::get().mw->qaQuit);
+}
+
+void TrayIcon::updateRecordAction() {
+	const bool recording = Global::get().mw->isRecording();
+
+	m_recordAction->setText(recording ? tr("Stop Recording") : tr("Start Recording"));
+	// Recording needs a server that allows it, just like the main window's entry does
+	m_recordAction->setEnabled(recording || Global::get().mw->qaRecording->isEnabled());
 }
 
 void TrayIcon::on_contextMenu_aboutToHide() {

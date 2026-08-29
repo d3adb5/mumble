@@ -40,6 +40,7 @@
 #include "PluginManager.h"
 #include "PositionalAudioViewer.h"
 #include "QtWidgetUtils.h"
+#include "RecordingTarget.h"
 #include "RichTextEditor.h"
 #include "Screen.h"
 #include "SearchDialog.h"
@@ -60,6 +61,7 @@
 #include "Utils.h"
 #include "VersionCheck.h"
 #include "ViewCert.h"
+#include "VoiceRecorder.h"
 #include "VoiceRecorderDialog.h"
 #include "Global.h"
 
@@ -1686,9 +1688,145 @@ void MainWindow::enableRecording(bool recordingAllowed) {
 
 	Global::get().recordingAllowed = recordingAllowed;
 
-	if (!recordingAllowed && voiceRecorderDialog) {
-		voiceRecorderDialog->reject();
+	if (!recordingAllowed) {
+		if (voiceRecorderDialog) {
+			voiceRecorderDialog->reject();
+		} else {
+			// A recording started from the tray has no dialog to reject
+			stopRecording();
+		}
 	}
+}
+
+bool MainWindow::isRecording() const {
+	if (!Global::get().sh) {
+		return false;
+	}
+
+	VoiceRecorderPtr recorder(Global::get().sh->recorder);
+
+	return recorder && recorder->isRunning();
+}
+
+void MainWindow::toggleRecording() {
+	if (voiceRecorderDialog) {
+		// The dialog owns the recording it started and shows its state, so let it do
+		// the work instead of pulling the recorder out from under it.
+		if (isRecording()) {
+			voiceRecorderDialog->on_qpbStop_clicked();
+		} else {
+			voiceRecorderDialog->on_qpbStart_clicked();
+		}
+
+		return;
+	}
+
+	if (isRecording()) {
+		stopRecording();
+	} else {
+		startRecording();
+	}
+}
+
+void MainWindow::startRecording() {
+	if (!Global::get().uiSession || !Global::get().sh) {
+		Global::get().l->log(Log::Warning, tr("Unable to start recording - not connected to a server."));
+		return;
+	}
+
+	if (Global::get().sh->m_version < Version::fromComponents(1, 2, 3)) {
+		// For privacy reasons servers older than that don't tell the others that
+		// somebody is recording, so Mumble refuses to record on them.
+		Global::get().l->log(Log::Warning, tr("Unable to start recording - the server is too old (1.2.2 or older)."));
+		return;
+	}
+
+	if (Global::get().sh->recorder) {
+		Global::get().l->log(Log::Warning, tr("There is already a recorder active for this server."));
+		return;
+	}
+
+	AudioOutputPtr ao(Global::get().ao);
+	if (!ao) {
+		return;
+	}
+
+	Settings &settings = Global::get().s;
+
+	if (settings.iRecordingFormat < 0 || settings.iRecordingFormat >= VoiceRecorderFormat::kEnd) {
+		settings.iRecordingFormat = 0;
+	}
+	const VoiceRecorderFormat::Format format = static_cast< VoiceRecorderFormat::Format >(settings.iRecordingFormat);
+
+	QString directory = settings.qsRecordingPath;
+	if (directory.isEmpty()) {
+		directory = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+	}
+
+	const bool transportRequested = settings.rmRecordingMode == Settings::RecordingMultichannelAndTransport
+									|| settings.rmRecordingMode == Settings::RecordingTransportStandalone;
+
+	VoiceRecorder::Config config;
+	config.sampleRate = static_cast< int >(ao->getMixerFreq());
+	config.fileName = Mumble::RecordingTarget::resolveFilePath(directory, settings.qsRecordingFile,
+															   VoiceRecorderFormat::getFormatDefaultExtension(format));
+	config.mixDownMode = settings.rmRecordingMode == Settings::RecordingMixdown
+						 || settings.rmRecordingMode == Settings::RecordingTransportStandalone;
+	// Only some backends can record what is being played back, just like the dialog
+	// only offers those modes for them.
+	config.transportEnable = transportRequested && ao->supportsTransportRecording();
+	config.recordingFormat = format;
+
+	if (config.sampleRate == 0) {
+		// If we don't catch this here, Mumble will crash because VoiceRecorder expects the sample rate to be non-zero
+		Global::get().l->log(Log::Warning,
+							 tr("Unable to start recording - the audio output is misconfigured (0Hz sample rate)"));
+		return;
+	}
+
+	Global::get().sh->announceRecordingState(true);
+
+	Global::get().sh->recorder.reset(new VoiceRecorder(this, config));
+	VoiceRecorderPtr recorder(Global::get().sh->recorder);
+
+	connect(&*recorder, &VoiceRecorder::recording_stopped, this, &MainWindow::on_recorder_stopped);
+	connect(&*recorder, &VoiceRecorder::error, this, &MainWindow::on_recorder_error);
+
+	recorder->start();
+
+	Global::get().l->log(Log::Information, tr("Recording to %1").arg(config.fileName.toHtmlEscaped()));
+
+	emit recordingStateChanged(true);
+}
+
+void MainWindow::stopRecording() {
+	if (!Global::get().sh) {
+		return;
+	}
+
+	VoiceRecorderPtr recorder(Global::get().sh->recorder);
+	if (!recorder) {
+		return;
+	}
+
+	recorder->stop();
+}
+
+void MainWindow::on_recorder_stopped() {
+	if (Global::get().sh && Global::get().sh->recorder) {
+		Global::get().sh->recorder.reset();
+		Global::get().sh->announceRecordingState(false);
+	}
+
+	Global::get().l->log(Log::Information, tr("Recording stopped"));
+
+	emit recordingStateChanged(false);
+}
+
+void MainWindow::on_recorder_error(int err, QString strerr) {
+	Q_UNUSED(err);
+
+	Global::get().l->log(Log::Warning, strerr.toHtmlEscaped());
 }
 
 void MainWindow::on_user_moved(unsigned int sessionID, const std::optional< unsigned int > &prevChannelID,

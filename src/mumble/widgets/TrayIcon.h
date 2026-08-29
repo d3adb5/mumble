@@ -48,6 +48,7 @@ private:
 	QMenu *m_outputDeviceMenu = nullptr;
 	QAction *m_showAction     = nullptr;
 	QAction *m_hideAction     = nullptr;
+	QAction *m_recordAction   = nullptr;
 	QTimer *m_highlightTimer  = nullptr;
 	/// Keeps the channel view up to date for as long as the context menu is open
 	QTimer *m_channelViewTimer = nullptr;
@@ -70,6 +71,10 @@ private:
 	/// that channel. Entries are only recreated when the users themselves changed, so
 	/// that talking states can be followed while the menu stays open.
 	void updateChannelMenu();
+
+	/// Labels the recording entry after what triggering it would do and disables it
+	/// while recording is not possible.
+	void updateRecordAction();
 
 	/// Shows a pop-up notification, preferring the freedesktop.org notification
 	/// service over the Qt tray icon balloon

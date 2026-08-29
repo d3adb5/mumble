@@ -256,6 +256,12 @@ protected:
 
 	void autocompleteUsername();
 
+	/// Starts a recording with the settings the recorder dialog would have used,
+	/// reporting anything that keeps it from starting to the log.
+	void startRecording();
+	/// Stops the running recording, if there is one.
+	void stopRecording();
+
 public slots:
 	void on_qmServer_aboutToShow();
 	void on_qaServerConnect_triggered(bool autoconnect = false);
@@ -396,6 +402,9 @@ public slots:
 	void on_Reconnect_timeout();
 	void on_qaTalkingUIToggle_triggered();
 	void voiceRecorderDialog_finished(int);
+	/// Cleans up after a recording that was started without the recorder dialog
+	void on_recorder_stopped();
+	void on_recorder_error(int err, QString strerr);
 	void qtvUserCurrentChanged(const QModelIndex &, const QModelIndex &);
 	void serverConnected();
 	void serverDisconnected(QAbstractSocket::SocketError, QString reason);
@@ -465,6 +474,9 @@ public slots:
 	void toggleSearchDialogVisibility();
 	/// Enables or disables the recording feature
 	void enableRecording(bool recordingAllowed);
+	/// Starts a recording with the configured settings, or stops the running one.
+	/// The recorder dialog is used when it is open, so that it stays in sync.
+	void toggleRecording();
 	/// Invokes OS native window highlighting
 	void highlightWindow();
 	void on_user_moved(unsigned int sessionID, const std::optional< unsigned int > &prevChannelID,
@@ -480,6 +492,8 @@ signals:
 	void userRemovedChannelListener(ClientUser *user, Channel *channel);
 	void transmissionModeChanged(Settings::AudioTransmit newMode);
 	void noiseCancelModeChanged(Settings::NoiseCancel newMode);
+	/// Signal emitted whenever a recording is started or has stopped
+	void recordingStateChanged(bool recording);
 
 	/// Signal emitted when the local user changes their talking status either actively or passively
 	void talkingStatusChanged();
@@ -522,6 +536,8 @@ public:
 	void openServerBanListDialog();
 	void toggleSelfPrioritySpeaker();
 	void recording();
+	/// @returns Whether a recording is currently running for this server
+	bool isRecording() const;
 	/// @returns The transmit modes the toolbar dropdown offers, each label paired
 	/// 	with the Settings::AudioTransmit value it stands for.
 	QList< QPair< QString, QVariant > > transmitModeChoices() const;

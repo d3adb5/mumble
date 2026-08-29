@@ -364,6 +364,16 @@
         </property>
        </widget>
       </item>
+      <item>
+       <widget class="QCheckBox" name="qcbTrayShowRecording">
+        <property name="toolTip">
+         <string>Offer starting and stopping a recording in the tray icon's menu</string>
+        </property>
+        <property name="text">
+         <string>Show recording in tray menu</string>
+        </property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>
@@ -1453,6 +1463,7 @@
   <tabstop>qcbTrayShowTransmitMode</tabstop>
   <tabstop>qcbTrayShowNoiseCancel</tabstop>
   <tabstop>qcbTrayShowOutputDevice</tabstop>
+  <tabstop>qcbTrayShowRecording</tabstop>
   <tabstop>qcbSearchUserAction</tabstop>
   <tabstop>qcbSearchChannelAction</tabstop>
   <tabstop>qcbChannelDrag</tabstop>
