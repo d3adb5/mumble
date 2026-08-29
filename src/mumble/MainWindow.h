@@ -538,6 +538,11 @@ public:
 	void recording();
 	/// @returns Whether a recording is currently running for this server
 	bool isRecording() const;
+	/// Points the context menus at the given user and channel, as selecting them in
+	/// the user list would. Whatever the selected item itself resolves to still takes
+	/// precedence, so this is for what it cannot express - the channel a listener
+	/// belongs to, for instance.
+	void setContextMenuTarget(ClientUser *user, Channel *channel);
 	/// @returns The transmit modes the toolbar dropdown offers, each label paired
 	/// 	with the Settings::AudioTransmit value it stands for.
 	QList< QPair< QString, QVariant > > transmitModeChoices() const;

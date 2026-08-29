@@ -1698,6 +1698,11 @@ void MainWindow::enableRecording(bool recordingAllowed) {
 	}
 }
 
+void MainWindow::setContextMenuTarget(ClientUser *user, Channel *channel) {
+	cuContextUser   = user;
+	cContextChannel = channel;
+}
+
 bool MainWindow::isRecording() const {
 	if (!Global::get().sh) {
 		return false;

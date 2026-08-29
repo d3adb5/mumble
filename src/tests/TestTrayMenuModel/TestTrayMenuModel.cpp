@@ -38,6 +38,8 @@ private slots:
 	void silentTransmissionHasOwnIcon();
 	void beingUnheardBeatsTalkingState();
 	void listenerIconWinsOverEverything();
+	void spotsTheSameUsers();
+	void spotsChangedUsers();
 };
 
 static ChoiceList someModes() {
@@ -262,6 +264,33 @@ void TestTrayMenuModel::listenerIconWinsOverEverything() {
 	state.talkState    = TalkState::Talking;
 
 	QCOMPARE(iconFor(state), UserIcon::Listener);
+}
+
+void TestTrayMenuModel::spotsTheSameUsers() {
+	UserEntry first  = user(QStringLiteral("Alice"));
+	UserEntry second = user(QStringLiteral("Bob"));
+	first.session    = 1;
+	second.session   = 2;
+
+	QList< UserEntry > before = { first, second };
+
+	// The same users, one of them now talking: the entries showing them can stay
+	second.state.talkState   = TalkState::Talking;
+	QList< UserEntry > after = { first, second };
+
+	QVERIFY(sameUsers(before, after));
+}
+
+void TestTrayMenuModel::spotsChangedUsers() {
+	UserEntry alice = user(QStringLiteral("Alice"));
+	UserEntry bob   = user(QStringLiteral("Bob"));
+	alice.session   = 1;
+	bob.session     = 2;
+
+	QVERIFY(!sameUsers({ alice, bob }, { alice }));
+	QVERIFY(!sameUsers({ alice, bob }, { bob, alice }));
+	QVERIFY(!sameUsers({ alice }, { listener(QStringLiteral("Alice")) }));
+	QVERIFY(sameUsers({}, {}));
 }
 
 QTEST_MAIN(TestTrayMenuModel)

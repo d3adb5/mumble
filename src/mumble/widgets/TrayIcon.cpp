@@ -10,6 +10,8 @@
 #include "ClientUser.h"
 #include "Log.h"
 #include "MainWindow.h"
+#include "MumbleConstants.h"
+#include "ServerHandler.h"
 #include "TrayMenuModel.h"
 #include "UserModel.h"
 #include "X11WindowState.h"
@@ -121,20 +123,36 @@ Mumble::TrayMenu::UserEntry entryFor(const ClientUser &user, bool isListener, co
 	return entry;
 }
 
-/// Whether both lists show the same users in the same order, in which case the
-/// existing menu entries can be updated instead of being recreated.
-bool sameUsers(const QList< Mumble::TrayMenu::UserEntry > &first, const QList< Mumble::TrayMenu::UserEntry > &second) {
-	if (first.size() != second.size()) {
-		return false;
-	}
+/// The symbol a channel's menu carries, which is the one the user list shows for it:
+/// the channel the local user is in stands out from the ones linked to it, and those
+/// from the rest.
+const QIcon &channelIconOf(Channel &channel) {
+	static const QIcon plain(QLatin1String("skin:channel.svg"));
+	static const QIcon active(QLatin1String("skin:channel_active.svg"));
+	static const QIcon linked(QLatin1String("skin:channel_linked.svg"));
 
-	for (int i = 0; i < first.size(); ++i) {
-		if (first.at(i).session != second.at(i).session || first.at(i).state.listener != second.at(i).state.listener) {
-			return false;
+	const ClientUser *self = ClientUser::get(Global::get().uiSession);
+	if (self && self->cChannel) {
+		if (self->cChannel == &channel) {
+			return active;
+		}
+		if (self->cChannel->allLinks().contains(&channel)) {
+			return linked;
 		}
 	}
 
-	return true;
+	return plain;
+}
+
+/// The name a channel's menu goes by, which is the one the user list shows for it.
+QString channelTitle(const Channel &channel, int userCount) {
+	const QString name = Mumble::TrayMenu::escapeMenuText(channel.qsName);
+
+	if (!Global::get().s.bShowUserCount || userCount == 0) {
+		return name;
+	}
+
+	return QString::fromLatin1("%1 (%2)").arg(name).arg(userCount);
 }
 
 } // namespace
@@ -221,11 +239,11 @@ TrayIcon::TrayIcon() : QSystemTrayIcon(Global::get().mw), m_statusIcon(Global::g
 	// A view of the channel the local user is in, which is kept up to date for as
 	// long as the context menu is open.
 	m_channelMenu = new QMenu(Global::get().mw);
-	m_channelMenu->setIcon(QIcon(QLatin1String("skin:channel_active.svg")));
+	m_channelMenu->setIcon(QIcon(QLatin1String("skin:channel.svg")));
 
 	m_channelViewTimer = new QTimer(this);
 	m_channelViewTimer->setInterval(channelViewUpdateInterval);
-	QObject::connect(m_channelViewTimer, &QTimer::timeout, this, &TrayIcon::updateChannelMenu);
+	QObject::connect(m_channelViewTimer, &QTimer::timeout, this, &TrayIcon::refreshChannelMenus);
 
 	// Submenus mirroring the main window's toolbar dropdowns. They are filled in
 	// whenever the context menu is about to be shown, as their entries depend on
@@ -428,72 +446,239 @@ void TrayIcon::on_contextMenu_aboutToHide() {
 }
 
 void TrayIcon::updateChannelMenu() {
-	const ClientUser *self = ClientUser::get(Global::get().uiSession);
-	const Channel *channel = self ? self->cChannel : nullptr;
-
-	if (!channel) {
-		m_channelMenu->clear();
-		m_channelEntries.clear();
+	if (!Global::get().uiSession) {
+		clearChannelMenus();
 
 		m_channelMenu->setTitle(tr("Not Connected"));
+		m_channelMenu->setIcon(QIcon(QLatin1String("skin:channel.svg")));
 		m_channelMenu->setEnabled(false);
 
 		return;
 	}
 
-	m_channelMenu->setTitle(Mumble::TrayMenu::escapeMenuText(channel->qsName));
+	// Channels that were removed while the menu was closed leave their menu behind
+	for (auto it = m_channelMenus.begin(); it != m_channelMenus.end();) {
+		if (it.key() != Mumble::ROOT_CHANNEL_ID && !Channel::get(it.key())) {
+			delete it->menu;
+			it = m_channelMenus.erase(it);
+		} else {
+			++it;
+		}
+	}
+
 	m_channelMenu->setEnabled(true);
 
-	QList< Mumble::TrayMenu::UserEntry > entries;
+	// Filling the root menu right away gives the entry its title, which is the one
+	// thing of the tree that is visible without opening it
+	fillChannelMenu(Mumble::ROOT_CHANNEL_ID);
+}
 
+QMenu *TrayIcon::channelMenu(unsigned int channelId) {
+	const auto it = m_channelMenus.constFind(channelId);
+	if (it != m_channelMenus.constEnd()) {
+		return it->menu;
+	}
+
+	ChannelMenu record;
+	// The tree's root is the entry the menu itself hangs off of, the rest are its
+	// descendants and are owned by it
+	record.menu = channelId == Mumble::ROOT_CHANNEL_ID ? m_channelMenu : new QMenu(m_channelMenu);
+
+	// Only the branches the user actually walks into are built
+	QObject::connect(record.menu, &QMenu::aboutToShow, this, [this, channelId]() { fillChannelMenu(channelId); });
+
+	m_channelMenus.insert(channelId, record);
+
+	return record.menu;
+}
+
+void TrayIcon::fillChannelMenu(unsigned int channelId, bool allowRebuild) {
+	Channel *channel = Channel::get(channelId);
+	if (!channel) {
+		return;
+	}
+
+	QList< Mumble::TrayMenu::UserEntry > users;
 	for (const User *user : channel->qlUsers) {
-		entries.append(entryFor(*static_cast< const ClientUser * >(user), false, *channel));
+		users.append(entryFor(*static_cast< const ClientUser * >(user), false, *channel));
 	}
 
 	if (Global::get().channelListenerManager) {
-		for (unsigned int session : Global::get().channelListenerManager->getListenersForChannel(channel->iId)) {
+		for (unsigned int session : Global::get().channelListenerManager->getListenersForChannel(channelId)) {
 			const ClientUser *listener = ClientUser::get(session);
 			if (listener) {
-				entries.append(entryFor(*listener, true, *channel));
+				users.append(entryFor(*listener, true, *channel));
 			}
 		}
 	}
 
-	Mumble::TrayMenu::sortEntries(entries);
+	Mumble::TrayMenu::sortEntries(users);
 
-	if (sameUsers(entries, m_channelEntries)) {
+	QList< Channel * > subChannels;
+	for (Channel *subChannel : channel->qlChannels) {
+		// The user list hides filtered channels, and so does this
+		if (!subChannel->isFiltered()) {
+			subChannels.append(subChannel);
+		}
+	}
+	std::sort(subChannels.begin(), subChannels.end(), Channel::lessThan);
+
+	QList< unsigned int > subChannelIds;
+	QList< QMenu * > subChannelMenus;
+	for (const Channel *subChannel : subChannels) {
+		subChannelIds.append(subChannel->iId);
+		// Before taking the record below: this may insert into the very hash it lives in
+		subChannelMenus.append(channelMenu(subChannel->iId));
+	}
+
+	QMenu *menu        = channelMenu(channelId);
+	ChannelMenu record = m_channelMenus.value(channelId);
+	const bool contents =
+		record.filled && record.subChannels == subChannelIds && Mumble::TrayMenu::sameUsers(users, record.users);
+
+	menu->setTitle(channelTitle(*channel, static_cast< int >(users.size())));
+	menu->setIcon(channelIconOf(*channel));
+
+	if (contents) {
 		// Only the users' states changed, so the entries can be updated in place. That
 		// keeps the menu from flickering (and from moving under the cursor) while it is
 		// open, which happens whenever its entries are recreated.
-		const QList< QAction * > actions = m_channelMenu->actions();
-
-		for (int i = 0; i < entries.size() && i < actions.size(); ++i) {
-			actions.at(i)->setIcon(iconOf(Mumble::TrayMenu::iconFor(entries.at(i).state)));
-			actions.at(i)->setText(entries.at(i).label);
+		for (int i = 0; i < users.size() && i < record.userActions.size(); ++i) {
+			record.userActions.at(i)->setIcon(iconOf(Mumble::TrayMenu::iconFor(users.at(i).state)));
+			record.userActions.at(i)->setText(users.at(i).label);
 		}
-	} else {
-		m_channelMenu->clear();
 
-		for (const Mumble::TrayMenu::UserEntry &entry : entries) {
-			QAction *action = m_channelMenu->addAction(iconOf(Mumble::TrayMenu::iconFor(entry.state)), entry.label);
+		record.users = users;
+		m_channelMenus.insert(channelId, record);
+
+		return;
+	}
+
+	if (!allowRebuild) {
+		// One of the shared context menus is open, and its entry must not be pulled
+		// out from under it. The channel is picked up again on the next refresh.
+		return;
+	}
+
+	menu->clear();
+	record.userActions.clear();
+
+	const ClientUser *self = ClientUser::get(Global::get().uiSession);
+
+	if (self && self->cChannel != channel) {
+		QAction *join = menu->addAction(tr("Join Channel"));
+		QObject::connect(join, &QAction::triggered, this, [channelId]() {
+			if (Global::get().sh) {
+				Global::get().sh->joinChannel(Global::get().uiSession, channelId);
+			}
+		});
+	}
+
+	QAction *channelActions = menu->addAction(tr("Channel Actions"));
+	// The main window's own channel menu, which reads what it acts on from the user
+	// list - hence pointing that at this channel as soon as the entry is highlighted
+	channelActions->setMenu(Global::get().mw->qmChannel);
+	QObject::connect(channelActions, &QAction::hovered, this, [this, channelId]() { selectChannel(channelId); });
+
+	menu->addSeparator();
+
+	const auto addUsers = [this, menu, &record, &users, channelId]() {
+		for (const Mumble::TrayMenu::UserEntry &entry : users) {
+			QAction *action = menu->addAction(iconOf(Mumble::TrayMenu::iconFor(entry.state)), entry.label);
 
 			if (entry.self || entry.state.listener) {
 				// Emphasise the local user and set listeners apart, like the user list does
-				QFont font = m_channelMenu->font();
+				QFont font = menu->font();
 				font.setBold(entry.self != font.bold());
 				font.setItalic(entry.state.listener);
 				action->setFont(font);
 			}
 
 			const unsigned int session = entry.session;
-			QObject::connect(action, &QAction::triggered, this, [this, session]() {
-				on_showAction_triggered();
-				Global::get().mw->pmModel->setSelectedUser(session);
-			});
+			if (entry.state.listener) {
+				action->setMenu(Global::get().mw->qmListener);
+				QObject::connect(action, &QAction::hovered, this,
+								 [this, session, channelId]() { selectListener(session, channelId); });
+			} else {
+				action->setMenu(Global::get().mw->qmUser);
+				QObject::connect(action, &QAction::hovered, this, [this, session]() { selectUser(session); });
+			}
+
+			record.userActions.append(action);
+		}
+	};
+
+	const auto addSubChannels = [menu, &subChannelMenus]() {
+		for (QMenu *subChannelMenu : subChannelMenus) {
+			menu->addMenu(subChannelMenu);
+		}
+	};
+
+	// The user list can be configured to put the users of a channel above or below
+	// its subchannels, and the tray follows suit
+	if (Global::get().s.bUserTop) {
+		addUsers();
+		addSubChannels();
+	} else {
+		addSubChannels();
+		addUsers();
+	}
+
+	record.users       = users;
+	record.subChannels = subChannelIds;
+	record.filled      = true;
+
+	m_channelMenus.insert(channelId, record);
+}
+
+void TrayIcon::refreshChannelMenus() {
+	if (!Global::get().uiSession) {
+		updateChannelMenu();
+		return;
+	}
+
+	// Rebuilding a menu deletes the entries the shared context menus hang off of, so
+	// while one of those is open the tree only gets its states refreshed
+	const MainWindow *mw       = Global::get().mw;
+	const bool contextMenuOpen = mw->qmUser->isVisible() || mw->qmChannel->isVisible() || mw->qmListener->isVisible();
+
+	// The root menu is refreshed even when it is not on screen, as its title is what
+	// the tray menu shows for the whole tree
+	fillChannelMenu(Mumble::ROOT_CHANNEL_ID, !contextMenuOpen);
+
+	for (unsigned int channelId : m_channelMenus.keys()) {
+		const auto it = m_channelMenus.constFind(channelId);
+		if (it != m_channelMenus.constEnd() && it->menu->isVisible()) {
+			fillChannelMenu(channelId, !contextMenuOpen);
+		}
+	}
+}
+
+void TrayIcon::clearChannelMenus() {
+	for (auto it = m_channelMenus.begin(); it != m_channelMenus.end(); ++it) {
+		if (it.key() == Mumble::ROOT_CHANNEL_ID) {
+			it->menu->clear();
+		} else {
+			delete it->menu;
 		}
 	}
 
-	m_channelEntries = entries;
+	m_channelMenus.clear();
+}
+
+void TrayIcon::selectUser(unsigned int session) {
+	Global::get().mw->pmModel->setSelectedUser(session);
+}
+
+void TrayIcon::selectChannel(unsigned int channelId) {
+	Global::get().mw->pmModel->setSelectedChannel(channelId);
+}
+
+void TrayIcon::selectListener(unsigned int session, unsigned int channelId) {
+	Global::get().mw->pmModel->setSelectedChannelListener(session, channelId);
+	// A listener's entry in the user list does not name a channel of its own, so the
+	// channel it listens to has to be handed over separately
+	Global::get().mw->setContextMenuTarget(nullptr, Channel::get(channelId));
 }
 
 void TrayIcon::populateChoiceMenu(QMenu *menu, const QList< QPair< QString, QVariant > > &choices,

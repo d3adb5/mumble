@@ -232,6 +232,23 @@ namespace TrayMenu {
 		std::stable_sort(entries.begin(), entries.end(), lessThan);
 	}
 
+	/// Whether both lists show the same users in the same order - in which case the
+	/// entries showing them only need their state updated, rather than being recreated.
+	inline bool sameUsers(const QList< UserEntry > &first, const QList< UserEntry > &second) {
+		if (first.size() != second.size()) {
+			return false;
+		}
+
+		for (int i = 0; i < first.size(); ++i) {
+			if (first.at(i).session != second.at(i).session
+				|| first.at(i).state.listener != second.at(i).state.listener) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
 } // namespace TrayMenu
 } // namespace Mumble
 

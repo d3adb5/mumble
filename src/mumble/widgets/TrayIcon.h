@@ -10,6 +10,7 @@
 
 #include <QAction>
 #include <QTimer>
+#include <QtCore/QHash>
 #include <QtCore/QList>
 #include <QtCore/QPair>
 #include <QtCore/QVariant>
@@ -40,6 +41,21 @@ private:
 		BlinkIcon,
 	};
 
+	/// The menu showing one channel of the tray's channel tree, along with what it
+	/// currently lists - so that a refresh can tell a changed state from a changed
+	/// channel and only rebuild the menu for the latter.
+	struct ChannelMenu {
+		QMenu *menu = nullptr;
+		/// The users the menu lists, in the order they are shown
+		QList< Mumble::TrayMenu::UserEntry > users;
+		/// The entries showing those users, in the same order
+		QList< QAction * > userActions;
+		/// The channels the menu lists, in the order they are shown
+		QList< unsigned int > subChannels;
+		/// False until the menu has been filled for the first time
+		bool filled = false;
+	};
+
 	std::reference_wrapper< QIcon > m_statusIcon;
 	BlinkState m_blinkState   = BlinkState::RegularIcon;
 	bool m_blinkingIcon       = false;
@@ -56,10 +72,10 @@ private:
 	QWidgetAction *m_controlsAction = nullptr;
 	QToolButton *m_recordButton     = nullptr;
 	QTimer *m_highlightTimer        = nullptr;
-	/// Keeps the channel view up to date for as long as the context menu is open
+	/// Keeps the channel tree up to date for as long as the context menu is open
 	QTimer *m_channelViewTimer = nullptr;
-	/// The users the channel view currently lists, in the order they are shown
-	QList< Mumble::TrayMenu::UserEntry > m_channelEntries;
+	/// The menus of the channel tree, by the ID of the channel they show
+	QHash< unsigned int, ChannelMenu > m_channelMenus;
 #ifdef USE_DBUS
 	/// ID of the last notification posted via org.freedesktop.Notifications, so that
 	/// a new notification replaces the previous one instead of stacking up
@@ -86,10 +102,26 @@ private:
 	void populateChoiceMenu(QMenu *menu, const QList< QPair< QString, QVariant > > &choices, const QVariant &current,
 							std::function< void(const QVariant &) > onPicked);
 
-	/// Brings the view of the local user's channel in line with the current state of
-	/// that channel. Entries are only recreated when the users themselves changed, so
-	/// that talking states can be followed while the menu stays open.
+	/// Brings the channel tree in line with the server's, dropping the menus of
+	/// channels that are gone.
 	void updateChannelMenu();
+	/// @returns The menu showing the given channel, creating it if there is none yet
+	QMenu *channelMenu(unsigned int channelId);
+	/// Fills the menu of the given channel with its users and subchannels. Entries are
+	/// only recreated when the channel's contents changed, so that talking states can
+	/// be followed while the menu stays open; a rebuild that is not allowed right now
+	/// is skipped rather than done anyway.
+	void fillChannelMenu(unsigned int channelId, bool allowRebuild = true);
+	/// Refreshes the channel menus that are on screen.
+	void refreshChannelMenus();
+	/// Forgets every channel menu, which is what leaving a server calls for.
+	void clearChannelMenus();
+
+	/// Points the main window's context menus at the given user, channel or listener,
+	/// the way selecting them in its user list does.
+	void selectUser(unsigned int session);
+	void selectChannel(unsigned int channelId);
+	void selectListener(unsigned int session, unsigned int channelId);
 
 	/// Labels the recording entry after what triggering it would do and disables it
 	/// while recording is not possible.
