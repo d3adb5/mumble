@@ -34,6 +34,7 @@
 #include "ChannelListenerManager.h"
 #include "FailedConnectionDialog.h"
 #include "ListenerVolumeSlider.h"
+#include "MainWindowLayout.h"
 #include "Markdown.h"
 #include "MenuLabel.h"
 #include "PTTButtonWidget.h"
@@ -2155,26 +2156,13 @@ void MainWindow::setupView(bool toggle_minimize) {
 
 	switch (Global::get().s.wlWindowLayout) {
 		case Settings::LayoutClassic:
-			removeDockWidget(qdwLog);
-			addDockWidget(Qt::LeftDockWidgetArea, qdwLog);
-			qdwLog->show();
-			splitDockWidget(qdwLog, qdwChat, Qt::Vertical);
-			qdwChat->show();
+			Mumble::WindowLayout::applyClassic(*this, *qdwLog, *qdwChat);
 			break;
 		case Settings::LayoutStacked:
-			removeDockWidget(qdwLog);
-			addDockWidget(Qt::BottomDockWidgetArea, qdwLog);
-			qdwLog->show();
-			splitDockWidget(qdwLog, qdwChat, Qt::Vertical);
-			qdwChat->show();
+			Mumble::WindowLayout::applyStacked(*this, *qdwLog, *qdwChat);
 			break;
 		case Settings::LayoutHybrid:
-			removeDockWidget(qdwLog);
-			removeDockWidget(qdwChat);
-			addDockWidget(Qt::LeftDockWidgetArea, qdwLog);
-			qdwLog->show();
-			addDockWidget(Qt::BottomDockWidgetArea, qdwChat);
-			qdwChat->show();
+			Mumble::WindowLayout::applyHybrid(*this, *qdwLog, *qdwChat);
 			break;
 		default:
 			break;

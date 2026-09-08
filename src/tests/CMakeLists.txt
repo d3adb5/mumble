@@ -37,6 +37,7 @@ if(client)
 		# Guarded, as it links the DeepFilterNet library the option builds.
 		add_subdirectory("TestDeepFilterModel")
 	endif()
+	add_subdirectory("TestMainWindowLayout")
 	add_subdirectory("TestMultiSlider")
 	add_subdirectory("TestRecordingTarget")
 	add_subdirectory("TestTrayMenuModel")
