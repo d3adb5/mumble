@@ -464,6 +464,10 @@ void WebcamManager::watch(unsigned int session) {
 	watch->keys  = *keys;
 	watch->window =
 		new WebcamWindow(tr("%1's camera").arg(user->qsName), Global::get().s.qbaWebcamWindowGeometry, nullptr);
+	// Every window restores the same geometry, so step each further one aside instead of
+	// stacking it exactly on top of the others.
+	const int cascade = static_cast< int >(m_watches.size()) * 32;
+	watch->window->move(watch->window->pos() - QPoint(cascade, cascade));
 	watch->window->setStatus(tr("Asking %1…").arg(user->qsName));
 	connect(watch->window, &WebcamWindow::closedByUser, this, [this, session] { endWatch(session, true); });
 	watch->window->show();
@@ -563,7 +567,7 @@ void WebcamManager::onShareState(unsigned int sender, const std::string &data) {
 		user->setWebcamSharing(state->sharing);
 	}
 	if (!state->sharing && m_watches.contains(sender)) {
-		endWatch(sender, false);
+		endWatch(sender, false, tr("%1 stopped sharing their camera.").arg(userName(sender)));
 	}
 }
 
