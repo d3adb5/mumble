@@ -1,0 +1,380 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>WebcamConfig</class>
+ <widget class="QWidget" name="WebcamConfig">
+  <property name="windowTitle">
+   <string>Camera</string>
+  </property>
+  <layout class="QVBoxLayout" name="qvlMain">
+   <item>
+    <widget class="QGroupBox" name="qgbSharing">
+     <property name="title">
+      <string>Sharing</string>
+     </property>
+     <layout class="QFormLayout" name="qflSharing">
+      <item row="0" column="0">
+       <widget class="QLabel" name="qlPolicy">
+        <property name="text">
+         <string>Who may watch</string>
+        </property>
+        <property name="buddy">
+         <cstring>qcbPolicy</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QComboBox" name="qcbPolicy">
+        <property name="toolTip">
+         <string>What happens when someone asks to watch your camera while you share it</string>
+        </property>
+        <item>
+         <property name="text">
+          <string>Everyone who asks</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Ask me each time</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>Nobody</string>
+         </property>
+        </item>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="qlDevice">
+        <property name="text">
+         <string>Camera</string>
+        </property>
+        <property name="buddy">
+         <cstring>qcbDevice</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <layout class="QHBoxLayout" name="qhlDevice">
+        <item>
+         <widget class="QComboBox" name="qcbDevice">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="qpbRefreshDevices">
+          <property name="text">
+           <string>Refresh</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="qlQuality">
+        <property name="text">
+         <string>Quality</string>
+        </property>
+        <property name="buddy">
+         <cstring>qcbQuality</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QComboBox" name="qcbQuality">
+        <property name="toolTip">
+         <string>What your camera is sent at. Lower settings use less data for you and your viewers.</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="0">
+       <widget class="QLabel" name="qlCustomHeight">
+        <property name="text">
+         <string>Height</string>
+        </property>
+        <property name="buddy">
+         <cstring>qsbCustomHeight</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="1">
+       <widget class="QSpinBox" name="qsbCustomHeight">
+        <property name="suffix">
+         <string> px</string>
+        </property>
+        <property name="minimum">
+         <number>96</number>
+        </property>
+        <property name="maximum">
+         <number>2160</number>
+        </property>
+        <property name="singleStep">
+         <number>16</number>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="0">
+       <widget class="QLabel" name="qlCustomFps">
+        <property name="text">
+         <string>Frame rate</string>
+        </property>
+        <property name="buddy">
+         <cstring>qsbCustomFps</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="1">
+       <widget class="QSpinBox" name="qsbCustomFps">
+        <property name="suffix">
+         <string> fps</string>
+        </property>
+        <property name="minimum">
+         <number>1</number>
+        </property>
+        <property name="maximum">
+         <number>60</number>
+        </property>
+       </widget>
+      </item>
+      <item row="5" column="0">
+       <widget class="QLabel" name="qlCustomKbps">
+        <property name="text">
+         <string>Bitrate</string>
+        </property>
+        <property name="buddy">
+         <cstring>qsbCustomKbps</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="5" column="1">
+       <widget class="QSpinBox" name="qsbCustomKbps">
+        <property name="suffix">
+         <string> kbit/s</string>
+        </property>
+        <property name="minimum">
+         <number>32</number>
+        </property>
+        <property name="maximum">
+         <number>20000</number>
+        </property>
+        <property name="singleStep">
+         <number>50</number>
+        </property>
+       </widget>
+      </item>
+      <item row="6" column="0">
+       <widget class="QLabel" name="qlEncoder">
+        <property name="text">
+         <string>Encoder</string>
+        </property>
+        <property name="buddy">
+         <cstring>qcbEncoder</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="6" column="1">
+       <widget class="QComboBox" name="qcbEncoder"/>
+      </item>
+      <item row="7" column="0" colspan="2">
+       <widget class="QCheckBox" name="qcbOnDemand">
+        <property name="toolTip">
+         <string>Keep the camera (and its light) off while you share and nobody is watching, and send nothing to the relay</string>
+        </property>
+        <property name="text">
+         <string>Open the camera only while someone is watching</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="qgbRelay">
+     <property name="title">
+      <string>Relay</string>
+     </property>
+     <layout class="QFormLayout" name="qflRelay">
+      <item row="0" column="0" colspan="2">
+       <widget class="QLabel" name="qlRelayInfo">
+        <property name="text">
+         <string>Your camera is sent to a MediaMTX relay over RTSPS, on a new random path every time, and encrypted end to end: the relay never sees the picture. Watching needs none of this.</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="qlRelay">
+        <property name="text">
+         <string>Address</string>
+        </property>
+        <property name="buddy">
+         <cstring>qleRelay</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QLineEdit" name="qleRelay">
+        <property name="placeholderText">
+         <string>rtsps://relay.example.org:8322</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="qlPublishUser">
+        <property name="text">
+         <string>Publish login</string>
+        </property>
+        <property name="buddy">
+         <cstring>qlePublishUser</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <layout class="QHBoxLayout" name="qhlPublish">
+        <item>
+         <widget class="QLineEdit" name="qlePublishUser">
+          <property name="placeholderText">
+           <string>User</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLineEdit" name="qlePublishPassword">
+          <property name="echoMode">
+           <enum>QLineEdit::Password</enum>
+          </property>
+          <property name="placeholderText">
+           <string>Password</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item row="3" column="0">
+       <widget class="QLabel" name="qlReadUser">
+        <property name="text">
+         <string>Read login</string>
+        </property>
+        <property name="buddy">
+         <cstring>qleReadUser</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="1">
+       <layout class="QHBoxLayout" name="qhlRead">
+        <item>
+         <widget class="QLineEdit" name="qleReadUser">
+          <property name="toolTip">
+           <string>Only if the relay wants a login for reading: it is given to each viewer you let in, sealed to them</string>
+          </property>
+          <property name="placeholderText">
+           <string>User (optional)</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLineEdit" name="qleReadPassword">
+          <property name="echoMode">
+           <enum>QLineEdit::Password</enum>
+          </property>
+          <property name="placeholderText">
+           <string>Password</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item row="4" column="0">
+       <widget class="QLabel" name="qlCaFile">
+        <property name="text">
+         <string>Trusted CA</string>
+        </property>
+        <property name="buddy">
+         <cstring>qleCaFile</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="1">
+       <layout class="QHBoxLayout" name="qhlCaFile">
+        <item>
+         <widget class="QLineEdit" name="qleCaFile">
+          <property name="toolTip">
+           <string>A PEM file of certificate authorities to trust for relays, when theirs is not one the system trusts. Used for watching as well.</string>
+          </property>
+          <property name="placeholderText">
+           <string>The system's (optional)</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="qpbCaFile">
+          <property name="text">
+           <string>Browse…</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="qgbWatching">
+     <property name="title">
+      <string>Watching</string>
+     </property>
+     <layout class="QFormLayout" name="qflWatching">
+      <item row="0" column="0">
+       <widget class="QLabel" name="qlLatency">
+        <property name="text">
+         <string>Buffer</string>
+        </property>
+        <property name="buddy">
+         <cstring>qsbLatency</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QSpinBox" name="qsbLatency">
+        <property name="toolTip">
+         <string>How far behind live a watched camera plays. More smooths out a poor connection.</string>
+        </property>
+        <property name="suffix">
+         <string> ms</string>
+        </property>
+        <property name="maximum">
+         <number>5000</number>
+        </property>
+        <property name="singleStep">
+         <number>50</number>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <spacer name="qsVertical">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>0</width>
+       <height>0</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

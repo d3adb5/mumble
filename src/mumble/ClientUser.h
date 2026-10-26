@@ -68,6 +68,9 @@ public:
 	bool bLocalIgnore;
 	bool bLocalIgnoreTTS;
 	bool bLocalMute;
+	/// Whether the user announced (webcam/share-state) that their camera can be watched. Client-side
+	/// only: nothing in the server's user state carries it.
+	bool bWebcamSharing = false;
 	// Whether or not the user's effective output is inaudible due to volume settings, positional audio etc.
 	bool volumeMute;
 
@@ -159,6 +162,7 @@ public slots:
 	void setSelfDeaf(bool deaf);
 	void setPrioritySpeaker(bool priority);
 	void setRecording(bool recording);
+	void setWebcamSharing(bool sharing);
 	void setLocalVolumeAdjustment(float adjustment);
 	void setLocalNickname(const QString &nickname);
 signals:
@@ -166,6 +170,7 @@ signals:
 	void muteDeafStateChanged();
 	void prioritySpeakerStateChanged();
 	void recordingStateChanged();
+	void webcamStateChanged();
 	void localVolumeAdjustmentsChanged(float newAdjustment, float oldAdjustment);
 	void localNicknameChanged();
 };

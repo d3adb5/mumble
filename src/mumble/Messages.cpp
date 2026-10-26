@@ -35,6 +35,9 @@
 #include "UserModel.h"
 #include "Utils.h"
 #include "VersionCheck.h"
+#ifdef USE_WEBCAM
+#	include "Webcam.h"
+#endif
 #include "ViewCert.h"
 #include "crypto/CryptState.h"
 #include "crypto/CryptStateOCB2.h"
@@ -363,6 +366,13 @@ void MainWindow::msgUserState(const MumbleProto::UserState &msg) {
 		}
 
 		pDst = pmModel->addUser(msg.session(), u8(msg.name()));
+
+#ifdef USE_WEBCAM
+		// Someone joining after our own sync learns whether we share our camera.
+		if (Global::get().uiSession != 0) {
+			m_webcam->userJoined(msg.session());
+		}
+#endif
 
 		connect(pDst, &ClientUser::talkingStateChanged, Global::get().talkingUI, &TalkingUI::on_talkingStateChanged);
 		connect(pDst, &ClientUser::muteDeafStateChanged, Global::get().talkingUI, &TalkingUI::on_muteDeafStateChanged);
@@ -869,6 +879,10 @@ void MainWindow::msgUserRemove(const MumbleProto::UserRemove &msg) {
 		}
 	}
 
+#ifdef USE_WEBCAM
+	m_webcam->userLeft(pDst->uiSession);
+#endif
+
 	QMetaObject::invokeMethod(Global::get().talkingUI, "on_clientDisconnected", Qt::QueuedConnection,
 							  Q_ARG(unsigned int, pDst->uiSession));
 	if (Global::get().mw->m_searchDialog) {
@@ -1296,6 +1310,14 @@ void MainWindow::msgPluginDataTransmission(const MumbleProto::PluginDataTransmis
 
 	const ClientUser *sender   = ClientUser::get(msg.sendersession());
 	const std::string &msgData = msg.data();
+
+#ifdef USE_WEBCAM
+	// Webcam sharing is the client's own, and its messages are not for plugins.
+	if (sender && Mumble::Webcam::isWebcamDataId(msg.dataid())) {
+		m_webcam->handleData(msg.sendersession(), msg.dataid(), msgData);
+		return;
+	}
+#endif
 
 	if (sender) {
 		static_assert(sizeof(unsigned char) == sizeof(uint8_t), "Unsigned char does not have expected 8bit size");

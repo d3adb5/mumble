@@ -301,6 +301,24 @@ const SettingsKey RECORDING_FILE_KEY   = { "recording_file" };
 const SettingsKey RECORDING_MODE_KEY   = { "recording_mode" };
 const SettingsKey RECORDING_FORMAT_KEY = { "recording_format" };
 
+// Webcam sharing
+const SettingsKey WEBCAM_POLICY_KEY           = { "webcam_policy" };
+const SettingsKey WEBCAM_DEVICE_KEY           = { "webcam_device" };
+const SettingsKey WEBCAM_QUALITY_KEY          = { "webcam_quality" };
+const SettingsKey WEBCAM_CUSTOM_HEIGHT_KEY    = { "webcam_custom_height" };
+const SettingsKey WEBCAM_CUSTOM_FPS_KEY       = { "webcam_custom_fps" };
+const SettingsKey WEBCAM_CUSTOM_KBPS_KEY      = { "webcam_custom_kbps" };
+const SettingsKey WEBCAM_ENCODER_KEY          = { "webcam_encoder" };
+const SettingsKey WEBCAM_RELAY_KEY            = { "webcam_relay" };
+const SettingsKey WEBCAM_PUBLISH_USER_KEY     = { "webcam_publish_user" };
+const SettingsKey WEBCAM_PUBLISH_PASSWORD_KEY = { "webcam_publish_password" };
+const SettingsKey WEBCAM_READ_USER_KEY        = { "webcam_read_user" };
+const SettingsKey WEBCAM_READ_PASSWORD_KEY    = { "webcam_read_password" };
+const SettingsKey WEBCAM_CA_FILE_KEY          = { "webcam_ca_file" };
+const SettingsKey WEBCAM_ON_DEMAND_KEY        = { "webcam_on_demand" };
+const SettingsKey WEBCAM_VIEW_LATENCY_KEY     = { "webcam_view_latency" };
+const SettingsKey WEBCAM_WINDOW_GEOMETRY_KEY  = { "webcam_window_geometry" };
+
 // Hidden
 const SettingsKey DISABLE_CONNECT_DIALOG_EDITING_KEY = { "disable_connect_dialog_editing" };
 

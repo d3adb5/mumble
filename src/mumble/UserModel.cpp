@@ -241,6 +241,7 @@ UserModel::UserModel(QObject *p) : QAbstractItemModel(p) {
 	qiTalkingWhisper  = QIcon(QLatin1String("skin:talking_whisper.svg"));
 	qiPrioritySpeaker = QIcon(QLatin1String("skin:priority_speaker.svg"));
 	qiRecording       = QIcon(QLatin1String("skin:actions/media-record.svg"));
+	qiWebcam          = QIcon(QLatin1String("skin:actions/camera-web.svg"));
 	qiMutedPushToMute.addFile(QLatin1String("skin:muted_pushtomute.svg"));
 	qiMutedSelf       = QIcon(QLatin1String("skin:muted_self.svg"));
 	qiMutedServer     = QIcon(QLatin1String("skin:muted_server.svg"));
@@ -504,6 +505,8 @@ QVariant UserModel::data(const QModelIndex &idx, int role) const {
 					l << qiPrioritySpeaker;
 				if (p->bRecording)
 					l << qiRecording;
+				if (p->bWebcamSharing && !item->isListener)
+					l << qiWebcam;
 				// ClientUser doesn't contain a push-to-mute
 				// state because it isn't sent to the server.
 				// We can show the icon only for the local user.
@@ -1068,6 +1071,7 @@ ClientUser *UserModel::addUser(unsigned int id, const QString &name) {
 	connect(p, SIGNAL(muteDeafStateChanged()), this, SLOT(userStateChanged()));
 	connect(p, SIGNAL(prioritySpeakerStateChanged()), this, SLOT(userStateChanged()));
 	connect(p, SIGNAL(recordingStateChanged()), this, SLOT(userStateChanged()));
+	connect(p, SIGNAL(webcamStateChanged()), this, SLOT(userStateChanged()));
 	connect(p, &ClientUser::localVolumeAdjustmentsChanged, this, &UserModel::userStateChanged);
 	connect(p, &ClientUser::localNicknameChanged, this, &UserModel::userStateChanged);
 

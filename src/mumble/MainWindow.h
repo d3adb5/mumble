@@ -72,6 +72,10 @@ public:
 	OpenURLEvent(QUrl url);
 };
 
+#ifdef USE_WEBCAM
+class WebcamManager;
+#endif
+
 class MainWindow : public QMainWindow, public Ui::MainWindow {
 	friend class UserModel;
 
@@ -198,6 +202,18 @@ protected:
 	QMap< unsigned int, UserInformation * > qmUserInformations;
 
 	std::unique_ptr< PositionalAudioViewer > m_paViewer;
+
+#ifdef USE_WEBCAM
+public:
+	/// Webcam sharing: this client's share and the cameras it watches.
+	WebcamManager *m_webcam = nullptr;
+
+protected:
+	QAction *qaSelfWebcam       = nullptr;
+	QAction *qaUserWebcamWatch  = nullptr;
+	QAction *qaUserWebcamRevoke = nullptr;
+	void setupWebcam();
+#endif
 
 	PTTButtonWidget *qwPTTButtonWidget;
 

@@ -74,6 +74,10 @@ namespace Accessibility {
 			description += QString("%1,").arg(QObject::tr("recording"));
 		}
 
+		if (user->bWebcamSharing) {
+			description += QString("%1,").arg(QObject::tr("sharing camera"));
+		}
+
 		if (user->bPrioritySpeaker) {
 			description += QString("%1,").arg(QObject::tr("priority speaker"));
 		}

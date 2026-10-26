@@ -1168,10 +1168,18 @@ if(webcam)
 
 	target_sources(mumble_client_object_lib
 		PRIVATE
+			"Webcam.cpp"
+			"Webcam.h"
+			"WebcamConfig.cpp"
+			"WebcamConfig.h"
+			"WebcamConfig.ui"
 			"WebcamCrypto.h"
 			"WebcamMode.h"
+			"WebcamProtocol.h"
 			"WebcamStream.cpp"
 			"WebcamStream.h"
+			"WebcamWindow.cpp"
+			"WebcamWindow.h"
 	)
 
 	target_compile_definitions(mumble_client_object_lib PUBLIC "USE_WEBCAM")

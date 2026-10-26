@@ -64,6 +64,9 @@
 #include "ViewCert.h"
 #include "VoiceRecorder.h"
 #include "VoiceRecorderDialog.h"
+#ifdef USE_WEBCAM
+#	include "Webcam.h"
+#endif
 #include "Global.h"
 
 #ifdef Q_OS_WIN
@@ -184,6 +187,9 @@ MainWindow::MainWindow(QWidget *p)
 	createActions();
 	setupUi(this);
 	setupGui();
+#ifdef USE_WEBCAM
+	setupWebcam();
+#endif
 	connect(qmUser, SIGNAL(aboutToShow()), this, SLOT(qmUser_aboutToShow()));
 	connect(qmChannel, SIGNAL(aboutToShow()), this, SLOT(qmChannel_aboutToShow()));
 	connect(qmListener, SIGNAL(aboutToShow()), this, SLOT(qmListener_aboutToShow()));
@@ -2343,7 +2349,50 @@ void MainWindow::on_qmSelf_aboutToShow() {
 		qaSelfPrioritySpeaker->setEnabled(false);
 		qaSelfPrioritySpeaker->setChecked(false);
 	}
+#ifdef USE_WEBCAM
+	if (qaSelfWebcam) {
+		qaSelfWebcam->setEnabled(user != nullptr);
+		qaSelfWebcam->setChecked(m_webcam->isSharing());
+	}
+#endif
 }
+
+#ifdef USE_WEBCAM
+void MainWindow::setupWebcam() {
+	m_webcam = new WebcamManager(this);
+
+	qaSelfWebcam = new QAction(QIcon(QLatin1String("skin:actions/camera-web.svg")), tr("Share &Camera"), this);
+	qaSelfWebcam->setObjectName(QLatin1String("qaSelfWebcam"));
+	qaSelfWebcam->setCheckable(true);
+	qaSelfWebcam->setToolTip(tr("Let others ask to watch your camera"));
+	connect(qaSelfWebcam, &QAction::triggered, this, [this](bool checked) {
+		if (checked) {
+			m_webcam->startSharing();
+		} else {
+			m_webcam->stopSharing();
+		}
+		qaSelfWebcam->setChecked(m_webcam->isSharing());
+	});
+	connect(m_webcam, &WebcamManager::sharingChanged, qaSelfWebcam, &QAction::setChecked);
+
+	// Right after recording, in the block of things others can see us do.
+	const QList< QAction * > selfActions = qmSelf->actions();
+	const qsizetype recording            = selfActions.indexOf(qaRecording);
+	qmSelf->insertAction(recording >= 0 && recording + 1 < selfActions.size() ? selfActions[recording + 1] : nullptr,
+						 qaSelfWebcam);
+
+	// The target is the user the menu was opened on, stored when it opens.
+	qaUserWebcamWatch = new QAction(QIcon(QLatin1String("skin:actions/camera-web.svg")), tr("Watch &Camera"), this);
+	qaUserWebcamWatch->setObjectName(QLatin1String("qaUserWebcamWatch"));
+	connect(qaUserWebcamWatch, &QAction::triggered, this,
+			[this] { m_webcam->watch(qaUserWebcamWatch->data().toUInt()); });
+
+	qaUserWebcamRevoke = new QAction(tr("Stop Letting Them Watch Your Camera"), this);
+	qaUserWebcamRevoke->setObjectName(QLatin1String("qaUserWebcamRevoke"));
+	connect(qaUserWebcamRevoke, &QAction::triggered, this,
+			[this] { m_webcam->revoke(qaUserWebcamRevoke->data().toUInt()); });
+}
+#endif
 
 void MainWindow::on_qaSelfComment_triggered() {
 	openSelfCommentDialog();
@@ -2487,6 +2536,22 @@ void MainWindow::qmUser_aboutToShow() {
 	qmUser->addAction(qaUserTextMessage);
 	if (Global::get().sh && Global::get().sh->m_version >= Version::fromComponents(1, 2, 2))
 		qmUser->addAction(qaUserInformation);
+
+#ifdef USE_WEBCAM
+	// Watching needs no camera of one's own: only that the other side shares theirs.
+	if (p && !isSelf && (p->bWebcamSharing || m_webcam->isWatching(p->uiSession))) {
+		qmUser->addSeparator();
+		qaUserWebcamWatch->setData(p->uiSession);
+		qmUser->addAction(qaUserWebcamWatch);
+	}
+	if (p && !isSelf && m_webcam->isWatchedBy(p->uiSession)) {
+		qaUserWebcamRevoke->setData(p->uiSession);
+		qmUser->addAction(qaUserWebcamRevoke);
+	}
+	if (isSelf) {
+		qmUser->addAction(qaSelfWebcam);
+	}
+#endif
 
 	if (p && (p->iId < 0) && !p->qsHash.isEmpty()
 		&& (Global::get().pPermissions & ((isSelf ? ChanACL::SelfRegister : ChanACL::Register) | ChanACL::Write))) {
@@ -4345,6 +4410,11 @@ void MainWindow::serverConnected() {
 void MainWindow::serverDisconnected(QAbstractSocket::SocketError err, QString reason) {
 	// clear ChannelListener
 	Global::get().channelListenerManager->clear();
+
+#ifdef USE_WEBCAM
+	// Every share and view belongs to this connection, and so do the keys.
+	m_webcam->serverDisconnected();
+#endif
 
 	// Reset move-back history
 	qaMoveBack->setEnabled(false);

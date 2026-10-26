@@ -271,6 +271,25 @@
 	PROCESS(recording, RECORDING_FORMAT_KEY, iRecordingFormat)
 
 
+#define WEBCAM_SETTINGS                                                  \
+	PROCESS(webcam, WEBCAM_POLICY_KEY, iWebcamPolicy)                     \
+	PROCESS(webcam, WEBCAM_DEVICE_KEY, qsWebcamDevice)                    \
+	PROCESS(webcam, WEBCAM_QUALITY_KEY, iWebcamQuality)                   \
+	PROCESS(webcam, WEBCAM_CUSTOM_HEIGHT_KEY, iWebcamCustomHeight)        \
+	PROCESS(webcam, WEBCAM_CUSTOM_FPS_KEY, iWebcamCustomFps)              \
+	PROCESS(webcam, WEBCAM_CUSTOM_KBPS_KEY, iWebcamCustomKbps)            \
+	PROCESS(webcam, WEBCAM_ENCODER_KEY, qsWebcamEncoder)                  \
+	PROCESS(webcam, WEBCAM_RELAY_KEY, qsWebcamRelay)                      \
+	PROCESS(webcam, WEBCAM_PUBLISH_USER_KEY, qsWebcamPublishUser)         \
+	PROCESS(webcam, WEBCAM_PUBLISH_PASSWORD_KEY, qsWebcamPublishPassword) \
+	PROCESS(webcam, WEBCAM_READ_USER_KEY, qsWebcamReadUser)               \
+	PROCESS(webcam, WEBCAM_READ_PASSWORD_KEY, qsWebcamReadPassword)       \
+	PROCESS(webcam, WEBCAM_CA_FILE_KEY, qsWebcamCaFile)                   \
+	PROCESS(webcam, WEBCAM_ON_DEMAND_KEY, bWebcamOnDemand)                \
+	PROCESS(webcam, WEBCAM_VIEW_LATENCY_KEY, iWebcamViewLatency)          \
+	PROCESS(webcam, WEBCAM_WINDOW_GEOMETRY_KEY, qbaWebcamWindowGeometry)
+
+
 #define HIDDEN_SETTINGS PROCESS(hidden, DISABLE_CONNECT_DIALOG_EDITING_KEY, disableConnectDialogEditing)
 
 
@@ -381,6 +400,7 @@
 	MANUAL_PLUGIN_SETTINGS     \
 	PTT_WINDOW_SETTINGS        \
 	RECORDING_SETTINGS         \
+	WEBCAM_SETTINGS            \
 	HIDDEN_SETTINGS            \
 	WIN_OVERLAY_SETTINGS       \
 	LCD_SETTINGS               \
@@ -423,6 +443,8 @@
 	PTT_WINDOW_SETTINGS                                  \
 	INTERMEDIATE_OPERATION                               \
 	RECORDING_SETTINGS                                   \
+	INTERMEDIATE_OPERATION                               \
+	WEBCAM_SETTINGS                                      \
 	INTERMEDIATE_OPERATION                               \
 	HIDDEN_SETTINGS                                      \
 	INTERMEDIATE_OPERATION                               \

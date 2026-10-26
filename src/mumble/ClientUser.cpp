@@ -270,6 +270,13 @@ void ClientUser::setRecording(bool recording) {
 	emit recordingStateChanged();
 }
 
+void ClientUser::setWebcamSharing(bool sharing) {
+	if (bWebcamSharing == sharing)
+		return;
+	bWebcamSharing = sharing;
+	emit webcamStateChanged();
+}
+
 void ClientUser::setLocalVolumeAdjustment(float adjustment) {
 	float oldAdjustment = m_localVolume;
 	m_localVolume       = adjustment;

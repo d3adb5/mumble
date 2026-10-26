@@ -688,6 +688,34 @@ struct Settings {
 	RecordingMode rmRecordingMode = RecordingMixdown;
 	int iRecordingFormat          = 0;
 
+	// Webcam sharing (protocol v1, see WebcamProtocol.h)
+	/// Who may watch: 0 everyone, 1 ask each time, 2 nobody.
+	int iWebcamPolicy = 1;
+	/// The camera: a device path or name from the device monitor, empty for the first one.
+	QString qsWebcamDevice = {};
+	/// A preset from Mumble::Webcam::qualityPresets() (0 data saver .. 3 high), or 4 for custom.
+	int iWebcamQuality      = 2;
+	int iWebcamCustomHeight = 480;
+	int iWebcamCustomFps    = 24;
+	int iWebcamCustomKbps   = 600;
+	/// An H.264 encoder factory, empty for the first one installed.
+	QString qsWebcamEncoder = {};
+	/// The relay to publish to, e.g. rtsps://relay.example:8322 (the path is random per share).
+	QString qsWebcamRelay           = {};
+	QString qsWebcamPublishUser     = {};
+	QString qsWebcamPublishPassword = {};
+	/// A read credential handed to viewers inside the sealed grant, if the relay wants one.
+	QString qsWebcamReadUser     = {};
+	QString qsWebcamReadPassword = {};
+	/// A PEM file of CAs trusted for relays (publishing and watching), empty for the system's.
+	QString qsWebcamCaFile = {};
+	/// Open the camera only while someone is watching, rather than for the whole share.
+	bool bWebcamOnDemand = true;
+	/// How much the viewer buffers, in milliseconds.
+	int iWebcamViewLatency = 150;
+	/// Where the last camera window was, so the next one opens there.
+	QByteArray qbaWebcamWindowGeometry = {};
+
 	// Special configuration options not exposed to UI
 
 	/// Removes the add and edit options in the connect dialog if set.
