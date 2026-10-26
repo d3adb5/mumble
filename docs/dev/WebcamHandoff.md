@@ -49,17 +49,25 @@ ctest). They include the RFC 7748, RFC 5869 and spec vectors, cross-checked agai
 - **Local MediaMTX, Mumble's own classes:** `WebcamPublisher` with the C920 (864x480 at 24 fps,
   MJPG/raw chosen by `WebcamMode`, OpenH264) and `WebcamViewerStream` produced 172 frames in
   8 s. No error text contained the path.
+- **The whole client, 2026-10-26** (Xvfb, a local `mumble-server`, three Mumble instances, the
+  C920 through PipeWire, local relay): share-state and the tree icon (also for a user who joins
+  later), the ask dialog, allow, deny ("declined"), picture, revoke, leave by Escape and by the
+  window's close button, a revoke moving the stream for the remaining viewer (back in about 6 s),
+  share stop closing the window, two shares from one camera at once, and the camera going idle
+  when nobody watches. No log contained a path, URL or login.
+- **Interop, desktop shares and the RP6 watches** (Mumla viewer, Wi-Fi, local relay on the LAN
+  address, 2026-10-26): indicator, request, allow, decoded live picture (864x480, pillarboxed,
+  not squashed), following the move after another viewer's revoke (about 4.5 s gap), revoke
+  (keys wiped), deny, leave (the desktop logged it), re-watch and share stop. For a phone, the
+  relay setting must be the LAN address, not 127.0.0.1: the grant carries it.
 
 ## Not verified yet, in the order to do it
 
-1. **The whole client.** Two Mumble instances on a local Murmur, sharing and watching through
-   the UI: the ask dialog, grant, window, revoke (the stream must move), leave, share stop
-   closing the window, and the on-demand camera. Run `mumble-server` with your own ini on spare
-   ports. Nothing in the UI path (`Webcam.cpp`, `WebcamWindow.cpp`, `WebcamConfig.cpp`) has run
-   for real yet.
-2. **Interop with Mumla.** Desktop shares while the RP6 watches over Wi-Fi, and the other way
-   round. Tell the Mumla side when a share is up, but **never its path**: the grant carries it.
-   The user tests the Z Flip7 personally; no agent uses it.
+1. **Mumla shares, desktop watches.** Mumla has no sender yet, and the RP6 has no camera, so
+   this waits for Mumla's Camera2 sender and the user's own test on the Z Flip7 (no agent uses
+   it). Tell the Mumla side when a share is up, but **never its path**: the grant carries it.
+2. **The settings page.** `WebcamConfig.cpp` has not been driven through the UI; the UI tests
+   set the camera options in `mumble_settings.json` instead.
 3. **Production** (`rtsps://stream.d3adb5.ca:8322`, Let's Encrypt, anonymous read on `mcam/`).
    Publishing needs the user's own `beaver` login; ask the user for it and never commit it.
    Use production for the real-network checks only.
