@@ -64,6 +64,15 @@ elseif(UNIX)
 	endif()
 endif()
 
+# Webcam sharing needs GStreamer, which only the shared Linux builds have at hand: the static
+# Windows and macOS dependency bundles do not carry it yet.
+if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux" AND NOT static)
+	set(WEBCAM_DEFAULT ON)
+else()
+	set(WEBCAM_DEFAULT OFF)
+endif()
+option(webcam "Webcam sharing: send and watch cameras through a MediaMTX relay, end-to-end encrypted (requires GStreamer)." ${WEBCAM_DEFAULT})
+
 if(NOT APPLE)
 	option(g15 "Include support for the G15 keyboard (and compatible devices)." OFF)
 endif()
@@ -1146,6 +1155,27 @@ if(pipewire)
 
 	target_compile_definitions(mumble_client_object_lib PUBLIC "USE_PIPEWIRE")
 	target_include_directories(mumble_client_object_lib SYSTEM PUBLIC "${3RDPARTY_DIR}/pipewire")
+endif()
+
+if(webcam)
+	find_package(PkgConfig REQUIRED)
+	pkg_check_modules(GSTREAMER REQUIRED IMPORTED_TARGET
+		gstreamer-1.0
+		gstreamer-app-1.0
+		gstreamer-video-1.0
+		gio-2.0
+	)
+
+	target_sources(mumble_client_object_lib
+		PRIVATE
+			"WebcamCrypto.h"
+			"WebcamMode.h"
+			"WebcamStream.cpp"
+			"WebcamStream.h"
+	)
+
+	target_compile_definitions(mumble_client_object_lib PUBLIC "USE_WEBCAM")
+	target_link_libraries(mumble_client_object_lib PUBLIC PkgConfig::GSTREAMER)
 endif()
 
 if(portaudio)

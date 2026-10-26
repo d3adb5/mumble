@@ -283,6 +283,13 @@ if(deb-package)
 	# Resolve the shared-library dependencies (Qt, OpenSSL, ...) automatically from the
 	# linked binaries; requires dpkg-dev (dpkg-shlibdeps) to be present at package time.
 	set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+	if(webcam)
+		# Webcam sharing loads its GStreamer elements at runtime, which shlibdeps cannot see:
+		# capture and RTSP (good), the RTSP publisher (rtsp), H.264 encoders (ugly, bad),
+		# a decoder (libav) and TLS for RTSPS (glib-networking).
+		set(CPACK_DEBIAN_PACKAGE_RECOMMENDS
+			"gstreamer1.0-plugins-good, gstreamer1.0-plugins-bad, gstreamer1.0-plugins-ugly, gstreamer1.0-rtsp, gstreamer1.0-libav, glib-networking")
+	endif()
 	# Produce a single package with every installed component rather than one per component.
 	set(CPACK_DEB_COMPONENT_INSTALL OFF)
 	include(CPack)

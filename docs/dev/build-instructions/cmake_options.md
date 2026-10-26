@@ -319,6 +319,11 @@ All warnings are treated as errors.
 Build support for WASAPI.
 (Default: ON)
 
+### webcam
+
+Webcam sharing: send and watch cameras through a MediaMTX relay, end-to-end encrypted (requires GStreamer).
+(Default: ${WEBCAM_DEFAULT})
+
 ### xboxinput
 
 Build support for global shortcuts from Xbox controllers via the XInput DLL.

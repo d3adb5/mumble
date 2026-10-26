@@ -231,7 +231,8 @@ jobs:
           libprotobuf-dev protobuf-compiler libprotoc-dev \
           libcap-dev libxi-dev libpoco-dev \
           libasound2-dev libogg-dev libsndfile1-dev libopus-dev \
-          libspeechd-dev libavahi-compat-libdnssd-dev appstream
+          libspeechd-dev libavahi-compat-libdnssd-dev \
+          libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev appstream
 
     - uses: actions/checkout@v6
       with:

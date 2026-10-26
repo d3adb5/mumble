@@ -62,7 +62,8 @@ jobs:
           libprotobuf-dev protobuf-compiler libprotoc-dev \
           libcap-dev libxi-dev libpoco-dev \
           libasound2-dev libogg-dev libsndfile1-dev libopus-dev \
-          libspeechd-dev libavahi-compat-libdnssd-dev
+          libspeechd-dev libavahi-compat-libdnssd-dev \
+          libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
 
     - name: Create build dir
       run: cmake -E make_directory ${{runner.workspace}}/build
