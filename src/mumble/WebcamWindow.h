@@ -45,6 +45,8 @@ protected:
 
 private:
 	Qt::Edges edgesAt(const QPoint &pos) const;
+	/// Gives the window the picture's shape at about its current area, kept on the screen.
+	void fitTo(const QSize &picture);
 	void closeByUser();
 
 	QString m_title;

@@ -69,6 +69,8 @@ private slots:
 	void noModesIsNothing();
 	void devicePathFromPipewireAndV4l2();
 	void outputSizeKeepsAspectAndIsEven();
+	void windowKeepsItsAreaInThePicturesShape();
+	void windowStaysOnTheScreenAndAboveTheMinimum();
 };
 
 void TestWebcamMode::readsAFrameRateList() {
@@ -197,6 +199,26 @@ void TestWebcamMode::outputSizeKeepsAspectAndIsEven() {
 	mode.height = 480;
 	QCOMPARE(outputSize(mode, 360), std::make_pair(480, 360));
 	QCOMPARE(outputSize(mode, 0), std::make_pair(640, 480));
+}
+
+void TestWebcamMode::windowKeepsItsAreaInThePicturesShape() {
+	// The same shape keeps the size; a nearly equal one keeps the area.
+	QCOMPARE(windowSizeFor(480, 270, 864, 480, 160, 90, 1920, 1080), std::make_pair(483, 268));
+	QCOMPARE(windowSizeFor(480, 270, 1280, 720, 160, 90, 1920, 1080), std::make_pair(480, 270));
+	// A portrait share gets about as many pixels, not a strip of the landscape window.
+	QCOMPARE(windowSizeFor(480, 270, 480, 640, 160, 90, 1920, 1080), std::make_pair(312, 416));
+	// And back.
+	QCOMPARE(windowSizeFor(312, 416, 1280, 720, 160, 90, 1920, 1080), std::make_pair(480, 270));
+}
+
+void TestWebcamMode::windowStaysOnTheScreenAndAboveTheMinimum() {
+	// Too tall for the screen: shrunk with its shape.
+	QCOMPARE(windowSizeFor(1600, 900, 480, 640, 160, 90, 1920, 1080), std::make_pair(810, 1080));
+	// No screen known: no upper bound.
+	QCOMPARE(windowSizeFor(1600, 900, 480, 640, 160, 90, 0, 0), std::make_pair(1039, 1386));
+	// Never below the minimum, and a broken picture size does not divide by zero.
+	QCOMPARE(windowSizeFor(160, 90, 100, 1000, 160, 90, 1920, 1080), std::make_pair(160, 379));
+	QCOMPARE(windowSizeFor(480, 270, 0, 0, 160, 90, 1920, 1080), std::make_pair(360, 360));
 }
 
 QTEST_MAIN(TestWebcamMode)

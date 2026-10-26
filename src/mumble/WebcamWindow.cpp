@@ -5,6 +5,8 @@
 
 #include "WebcamWindow.h"
 
+#include "WebcamMode.h"
+
 #include <QtGui/QContextMenuEvent>
 #include <QtGui/QGuiApplication>
 #include <QtGui/QPainter>
@@ -34,9 +36,8 @@ WebcamWindow::WebcamWindow(const QString &title, const QByteArray &geometry, QWi
 	m_close->hide();
 	connect(m_close, &QToolButton::clicked, this, &WebcamWindow::closeByUser);
 
-	if (!geometry.isEmpty() && restoreGeometry(geometry)) {
-		m_userSized = true;
-	} else {
+	// A restored geometry gives the place and the size; the picture still sets the shape.
+	if (geometry.isEmpty() || !restoreGeometry(geometry)) {
 		resize(DEFAULT_WIDTH, DEFAULT_WIDTH * 9 / 16);
 		if (const QScreen *screen = QGuiApplication::primaryScreen()) {
 			const QRect area = screen->availableGeometry();
@@ -56,7 +57,7 @@ void WebcamWindow::setFrame(const QImage &image) {
 	}
 	// The first picture (and any change of shape) sizes the window, until the user does.
 	if (!m_userSized && (m_frame.isNull() || m_frame.size() != image.size())) {
-		resize(width(), std::max(minimumHeight(), width() * image.height() / std::max(1, image.width())));
+		fitTo(image.size());
 	}
 	m_frame = image;
 	m_status.clear();
@@ -85,6 +86,23 @@ void WebcamWindow::paintEvent(QPaintEvent *) {
 		painter.drawText(bar.adjusted(8, 0, -40, 0), Qt::AlignVCenter | Qt::AlignLeft,
 						 fontMetrics().elidedText(m_title, Qt::ElideRight, bar.width() - 48));
 	}
+}
+
+void WebcamWindow::fitTo(const QSize &picture) {
+	const QScreen *screen = this->screen() ? this->screen() : QGuiApplication::primaryScreen();
+	const QRect area      = screen ? screen->availableGeometry() : QRect();
+	const std::pair< int, int > fitted =
+		Mumble::Webcam::windowSizeFor(width(), height(), picture.width(), picture.height(), minimumWidth(),
+									  minimumHeight(), area.width(), area.height());
+
+	// Around the same centre, then back onto the screen if that pushed it off.
+	QRect target(QPoint(), QSize(fitted.first, fitted.second));
+	target.moveCenter(geometry().center());
+	if (area.isValid()) {
+		target.moveLeft(std::max(area.left(), std::min(target.left(), area.right() - target.width() + 1)));
+		target.moveTop(std::max(area.top(), std::min(target.top(), area.bottom() - target.height() + 1)));
+	}
+	setGeometry(target);
 }
 
 Qt::Edges WebcamWindow::edgesAt(const QPoint &pos) const {
@@ -138,7 +156,7 @@ void WebcamWindow::mouseDoubleClickEvent(QMouseEvent *event) {
 	// Back to the picture's own shape at the current width.
 	if (!m_frame.isNull()) {
 		m_userSized = false;
-		resize(width(), width() * m_frame.height() / std::max(1, m_frame.width()));
+		fitTo(m_frame.size());
 	}
 	event->accept();
 }
@@ -162,7 +180,7 @@ void WebcamWindow::contextMenuEvent(QContextMenuEvent *event) {
 		closeByUser();
 	} else if (chosen == fit) {
 		m_userSized = false;
-		resize(width(), width() * m_frame.height() / std::max(1, m_frame.width()));
+		fitTo(m_frame.size());
 	}
 }
 

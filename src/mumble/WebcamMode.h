@@ -248,6 +248,24 @@ namespace Webcam {
 		return { width, height };
 	}
 
+	/// The size a viewer window takes for a picture: the picture's shape at the window's current
+	/// area, so a portrait share is as big on screen as a landscape one, never smaller than
+	/// \p minWidth x \p minHeight and shrunk (keeping the shape) to fit \p maxWidth x \p maxHeight.
+	inline std::pair< int, int > windowSizeFor(int width, int height, int pictureWidth, int pictureHeight, int minWidth,
+											   int minHeight, int maxWidth, int maxHeight) {
+		const double aspect = static_cast< double >(std::max(1, pictureWidth)) / std::max(1, pictureHeight);
+		const double area   = static_cast< double >(std::max(1, width)) * std::max(1, height);
+		double w            = std::sqrt(area * aspect);
+		double h            = std::sqrt(area / aspect);
+		if (maxWidth > 0 && maxHeight > 0) {
+			const double shrink = std::min({ 1.0, maxWidth / w, maxHeight / h });
+			w *= shrink;
+			h *= shrink;
+		}
+		return { std::max(minWidth, static_cast< int >(std::lround(w))),
+				 std::max(minHeight, static_cast< int >(std::lround(h))) };
+	}
+
 } // namespace Webcam
 } // namespace Mumble
 
