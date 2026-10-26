@@ -60,12 +60,21 @@ ctest). They include the RFC 7748, RFC 5869 and spec vectors, cross-checked agai
   not squashed), following the move after another viewer's revoke (about 4.5 s gap), revoke
   (keys wiped), deny, leave (the desktop logged it), re-watch and share stop. For a phone, the
   relay setting must be the LAN address, not 127.0.0.1: the grant carries it.
+- **Interop, the Flip7 shares and the desktop watches** (Mumla's Camera2 sender, 480x640 portrait
+  at 24 fps, Exynos encoder, local relay, 2026-10-26): request, allow, decode at good quality,
+  upright and unmirrored (after a fix on Mumla's side), front/rear flips inside the same stream
+  with no reconnect, a second viewer's revoke (the desktop followed the move in about 1-2 s),
+  leave, re-watch on a fresh path and stop. A mid-share resolution change (864x480 to 480x640 and
+  back, new SPS before the next IDR) was also checked with a scratch harness through the same
+  viewer chain: decoding follows it without a restart.
 
 ## Not verified yet, in the order to do it
 
-1. **Mumla shares, desktop watches.** Mumla has no sender yet, and the RP6 has no camera, so
-   this waits for Mumla's Camera2 sender and the user's own test on the Z Flip7 (no agent uses
-   it). Tell the Mumla side when a share is up, but **never its path**: the grant carries it.
+1. **Test clients must be isolated.** Run extra Mumble instances with their own `HOME`,
+   `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_CACHE_HOME` and `XDG_RUNTIME_DIR` (keeping
+   `PIPEWIRE_RUNTIME_DIR`, `PULSE_RUNTIME_PATH` and `DBUS_SESSION_BUS_ADDRESS` on the real ones).
+   `-m` alone is not enough: a starting Mumble deletes and re-creates
+   `$XDG_RUNTIME_DIR/MumbleSocket` and takes the running Mumble's RPC socket.
 2. **The settings page.** `WebcamConfig.cpp` has not been driven through the UI; the UI tests
    set the camera options in `mumble_settings.json` instead.
 3. **Production** (`rtsps://stream.d3adb5.ca:8322`, Let's Encrypt, anonymous read on `mcam/`).
