@@ -1162,6 +1162,7 @@ if(webcam)
 	pkg_check_modules(GSTREAMER REQUIRED IMPORTED_TARGET
 		gstreamer-1.0
 		gstreamer-app-1.0
+		gstreamer-sdp-1.0
 		gstreamer-video-1.0
 		gio-2.0
 	)

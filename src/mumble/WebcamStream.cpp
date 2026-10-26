@@ -7,6 +7,7 @@
 #include <gio/gio.h>
 #include <gst/app/gstappsink.h>
 #include <gst/gst.h>
+#include <gst/sdp/sdp.h>
 #include <gst/video/video.h>
 
 #include "WebcamStream.h"
@@ -182,6 +183,23 @@ std::vector< std::string > capsStrings(GstCaps *caps) {
 		g_free(text);
 	}
 	return out;
+}
+
+/// MediaMTX offers SRTP (RTP/SAVP with MIKEY) inside RTSPS and refuses the SETUP rtspsrc
+/// answers that with. Inside TLS, with every slice already encrypted end to end, SRTP adds
+/// nothing: the plain profile is read over the same TLS connection instead.
+void readPlainProfile(GstElement *, GstSDPMessage *sdp, gpointer) {
+	for (guint i = 0; i < gst_sdp_message_medias_len(sdp); ++i) {
+		auto *media = const_cast< GstSDPMedia * >(gst_sdp_message_get_media(sdp, i));
+		if (g_strcmp0(gst_sdp_media_get_proto(media), "RTP/SAVP") == 0) {
+			gst_sdp_media_set_proto(media, "RTP/AVP");
+		}
+		for (guint a = gst_sdp_media_attributes_len(media); a-- > 0;) {
+			if (g_strcmp0(gst_sdp_media_get_attribute(media, a)->key, "key-mgmt") == 0) {
+				gst_sdp_media_remove_attribute(media, a);
+			}
+		}
+	}
 }
 
 /// Replaces the buffer a probe sees with \p data, keeping its timestamps and flags.
@@ -607,6 +625,7 @@ bool WebcamViewerStream::start(const Config &config, QString *error) {
 	g_object_set(source, "location", config.url.toUtf8().constData(), "latency",
 				 static_cast< guint >(std::max(0, config.latencyMs)), nullptr);
 	gst_util_set_object_arg(G_OBJECT(source), "protocols", "tcp");
+	g_signal_connect(source, "on-sdp", G_CALLBACK(readPlainProfile), nullptr);
 	if (!config.user.isEmpty()) {
 		g_object_set(source, "user-id", config.user.toUtf8().constData(), "user-pw",
 					 config.password.toUtf8().constData(), nullptr);
