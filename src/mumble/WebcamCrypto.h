@@ -145,7 +145,9 @@ namespace Webcam {
 			return {};
 		}
 		if (EVP_EncryptFinal_ex(ctx.get(), out.data() + IV_SIZE + size, &len) != 1
-			|| EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_GCM_GET_TAG, TAG_SIZE, out.data() + IV_SIZE + size) != 1) {
+			|| EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_GCM_GET_TAG, static_cast< int >(TAG_SIZE),
+								   out.data() + IV_SIZE + size)
+				   != 1) {
 			return {};
 		}
 		return out;
@@ -175,7 +177,7 @@ namespace Webcam {
 		}
 		// OpenSSL takes a non-const pointer for the expected tag but only reads it.
 		Bytes tag(sealed + IV_SIZE + textSize, sealed + size);
-		if (EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_GCM_SET_TAG, TAG_SIZE, tag.data()) != 1
+		if (EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_GCM_SET_TAG, static_cast< int >(TAG_SIZE), tag.data()) != 1
 			|| EVP_DecryptFinal_ex(ctx.get(), out.data() + textSize, &len) != 1) {
 			return std::nullopt;
 		}
