@@ -462,14 +462,45 @@ namespace Webcam {
 		bool operator==(const Login &other) const { return user == other.user && pass == other.pass; }
 	};
 
-	/// The login a viewer reads the stream with. The relay wants one for every read, so the
-	/// viewer brings its own; a login the sender put in the grant, if any, still wins. Nothing
-	/// if neither has a user.
-	inline std::optional< Login > readLogin(const StreamSecrets &secrets, const Login &own) {
+	/// The host and port of an RTSPS URL, lower-cased, with the default port filled in. Nothing
+	/// if it is not an RTSPS URL with a host.
+	inline std::optional< std::string > relayAuthority(const std::string &url) {
+		const std::string scheme = "rtsps://";
+		if (url.size() <= scheme.size() || url.compare(0, scheme.size(), scheme) != 0) {
+			return std::nullopt;
+		}
+		std::string authority = url.substr(scheme.size(), url.find_first_of("/?#", scheme.size()) - scheme.size());
+		const std::size_t at  = authority.rfind('@');
+		if (at != std::string::npos) {
+			authority.erase(0, at + 1);
+		}
+		std::transform(authority.begin(), authority.end(), authority.begin(),
+					   [](unsigned char c) { return static_cast< char >(std::tolower(c)); });
+		const std::size_t bracket = authority.rfind(']');
+		const std::size_t colon   = authority.rfind(':');
+		const bool hasPort        = colon != std::string::npos && (bracket == std::string::npos || colon > bracket);
+		if (hasPort && colon + 1 == authority.size()) {
+			authority += "322";
+		} else if (!hasPort) {
+			authority += ":322";
+		}
+		if (authority.empty() || authority[0] == ':') {
+			return std::nullopt;
+		}
+		return authority;
+	}
+
+	/// The login a viewer reads the stream at url with. The relay wants one for every read, so
+	/// the viewer brings its own; a login the sender put in the grant, if any, still wins. The
+	/// viewer's own login goes only to its own relay, never to wherever a grant points, or any
+	/// sender could collect its viewers' logins. Nothing if there is no login for that relay.
+	inline std::optional< Login > readLogin(const StreamSecrets &secrets, const std::string &url, const Login &own,
+											const std::string &ownRelay) {
 		if (!secrets.user.empty()) {
 			return Login{ secrets.user, secrets.pass };
 		}
-		if (!own.user.empty()) {
+		const std::optional< std::string > relay = relayAuthority(ownRelay);
+		if (!own.user.empty() && relay && relayAuthority(url) == relay) {
 			return own;
 		}
 		return std::nullopt;

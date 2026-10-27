@@ -61,8 +61,10 @@ Login ownLogin() {
 	return { s.qsWebcamPublishUser.toStdString(), s.qsWebcamPublishPassword.toStdString() };
 }
 
-/// Asks for a relay login and keeps it in the settings. False if the user gave none.
+/// Asks for the relay and a login on it, and keeps them in the settings. False if the user gave
+/// none.
 bool askRelayLogin() {
+	Settings &s = Global::get().s;
 	QDialog dialog(Global::get().mw);
 	dialog.setWindowTitle(QObject::tr("Relay login"));
 	auto *layout = new QFormLayout(&dialog);
@@ -71,9 +73,12 @@ bool askRelayLogin() {
 							  &dialog);
 	info->setWordWrap(true);
 	layout->addRow(info);
-	auto *user     = new QLineEdit(&dialog);
-	auto *password = new QLineEdit(&dialog);
+	auto *relay    = new QLineEdit(s.qsWebcamRelay, &dialog);
+	auto *user     = new QLineEdit(s.qsWebcamPublishUser, &dialog);
+	auto *password = new QLineEdit(s.qsWebcamPublishPassword, &dialog);
+	relay->setPlaceholderText(QLatin1String("rtsps://relay.example.org:8322"));
 	password->setEchoMode(QLineEdit::Password);
+	layout->addRow(QObject::tr("Relay"), relay);
 	layout->addRow(QObject::tr("User"), user);
 	layout->addRow(QObject::tr("Password"), password);
 	auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
@@ -81,10 +86,10 @@ bool askRelayLogin() {
 	QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
 	layout->addRow(buttons);
 
-	if (dialog.exec() != QDialog::Accepted || user->text().isEmpty()) {
+	if (dialog.exec() != QDialog::Accepted || relay->text().trimmed().isEmpty() || user->text().isEmpty()) {
 		return false;
 	}
-	Settings &s               = Global::get().s;
+	s.qsWebcamRelay           = relay->text().trimmed();
 	s.qsWebcamPublishUser     = user->text();
 	s.qsWebcamPublishPassword = password->text();
 	s.save();
@@ -494,7 +499,7 @@ void WebcamManager::watch(unsigned int session) {
 	}
 	// The relay lets nobody read without a login of their own. Watching needs only that: no
 	// camera, and no sharing.
-	if (ownLogin().user.empty() && !askRelayLogin()) {
+	if ((ownLogin().user.empty() || relayBase().isEmpty()) && !askRelayLogin()) {
 		return;
 	}
 	// The user may have left while the login was asked for.
@@ -648,13 +653,17 @@ void WebcamManager::connectWatch(unsigned int session) {
 	if (window) {
 		window->setStatus(tr("Connecting…"));
 	}
-	const std::optional< Login > login = readLogin(watch->secrets, ownLogin());
+	const std::string url              = *pickUrl(watch->secrets.urls);
+	const std::optional< Login > login = readLogin(watch->secrets, url, ownLogin(), relayBase().toStdString());
 	if (!login) {
-		endWatch(session, true, tr("Set your relay login under Settings, Camera, to watch cameras."));
+		endWatch(session, true,
+				 tr("%1's camera is on a relay you have no login for: watching needs your own login on the same "
+					"relay, under Settings, Camera.")
+					 .arg(userName(session)));
 		return;
 	}
 	WebcamViewerStream::Config config;
-	config.url       = QString::fromStdString(*pickUrl(watch->secrets.urls));
+	config.url       = QString::fromStdString(url);
 	config.user      = QString::fromStdString(login->user);
 	config.password  = QString::fromStdString(login->pass);
 	config.caFile    = Global::get().s.qsWebcamCaFile;

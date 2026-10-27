@@ -44,6 +44,7 @@ private slots:
 	void rekeyKeyOnlyAndMove();
 	void rekeyIsNotAGrant();
 	void pickUrl();
+	void relayAuthority();
 	void readLogin();
 };
 
@@ -261,20 +262,47 @@ void TestWebcamProtocol::pickUrl() {
 	QVERIFY(!Mumble::Webcam::pickUrl({}));
 }
 
+void TestWebcamProtocol::relayAuthority() {
+	using Mumble::Webcam::relayAuthority;
+	QCOMPARE(relayAuthority("rtsps://Relay.Example.org:8322/mcam/x"),
+			 std::optional< std::string >("relay.example.org:8322"));
+	QCOMPARE(relayAuthority("rtsps://relay.example.org"), std::optional< std::string >("relay.example.org:322"));
+	QCOMPARE(relayAuthority("rtsps://relay.example.org:/x"), std::optional< std::string >("relay.example.org:322"));
+	QCOMPARE(relayAuthority("rtsps://u:p@relay.example.org:8322"),
+			 std::optional< std::string >("relay.example.org:8322"));
+	QCOMPARE(relayAuthority("rtsps://[::1]:18322/x"), std::optional< std::string >("[::1]:18322"));
+	QCOMPARE(relayAuthority("rtsps://[::1]/x"), std::optional< std::string >("[::1]:322"));
+	// A user part cannot pass off another host as the relay.
+	QCOMPARE(relayAuthority("rtsps://relay.example.org:8322@evil.example:8322/x"),
+			 std::optional< std::string >("evil.example:8322"));
+	QVERIFY(!relayAuthority("rtsp://relay.example.org:8322/x"));
+	QVERIFY(!relayAuthority("rtsps://"));
+	QVERIFY(!relayAuthority("rtsps:///x"));
+	QVERIFY(!relayAuthority("rtsps://:8322/x"));
+	QVERIFY(!relayAuthority(""));
+}
+
 void TestWebcamProtocol::readLogin() {
 	using Mumble::Webcam::Login;
 	const Login own{ "viewer", "own-pass" };
-	StreamSecrets secrets = sampleSecrets();
+	const std::string relay = "rtsps://relay.example.org:8322/";
+	const std::string url   = "rtsps://relay.example.org:8322/mcam/0123";
+	StreamSecrets secrets   = sampleSecrets();
 
 	secrets.user = "sender-read";
 	secrets.pass = "read-pass";
-	QCOMPARE(Mumble::Webcam::readLogin(secrets, own), std::optional< Login >(Login{ "sender-read", "read-pass" }));
+	QCOMPARE(Mumble::Webcam::readLogin(secrets, url, own, relay),
+			 std::optional< Login >(Login{ "sender-read", "read-pass" }));
 
 	secrets.user.clear();
 	secrets.pass.clear();
-	QCOMPARE(Mumble::Webcam::readLogin(secrets, own), std::optional< Login >(own));
-	QVERIFY(!Mumble::Webcam::readLogin(secrets, Login{}));
-	QVERIFY(!Mumble::Webcam::readLogin(secrets, Login{ "", "pass-without-user" }));
+	QCOMPARE(Mumble::Webcam::readLogin(secrets, url, own, relay), std::optional< Login >(own));
+	QVERIFY(!Mumble::Webcam::readLogin(secrets, url, Login{}, relay));
+	QVERIFY(!Mumble::Webcam::readLogin(secrets, url, Login{ "", "pass-without-user" }, relay));
+	// The own login never goes to another relay, nor anywhere when no relay is set.
+	QVERIFY(!Mumble::Webcam::readLogin(secrets, "rtsps://evil.example:8322/mcam/0123", own, relay));
+	QVERIFY(!Mumble::Webcam::readLogin(secrets, "rtsps://relay.example.org:9322/mcam/0123", own, relay));
+	QVERIFY(!Mumble::Webcam::readLogin(secrets, url, own, ""));
 }
 
 QTEST_MAIN(TestWebcamProtocol)

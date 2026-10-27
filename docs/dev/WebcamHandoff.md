@@ -20,8 +20,10 @@ anything that goes over the wire:
   The camera opens only while someone watches (setting, on by default).
 - **Relay logins:** the relay allows no anonymous read (secretlab 25eb481). A viewer reads with
   its own relay login (the "Your login" setting, the same one that shares); a read login in
-  the grant still wins. "Watch camera" asks for a login when none is set. Watching never needs
-  a camera or a share. The mtx-gate (`~/projects/mtx-gate/DESIGN.md`) adds per-viewer tickets
+  the grant still wins. The own login goes only to a grant URL on the viewer's own relay
+  (same host and port as the Relay setting), so a sender can't collect viewers' logins by
+  pointing a grant elsewhere. "Watch camera" asks for the relay and a login when either is
+  unset. Watching never needs a camera or a share. The mtx-gate (`~/projects/mtx-gate/DESIGN.md`) adds per-viewer tickets
   in v1.1 grants; not implemented yet.
 
 The peer sessions were `mumla-f5` (Android, spec owner) and `retroid-bb` (relayed the user's
