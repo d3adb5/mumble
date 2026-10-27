@@ -23,8 +23,18 @@ anything that goes over the wire:
   the grant still wins. The own login goes only to a grant URL on the viewer's own relay
   (same host and port as the Relay setting), so a sender can't collect viewers' logins by
   pointing a grant elsewhere. "Watch camera" asks for the relay and a login when either is
-  unset. Watching never needs a camera or a share. The mtx-gate (`~/projects/mtx-gate/DESIGN.md`) adds per-viewer tickets
-  in v1.1 grants; not implemented yet.
+  unset. Watching never needs a camera or a share.
+- **The gate (v1.1, `~/projects/mtx-gate/DESIGN.md`):** the grant and rekey boxes carry
+  `gate: {id, secret}`, never a URL. The gate API is `https://<own relay host>/gate/v1`, or the
+  "Relay gate" setting (HTTPS only), and only the user's own login goes there
+  (`WebcamGate`, rules in `WebcamGateApi.h`). Sender: PUT the share at start, every 30 s and
+  before every publish connection; one ticket per grant; a move PUTs the new path, then
+  DELETEs the old one and re-tickets the remaining viewers in a rekey with urls; a 201 on a
+  renewal re-tickets everyone in a rekey without urls; stop DELETEs the share. Viewer: redeem
+  before every connection; 401 asks for the login; 410 sends watch-request again; 403/404/429
+  retry for 45 s; a MediaMTX 401 after a good redeem calls `open` to tell a bad login apart.
+  No gate (production today): anything without `X-Mtx-Gate`, a 2xx without JSON, or a timeout,
+  and the client behaves as in v1, without tickets.
 
 The peer sessions were `mumla-f5` (Android, spec owner) and `retroid-bb` (relayed the user's
 requirements and took status reports). They may be gone. The spec and the git logs carry
@@ -90,7 +100,13 @@ ctest). They include the RFC 7748, RFC 5869 and spec vectors, cross-checked agai
 4. **Windows/macOS.** The option is OFF there because the static dependency bundles have no
    GStreamer. Enabling it means adding GStreamer to those bundles (and the device-monitor source
    path in `makeSource()`, which is untested).
-5. **Optional:** a WHEP read path (`pickUrl()` only takes `rtsps://` today); a global shortcut to
+5. **The gate with a real relay.** Tested 2026-10-27 against mtx-gate 8f1a1c2 (`-enforce`,
+   throwaway owners) with a silent stand-in for MediaMTX: claim, renewals, ticket, PUT before
+   publish, redeem per connection, gate restart (201 → new ticket → redeem), bad login
+   (401 → login dialog → saved), revoke (ticket DELETE, new PUT, old DELETE), no gate (v1).
+   Still open: a picture through the gated relay, 410, the 45 s retry window, a MediaMTX 401
+   → `open`, and a move with two viewers. The gated relay is the user's to start.
+6. **Optional:** a WHEP read path (`pickUrl()` only takes `rtsps://` today); a global shortcut to
    toggle sharing; a self-preview.
 
 ## Dependencies

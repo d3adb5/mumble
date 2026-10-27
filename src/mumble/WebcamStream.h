@@ -62,6 +62,8 @@ public:
 	/// Stops and tears the pipeline down. Safe to call at any time, also twice.
 	void stop();
 	bool isRunning() const { return m_pipeline != nullptr; }
+	/// The last failure was the relay refusing our login (an RTSP 401).
+	bool wasRefused() const { return m_refused; }
 
 signals:
 	/// Frames are flowing.
@@ -91,6 +93,7 @@ private:
 	std::atomic_bool m_eos{ false };
 	/// Bumped on every start and stop, so messages of an old pipeline are dropped.
 	std::atomic_uint m_generation{ 0 };
+	bool m_refused = false;
 };
 
 /// Publishes a camera to a relay.

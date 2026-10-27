@@ -97,6 +97,7 @@ void WebcamConfig::load(const Settings &r) {
 	qleReadUser->setText(r.qsWebcamReadUser);
 	qleReadPassword->setText(r.qsWebcamReadPassword);
 	qleCaFile->setText(r.qsWebcamCaFile);
+	qleGateUrl->setText(r.qsWebcamGateUrl);
 	qsbLatency->setValue(r.iWebcamViewLatency);
 }
 
@@ -115,6 +116,7 @@ void WebcamConfig::save() const {
 	s.qsWebcamReadUser        = qleReadUser->text();
 	s.qsWebcamReadPassword    = qleReadPassword->text();
 	s.qsWebcamCaFile          = qleCaFile->text().trimmed();
+	s.qsWebcamGateUrl         = qleGateUrl->text().trimmed();
 	s.iWebcamViewLatency      = qsbLatency->value();
 }
 

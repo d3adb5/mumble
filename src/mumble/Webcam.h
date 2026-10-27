@@ -9,6 +9,7 @@
 #include "WebcamMode.h"
 #include "WebcamProtocol.h"
 
+#include <QtCore/QElapsedTimer>
 #include <QtCore/QHash>
 #include <QtCore/QObject>
 #include <QtCore/QPointer>
@@ -16,17 +17,20 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 class QMessageBox;
 class QTimer;
+class WebcamGate;
 class WebcamPublisher;
 class WebcamViewerStream;
 class WebcamWindow;
 
-/// Webcam sharing (protocol v1, shared with Mumla): this client's camera share and the cameras
+/// Webcam sharing (protocol v1.1, shared with Mumla): this client's camera share and the cameras
 /// it watches. Signalling goes over PluginDataTransmission to single sessions; the video goes
 /// through a MediaMTX relay on a random path, encrypted end to end, and every secret reaches a
-/// viewer only sealed to that viewer's key.
+/// viewer only sealed to that viewer's key. Where the relay has a gate, the sender claims each
+/// path there and hands each viewer a ticket, which the viewer redeems with its own login.
 class WebcamManager : public QObject {
 private:
 	Q_OBJECT
@@ -66,7 +70,15 @@ signals:
 private:
 	struct Viewer {
 		Mumble::Webcam::Bytes publicKey;
+		/// The viewer's gate ticket on the current path, if the relay has a gate.
+		std::string ticketId;
 	};
+	struct PendingGrant {
+		std::string nonce;
+		Mumble::Webcam::Bytes publicKey;
+	};
+	/// Whether the relay has a gate: found out by the share's first claim.
+	enum class GateMode { Unknown, Gated, Ungated };
 	struct PendingAsk {
 		std::string nonce;
 		Mumble::Webcam::Bytes publicKey;
@@ -82,6 +94,11 @@ private:
 		QTimer *answerTimeout = nullptr;
 		QTimer *retry         = nullptr;
 		int attempts          = 0;
+		/// The gate ticket (in secrets.gate) is redeemed for the next connection.
+		bool redeemed  = false;
+		bool redeeming = false;
+		/// Since when the gate has refused the ticket for now (see gateRetries).
+		QElapsedTimer gateRefusedSince;
 	};
 
 	void send(const QList< unsigned int > &sessions, const char *dataId, const std::string &data);
@@ -95,12 +112,25 @@ private:
 	void onRequest(unsigned int sender, const std::string &data);
 	void onLeave(unsigned int sender);
 	void grant(unsigned int session, const std::string &nonce, const Mumble::Webcam::Bytes &publicKey);
+	/// Claims (or renews) the current path at the gate, then publishes when \p thenPublish; the
+	/// first claim also finds out whether there is a gate at all.
+	void claimShare(bool thenPublish = false);
+	/// Ends the shares on paths we moved away from.
+	void deleteStaleShares();
+	/// The current path is ready to publish to: moved viewers learn it, waiting grants go out.
+	void shareReady();
+	/// Mints a ticket for every viewer and sends it in a rekey, with the urls when \p moved.
+	void reticket(bool moved);
 	void deny(unsigned int session, const std::string &nonce, const char *reason);
 	/// The stream's secrets as one viewer receives them.
 	Mumble::Webcam::StreamSecrets currentSecrets() const;
 	/// A fresh path and key (and the next kid); the old ones are forgotten.
 	bool newStreamSecrets();
+	/// Publishes if not already, after claiming the path where there is a gate. False (with the
+	/// share stopped) if it fails at once.
 	bool ensurePublishing();
+	/// Opens the publish connection now.
+	bool publishNow();
 	void stopPublishing();
 	/// After a viewer is gone: the remaining ones move to a fresh path, or the camera closes
 	/// when nobody is left and it opens on demand.
@@ -111,7 +141,17 @@ private:
 	void onDeny(unsigned int sender, const std::string &data);
 	void onRekey(unsigned int sender, const std::string &data);
 	void onShareState(unsigned int sender, const std::string &data);
+	/// Asks \p session to let us watch, with fresh keys and nonce.
+	void requestWatch(unsigned int session);
 	void connectWatch(unsigned int session);
+	/// Redeems the watch's gate ticket, then connects when \p reconnect.
+	void redeemWatch(unsigned int session, bool reconnect);
+	/// The relay refused our read login (RTSP 401) after a redeem.
+	void relayRefused(unsigned int session, const QString &message);
+	/// Asks for the relay login, then redeems (and connects, when \p reconnect) again.
+	void askLoginAndRetry(unsigned int session, bool reconnect);
+	/// Tries again shortly: connecting when \p reconnect, else only redeeming.
+	void armRetry(unsigned int session, bool reconnect);
 	void scheduleRetry(unsigned int session, const QString &status);
 	/// Closes the view on \p session; \p notify sends watch-leave.
 	void endWatch(unsigned int session, bool notify, const QString &message = QString());
@@ -123,6 +163,18 @@ private:
 	std::unique_ptr< WebcamPublisher > m_publisher;
 	QHash< unsigned int, Viewer > m_viewers;
 	QHash< unsigned int, PendingAsk > m_asks;
+	QHash< unsigned int, PendingGrant > m_pendingGrants;
+	WebcamGate *m_gate  = nullptr;
+	GateMode m_gateMode = GateMode::Unknown;
+	/// The gate holds the current path for us.
+	bool m_shareClaimed = false;
+	/// A claim before a publish connection is under way.
+	bool m_publishClaiming = false;
+	/// Paths moved away from, to end at the gate once the new one is claimed.
+	std::vector< std::string > m_staleShares;
+	/// The viewers have yet to learn the current path.
+	bool m_pendingMove   = false;
+	QTimer *m_shareRenew = nullptr;
 
 	QHash< unsigned int, Watch * > m_watches;
 };

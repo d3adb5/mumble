@@ -709,6 +709,8 @@ struct Settings {
 	QString qsWebcamReadPassword = {};
 	/// A PEM file of CAs trusted for relays (publishing and watching), empty for the system's.
 	QString qsWebcamCaFile = {};
+	/// The relay's gate API, when it is not https://<relay host>/gate/v1.
+	QString qsWebcamGateUrl = {};
 	/// Open the camera only while someone is watching, rather than for the whole share.
 	bool bWebcamOnDemand = true;
 	/// How much the viewer buffers, in milliseconds.

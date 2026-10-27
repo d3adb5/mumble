@@ -325,6 +325,26 @@
         </item>
        </layout>
       </item>
+      <item row="5" column="0">
+       <widget class="QLabel" name="qlGateUrl">
+        <property name="text">
+         <string>Relay gate</string>
+        </property>
+        <property name="buddy">
+         <cstring>qleGateUrl</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="5" column="1">
+       <widget class="QLineEdit" name="qleGateUrl">
+        <property name="toolTip">
+         <string>Where the relay's gate API is, if it has one and it is not at the relay's own host. Your login is sent there, so set only an address you trust. HTTPS only.</string>
+        </property>
+        <property name="placeholderText">
+         <string>https://&lt;relay host&gt;/gate/v1 (optional)</string>
+        </property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>

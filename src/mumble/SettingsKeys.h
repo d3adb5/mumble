@@ -315,6 +315,7 @@ const SettingsKey WEBCAM_PUBLISH_PASSWORD_KEY = { "webcam_publish_password" };
 const SettingsKey WEBCAM_READ_USER_KEY        = { "webcam_read_user" };
 const SettingsKey WEBCAM_READ_PASSWORD_KEY    = { "webcam_read_password" };
 const SettingsKey WEBCAM_CA_FILE_KEY          = { "webcam_ca_file" };
+const SettingsKey WEBCAM_GATE_URL_KEY         = { "webcam_gate_url" };
 const SettingsKey WEBCAM_ON_DEMAND_KEY        = { "webcam_on_demand" };
 const SettingsKey WEBCAM_VIEW_LATENCY_KEY     = { "webcam_view_latency" };
 const SettingsKey WEBCAM_WINDOW_GEOMETRY_KEY  = { "webcam_window_geometry" };

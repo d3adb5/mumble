@@ -9,6 +9,7 @@
 #include "Log.h"
 #include "MainWindow.h"
 #include "ServerHandler.h"
+#include "WebcamGate.h"
 #include "WebcamStream.h"
 #include "WebcamWindow.h"
 #include "Global.h"
@@ -61,15 +62,17 @@ Login ownLogin() {
 	return { s.qsWebcamPublishUser.toStdString(), s.qsWebcamPublishPassword.toStdString() };
 }
 
-/// Asks for the relay and a login on it, and keeps them in the settings. False if the user gave
-/// none.
-bool askRelayLogin() {
+/// Asks for the relay and a login on it, and keeps them in the settings; \p refused says the
+/// relay turned the current one down. False if the user gave none.
+bool askRelayLogin(bool refused = false) {
 	Settings &s = Global::get().s;
 	QDialog dialog(Global::get().mw);
 	dialog.setWindowTitle(QObject::tr("Relay login"));
 	auto *layout = new QFormLayout(&dialog);
-	auto *info   = new QLabel(QObject::tr("The camera relay wants your own login before you can watch. It is kept "
-										  "under Settings, Camera, and also used to share your camera."),
+	auto *info   = new QLabel(refused ? QObject::tr("The camera relay refused your login. Check it: it is kept under "
+													"Settings, Camera, and also used to share your camera.")
+									  : QObject::tr("The camera relay wants your own login before you can watch. It is "
+													"kept under Settings, Camera, and also used to share your camera."),
 							  &dialog);
 	info->setWordWrap(true);
 	layout->addRow(info);
@@ -97,7 +100,14 @@ bool askRelayLogin() {
 }
 } // namespace
 
-WebcamManager::WebcamManager(QObject *parent) : QObject(parent) {
+WebcamManager::WebcamManager(QObject *parent) : QObject(parent), m_gate(new WebcamGate(this)) {
+	m_shareRenew = new QTimer(this);
+	m_shareRenew->setInterval(GATE_SHARE_RENEW_MS);
+	connect(m_shareRenew, &QTimer::timeout, this, [this] {
+		if (m_sharing && m_gateMode == GateMode::Gated) {
+			claimShare();
+		}
+	});
 }
 
 WebcamManager::~WebcamManager() {
@@ -200,6 +210,7 @@ void WebcamManager::userLeft(unsigned int session) {
 			ask.box->deleteLater();
 		}
 	}
+	m_pendingGrants.remove(session);
 	if (m_viewers.contains(session)) {
 		viewerGone(session, false);
 	}
@@ -218,8 +229,19 @@ void WebcamManager::serverDisconnected() {
 		}
 	}
 	m_asks.clear();
+	m_pendingGrants.clear();
 	m_viewers.clear();
 	stopPublishing();
+	m_shareRenew->stop();
+	if (m_gateMode == GateMode::Gated) {
+		if (!m_path.empty()) {
+			m_staleShares.push_back(m_path);
+		}
+		deleteStaleShares();
+	}
+	m_staleShares.clear();
+	m_shareClaimed    = false;
+	m_publishClaiming = false;
 	m_path.clear();
 	m_key.clear();
 	if (m_sharing) {
@@ -257,10 +279,15 @@ bool WebcamManager::startSharing() {
 		return false;
 	}
 
-	m_sharing = true;
-	if (!s.bWebcamOnDemand && !ensurePublishing()) {
-		return false;
-	}
+	m_sharing         = true;
+	m_gateMode        = GateMode::Unknown;
+	m_shareClaimed    = false;
+	m_publishClaiming = false;
+	m_pendingMove     = false;
+	// The relay opens to our IP only once the gate holds the path, so publishing (and any grant)
+	// waits for the claim.
+	m_shareRenew->start();
+	claimShare();
 	if (ClientUser *self = ClientUser::get(Global::get().uiSession)) {
 		self->setWebcamSharing(true);
 	}
@@ -281,8 +308,19 @@ void WebcamManager::stopSharing(const QString &reason) {
 		}
 	}
 	m_asks.clear();
+	m_pendingGrants.clear();
 	m_viewers.clear();
 	stopPublishing();
+	m_shareRenew->stop();
+	if (m_gateMode == GateMode::Gated) {
+		if (!m_path.empty()) {
+			m_staleShares.push_back(m_path);
+		}
+		deleteStaleShares();
+	}
+	m_staleShares.clear();
+	m_shareClaimed    = false;
+	m_publishClaiming = false;
 	m_path.clear();
 	m_key.clear();
 
@@ -321,6 +359,21 @@ StreamSecrets WebcamManager::currentSecrets() const {
 }
 
 bool WebcamManager::ensurePublishing() {
+	if (m_publisher && m_publisher->isRunning()) {
+		return true;
+	}
+	if (m_gateMode == GateMode::Gated) {
+		// Every publish connection claims the path first, which also opens our IP.
+		if (!m_publishClaiming) {
+			m_publishClaiming = true;
+			claimShare(true);
+		}
+		return true;
+	}
+	return publishNow();
+}
+
+bool WebcamManager::publishNow() {
 	if (m_publisher && m_publisher->isRunning()) {
 		return true;
 	}
@@ -412,20 +465,177 @@ void WebcamManager::onRequest(unsigned int sender, const std::string &data) {
 }
 
 void WebcamManager::grant(unsigned int session, const std::string &nonce, const Bytes &publicKey) {
+	if (m_gateMode == GateMode::Unknown || (m_gateMode == GateMode::Gated && !m_shareClaimed)) {
+		// Goes out once the gate holds the path (shareReady).
+		m_pendingGrants.insert(session, { nonce, publicKey });
+		return;
+	}
 	if (!ensurePublishing()) {
 		deny(session, nonce, DENY_NOT_SHARING);
 		return;
 	}
-	const std::optional< std::string > message = encodeWatchGrant(nonce, publicKey, currentSecrets());
-	if (!message) {
-		deny(session, nonce, DENY_UNSUPPORTED);
+	auto sendGrant = [this, session, nonce, publicKey](const StreamSecrets &secrets, const std::string &ticketId) {
+		const std::optional< std::string > message = encodeWatchGrant(nonce, publicKey, secrets);
+		if (!message) {
+			deny(session, nonce, DENY_UNSUPPORTED);
+			return;
+		}
+		const bool already = m_viewers.contains(session);
+		m_viewers.insert(session, { publicKey, ticketId });
+		send({ session }, ID_WATCH_GRANT, *message);
+		if (!already) {
+			logInfo(tr("%1 is watching your camera.").arg(userName(session)));
+		}
+	};
+	if (m_gateMode == GateMode::Ungated) {
+		sendGrant(currentSecrets(), {});
 		return;
 	}
-	const bool already = m_viewers.contains(session);
-	m_viewers.insert(session, { publicKey });
-	send({ session }, ID_WATCH_GRANT, *message);
-	if (!already) {
-		logInfo(tr("%1 is watching your camera.").arg(userName(session)));
+
+	const std::string path = m_path;
+	m_gate->createTicket(path, [this, session, nonce, publicKey, path, sendGrant](const WebcamGate::Reply &reply) {
+		if (!m_sharing) {
+			deny(session, nonce, DENY_NOT_SHARING);
+			return;
+		}
+		if (path != m_path) {
+			// The stream moved meanwhile: a ticket for the new path instead.
+			grant(session, nonce, publicKey);
+			return;
+		}
+		if (const std::optional< GateTicket > ticket = WebcamGate::ticketFrom(reply)) {
+			StreamSecrets secrets = currentSecrets();
+			secrets.gate          = ticket;
+			sendGrant(secrets, ticket->id);
+		} else if (reply.answer == GateAnswer::Unknown) {
+			// The gate forgot the share (it restarted): claim it again, the grant waits.
+			m_shareClaimed = false;
+			m_pendingGrants.insert(session, { nonce, publicKey });
+			claimShare();
+		} else {
+			deny(session, nonce, DENY_UNSUPPORTED);
+		}
+	});
+}
+
+void WebcamManager::claimShare(bool thenPublish) {
+	const std::string path = m_path;
+	m_gate->putShare(path, [this, path, thenPublish](const WebcamGate::Reply &reply) {
+		if (thenPublish) {
+			m_publishClaiming = false;
+		}
+		if (!m_sharing || path != m_path) {
+			return;
+		}
+		switch (reply.answer) {
+			case GateAnswer::Ok:
+			case GateAnswer::Created: {
+				const bool first = !m_shareClaimed;
+				m_gateMode       = GateMode::Gated;
+				m_shareClaimed   = true;
+				if (first) {
+					// The new path is ours: the old ones go, and the viewers move over.
+					deleteStaleShares();
+					shareReady();
+				} else {
+					if (reply.answer == GateAnswer::Created) {
+						// The gate forgot the share and every ticket on it.
+						reticket(false);
+					}
+					if (thenPublish) {
+						publishNow();
+					}
+				}
+				break;
+			}
+			case GateAnswer::BadLogin:
+				stopSharing(tr("the relay refused your login. Check it under Settings, Camera."));
+				break;
+			case GateAnswer::Forbidden:
+				stopSharing(tr("the relay holds the stream's path for someone else."));
+				break;
+			case GateAnswer::Limited:
+				if (!m_shareClaimed) {
+					stopSharing(tr("the relay is at its limit."));
+				}
+				break;
+			case GateAnswer::NoGate:
+				if (m_gateMode == GateMode::Unknown) {
+					// A relay without a gate (v1, as production is today): everything goes out
+					// as before, without tickets.
+					m_gateMode = GateMode::Ungated;
+					m_shareRenew->stop();
+					shareReady();
+				} else if (thenPublish && m_shareClaimed) {
+					// The gate is unreachable for now; the claim may still hold, so try. The
+					// next renewal tries the gate again.
+					publishNow();
+				}
+				break;
+			case GateAnswer::Unknown:
+			case GateAnswer::Expired:
+				break;
+		}
+	});
+}
+
+void WebcamManager::shareReady() {
+	if (m_pendingMove) {
+		m_pendingMove = false;
+		if (m_gateMode == GateMode::Gated) {
+			reticket(true);
+		} else {
+			const StreamSecrets secrets = currentSecrets();
+			for (auto it = m_viewers.constBegin(); it != m_viewers.constEnd(); ++it) {
+				if (const std::optional< std::string > message = encodeWatchRekey(it->publicKey, secrets)) {
+					send({ it.key() }, ID_WATCH_REKEY, *message);
+				}
+			}
+		}
+	}
+	// Reached right after a claim (or with no gate), so the publish connection may go now.
+	if (!m_viewers.isEmpty() || !Global::get().s.bWebcamOnDemand) {
+		if (!publishNow()) {
+			return;
+		}
+	}
+	const QHash< unsigned int, PendingGrant > pending = std::move(m_pendingGrants);
+	m_pendingGrants.clear();
+	for (auto it = pending.constBegin(); it != pending.constEnd(); ++it) {
+		grant(it.key(), it->nonce, it->publicKey);
+	}
+}
+
+void WebcamManager::deleteStaleShares() {
+	for (const std::string &path : m_staleShares) {
+		m_gate->deleteShare(path);
+	}
+	m_staleShares.clear();
+}
+
+void WebcamManager::reticket(bool moved) {
+	const std::string path = m_path;
+	for (auto it = m_viewers.constBegin(); it != m_viewers.constEnd(); ++it) {
+		const unsigned int session = it.key();
+		m_gate->createTicket(path, [this, session, path, moved](const WebcamGate::Reply &reply) {
+			const std::optional< GateTicket > ticket = WebcamGate::ticketFrom(reply);
+			// A failure leaves the viewer waiting; the next renewal that finds the share
+			// forgotten mints again.
+			if (!m_sharing || path != m_path || !ticket || !m_viewers.contains(session)) {
+				return;
+			}
+			Viewer &viewer        = m_viewers[session];
+			viewer.ticketId       = ticket->id;
+			StreamSecrets secrets = currentSecrets();
+			if (!moved) {
+				// The stream carries on; only the ticket is new.
+				secrets.urls.clear();
+			}
+			secrets.gate = ticket;
+			if (const std::optional< std::string > message = encodeWatchRekey(viewer.publicKey, secrets)) {
+				send({ session }, ID_WATCH_REKEY, *message);
+			}
+		});
 	}
 }
 
@@ -448,9 +658,17 @@ void WebcamManager::revoke(unsigned int session) {
 }
 
 void WebcamManager::viewerGone(unsigned int session, bool sendRevoke) {
-	m_viewers.remove(session);
+	const Viewer gone = m_viewers.take(session);
 	if (sendRevoke) {
 		send({ session }, ID_WATCH_REVOKE, encodeEmpty());
+	}
+	if (m_gateMode == GateMode::Gated) {
+		// The relay cuts them off itself; the move below is for the key. The old path is let go
+		// once the new one is claimed.
+		if (!gone.ticketId.empty()) {
+			m_gate->deleteTicket(m_path, gone.ticketId);
+		}
+		m_staleShares.push_back(m_path);
 	}
 
 	// Whoever is gone still knows the path and key. Nobody left: the camera closes (when it opens
@@ -462,20 +680,13 @@ void WebcamManager::viewerGone(unsigned int session, bool sendRevoke) {
 		stopSharing(tr("new keys could not be created."));
 		return;
 	}
-	if (m_viewers.isEmpty()) {
-		if (!Global::get().s.bWebcamOnDemand) {
-			ensurePublishing();
-		}
-		return;
+	m_pendingMove = !m_viewers.isEmpty();
+	if (m_gateMode == GateMode::Gated) {
+		m_shareClaimed = false;
+		claimShare();
+	} else {
+		shareReady();
 	}
-
-	const StreamSecrets secrets = currentSecrets();
-	for (auto it = m_viewers.constBegin(); it != m_viewers.constEnd(); ++it) {
-		if (const std::optional< std::string > message = encodeWatchRekey(it->publicKey, secrets)) {
-			send({ it.key() }, ID_WATCH_REKEY, *message);
-		}
-	}
-	ensurePublishing();
 }
 
 // -- watching ----------------------------------------------------------------------------------
@@ -507,23 +718,13 @@ void WebcamManager::watch(unsigned int session) {
 	if (!user || m_watches.contains(session)) {
 		return;
 	}
-	std::optional< KeyPair > keys = x25519KeyPair();
-	const std::string nonce       = randomNonce();
-	if (!keys || nonce.empty()) {
-		logInfo(tr("Watching cameras is unavailable: no keys could be created."));
-		return;
-	}
-
-	auto *watch  = new Watch();
-	watch->nonce = nonce;
-	watch->keys  = *keys;
+	auto *watch = new Watch();
 	watch->window =
 		new WebcamWindow(tr("%1's camera").arg(user->qsName), Global::get().s.qbaWebcamWindowGeometry, nullptr);
 	// Every window restores the same geometry, so step each further one aside instead of
 	// stacking it exactly on top of the others.
 	const int cascade = static_cast< int >(m_watches.size()) * 32;
 	watch->window->move(watch->window->pos() - QPoint(cascade, cascade));
-	watch->window->setStatus(tr("Asking %1…").arg(user->qsName));
 	connect(watch->window, &WebcamWindow::closedByUser, this, [this, session] { endWatch(session, true); });
 	watch->window->show();
 
@@ -536,9 +737,39 @@ void WebcamManager::watch(unsigned int session) {
 					 tr("%1 did not answer your request to watch their camera.").arg(userName(session)));
 		}
 	});
-	watch->answerTimeout->start(ANSWER_TIMEOUT_MS);
 	m_watches.insert(session, watch);
+	requestWatch(session);
+}
 
+void WebcamManager::requestWatch(unsigned int session) {
+	Watch *watch = m_watches.value(session);
+	if (!watch) {
+		return;
+	}
+	std::optional< KeyPair > keys = x25519KeyPair();
+	const std::string nonce       = randomNonce();
+	if (!keys || nonce.empty()) {
+		endWatch(session, false, tr("Watching cameras is unavailable: no keys could be created."));
+		return;
+	}
+	if (watch->retry) {
+		watch->retry->stop();
+	}
+	discardStream(watch->stream);
+	watch->keys.privateKey.assign(watch->keys.privateKey.size(), 0);
+	watch->secrets.key.assign(watch->secrets.key.size(), 0);
+	watch->nonce    = nonce;
+	watch->keys     = *keys;
+	watch->granted  = false;
+	watch->secrets  = {};
+	watch->redeemed = false;
+	watch->attempts = 0;
+	watch->gateRefusedSince.invalidate();
+	if (watch->window) {
+		const ClientUser *user = ClientUser::get(session);
+		watch->window->setStatus(tr("Asking %1…").arg(user ? user->qsName : QString()));
+	}
+	watch->answerTimeout->start(ANSWER_TIMEOUT_MS);
 	send({ session }, ID_WATCH_REQUEST, encodeWatchRequest({ nonce, keys->publicKey }));
 }
 
@@ -595,10 +826,18 @@ void WebcamManager::onRekey(unsigned int sender, const std::string &data) {
 	}
 	watch->secrets.kid = secrets->kid;
 	watch->secrets.key = secrets->key;
+	if (secrets->gate) {
+		watch->secrets.gate = secrets->gate;
+		watch->redeemed     = false;
+		watch->gateRefusedSince.invalidate();
+	}
 	if (secrets->urls.empty()) {
-		// A key-only rotation: the stream carries on.
+		// A key-only rotation, or a new ticket for the same path: the stream carries on.
 		if (watch->stream) {
 			watch->stream->addKey(secrets->kid, secrets->key);
+		}
+		if (secrets->gate) {
+			redeemWatch(sender, !watch->stream);
 		}
 		return;
 	}
@@ -634,8 +873,26 @@ void WebcamManager::connectWatch(unsigned int session) {
 	if (watch->retry) {
 		watch->retry->stop();
 	}
+	// Our own login goes only to our own relay; a grant naming another one ends the view.
+	const std::string url              = *pickUrl(watch->secrets.urls);
+	const std::optional< Login > login = readLogin(watch->secrets, url, ownLogin(), relayBase().toStdString());
+	if (!login) {
+		endWatch(session, true,
+				 tr("%1's camera is on a relay you have no login for: watching needs your own login on the same "
+					"relay, under Settings, Camera.")
+					 .arg(userName(session)));
+		return;
+	}
 	discardStream(watch->stream);
-	watch->stream = std::make_unique< WebcamViewerStream >();
+	// Every connection is redeemed first (our IP may have changed), at our own relay's gate, so
+	// only for a stream there.
+	const bool ownRelay = relayAuthority(url) == relayAuthority(relayBase().toStdString());
+	if (watch->secrets.gate && ownRelay && !watch->redeemed) {
+		redeemWatch(session, true);
+		return;
+	}
+	watch->redeemed = false;
+	watch->stream   = std::make_unique< WebcamViewerStream >();
 	watch->stream->addKey(watch->secrets.kid, watch->secrets.key);
 
 	WebcamWindow *window = watch->window;
@@ -645,22 +902,19 @@ void WebcamManager::connectWatch(unsigned int session) {
 			w->attempts = 0;
 		}
 	});
-	connect(watch->stream.get(), &WebcamPipeline::failed, this,
-			[this, session](const QString &message) { scheduleRetry(session, message); });
+	connect(watch->stream.get(), &WebcamPipeline::failed, this, [this, session](const QString &message) {
+		Watch *w = m_watches.value(session);
+		if (w && w->stream && w->stream->wasRefused() && w->secrets.gate) {
+			relayRefused(session, message);
+		} else {
+			scheduleRetry(session, message);
+		}
+	});
 	connect(watch->stream.get(), &WebcamPipeline::ended, this,
 			[this, session] { scheduleRetry(session, tr("The stream paused.")); });
 
 	if (window) {
 		window->setStatus(tr("Connecting…"));
-	}
-	const std::string url              = *pickUrl(watch->secrets.urls);
-	const std::optional< Login > login = readLogin(watch->secrets, url, ownLogin(), relayBase().toStdString());
-	if (!login) {
-		endWatch(session, true,
-				 tr("%1's camera is on a relay you have no login for: watching needs your own login on the same "
-					"relay, under Settings, Camera.")
-					 .arg(userName(session)));
-		return;
 	}
 	WebcamViewerStream::Config config;
 	config.url       = QString::fromStdString(url);
@@ -672,6 +926,120 @@ void WebcamManager::connectWatch(unsigned int session) {
 	if (!watch->stream->start(config, &error)) {
 		endWatch(session, true, tr("The camera could not be shown: %1").arg(error.toHtmlEscaped()));
 	}
+}
+
+void WebcamManager::redeemWatch(unsigned int session, bool reconnect) {
+	Watch *watch = m_watches.value(session);
+	if (!watch || !watch->secrets.gate || watch->redeeming) {
+		return;
+	}
+	if (relayAuthority(*pickUrl(watch->secrets.urls)) != relayAuthority(relayBase().toStdString())) {
+		// Our gate is our own relay's: a ticket for another relay means nothing there.
+		return;
+	}
+	watch->redeeming        = true;
+	const GateTicket ticket = *watch->secrets.gate;
+	m_gate->redeem(ticket, [this, session, ticket, reconnect](const WebcamGate::Reply &reply) {
+		Watch *w = m_watches.value(session);
+		if (!w) {
+			return;
+		}
+		w->redeeming = false;
+		if (!w->secrets.gate || !(*w->secrets.gate == ticket)) {
+			// A newer ticket came meanwhile.
+			redeemWatch(session, reconnect || !w->stream);
+			return;
+		}
+		if (gateRetries(reply.answer)) {
+			// The sender may not have claimed the ticket's path yet (a move, a gate restart), or
+			// the gate is busy: keep trying for a while.
+			if (!w->gateRefusedSince.isValid()) {
+				w->gateRefusedSince.start();
+			}
+			if (w->gateRefusedSince.elapsed() > GATE_RETRY_WINDOW_MS) {
+				endWatch(session, true,
+						 tr("%1's camera could not be reached: the relay refused the ticket.").arg(userName(session)));
+				return;
+			}
+			if (reconnect && w->window) {
+				w->window->setStatus(tr("Waiting for the camera…"));
+			}
+			armRetry(session, reconnect);
+			return;
+		}
+		w->gateRefusedSince.invalidate();
+		switch (reply.answer) {
+			case GateAnswer::Ok:
+			case GateAnswer::Created:
+				w->redeemed = true;
+				if (reconnect) {
+					connectWatch(session);
+				}
+				break;
+			case GateAnswer::NoGate:
+				// No gate answered (a v1 relay, or it timed out): read as in v1, without a ticket.
+				if (reconnect) {
+					w->redeemed = true;
+					connectWatch(session);
+				}
+				break;
+			case GateAnswer::Expired:
+				// Too late for the first redeem: ask again from the start.
+				requestWatch(session);
+				break;
+			case GateAnswer::BadLogin:
+				askLoginAndRetry(session, reconnect);
+				break;
+			case GateAnswer::Forbidden:
+			case GateAnswer::Unknown:
+			case GateAnswer::Limited:
+				break;
+		}
+	});
+}
+
+void WebcamManager::relayRefused(unsigned int session, const QString &message) {
+	// MediaMTX refused the read after a good redeem: either the login is wrong, or our IP has no
+	// ticket binding (it changed). open tells them apart.
+	m_gate->open([this, session, message](const WebcamGate::Reply &reply) {
+		if (!m_watches.contains(session)) {
+			return;
+		}
+		if (reply.answer == GateAnswer::BadLogin) {
+			askLoginAndRetry(session, true);
+		} else {
+			scheduleRetry(session, message);
+		}
+	});
+}
+
+void WebcamManager::askLoginAndRetry(unsigned int session, bool reconnect) {
+	if (!askRelayLogin(true)) {
+		endWatch(session, true, tr("The camera relay refused your login. Check it under Settings, Camera."));
+		return;
+	}
+	// The dialog ran the event loop: the view may be gone.
+	if (m_watches.contains(session)) {
+		reconnect ? connectWatch(session) : redeemWatch(session, false);
+	}
+}
+
+void WebcamManager::armRetry(unsigned int session, bool reconnect) {
+	Watch *watch = m_watches.value(session);
+	if (!watch) {
+		return;
+	}
+	if (!reconnect) {
+		// The stream carries on meanwhile; only the redeem is tried again.
+		QTimer::singleShot(RETRY_INTERVAL_MS, this, [this, session] { redeemWatch(session, false); });
+		return;
+	}
+	if (!watch->retry) {
+		watch->retry = new QTimer(this);
+		watch->retry->setSingleShot(true);
+		connect(watch->retry, &QTimer::timeout, this, [this, session] { connectWatch(session); });
+	}
+	watch->retry->start(RETRY_INTERVAL_MS);
 }
 
 void WebcamManager::scheduleRetry(unsigned int session, const QString &status) {
@@ -687,12 +1055,7 @@ void WebcamManager::scheduleRetry(unsigned int session, const QString &status) {
 	if (watch->window) {
 		watch->window->setStatus(tr("Waiting for the camera…"));
 	}
-	if (!watch->retry) {
-		watch->retry = new QTimer(this);
-		watch->retry->setSingleShot(true);
-		connect(watch->retry, &QTimer::timeout, this, [this, session] { connectWatch(session); });
-	}
-	watch->retry->start(RETRY_INTERVAL_MS);
+	armRetry(session, true);
 }
 
 void WebcamManager::endWatch(unsigned int session, bool notify, const QString &message) {

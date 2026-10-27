@@ -425,11 +425,19 @@ void WebcamPipeline::handleMessage(GstMessage *message) {
 	const unsigned int generation = m_generation;
 	if (GST_MESSAGE_TYPE(message) == GST_MESSAGE_ERROR) {
 		const QString text = describeError(message);
+		GError *error      = nullptr;
+		gst_message_parse_error(message, &error, nullptr);
+		const bool refused =
+			error && error->domain == GST_RESOURCE_ERROR && error->code == GST_RESOURCE_ERROR_NOT_AUTHORIZED;
+		if (error) {
+			g_error_free(error);
+		}
 		QMetaObject::invokeMethod(
 			this,
-			[this, generation, text] {
+			[this, generation, text, refused] {
 				if (generation == m_generation) {
 					stop();
+					m_refused = refused;
 					emit failed(text);
 				}
 			},

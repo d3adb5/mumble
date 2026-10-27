@@ -10,10 +10,13 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
+#include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 // The signalling of webcam sharing (Mumla's docs/design/webcam-share.md, protocol v1): compact
@@ -303,6 +306,14 @@ namespace Webcam {
 		return detail::parseMessage(data).has_value();
 	}
 
+	/// A gate ticket (v1.1): the viewer redeems it at its own relay's gate before reading.
+	struct GateTicket {
+		std::string id;
+		std::string secret;
+
+		bool operator==(const GateTicket &other) const { return id == other.id && secret == other.secret; }
+	};
+
 	/// The secrets sealed into a grant or a rekey. A rekey without urls is a key-only rotation.
 	struct StreamSecrets {
 		std::vector< std::string > urls;
@@ -312,6 +323,8 @@ namespace Webcam {
 		std::string enc   = ENC_NAL_V1;
 		std::uint8_t kid  = 0;
 		Bytes key;
+		/// Set when the relay has a gate; a rekey may carry a new one, with or without urls.
+		std::optional< GateTicket > gate;
 	};
 
 	namespace detail {
@@ -327,6 +340,9 @@ namespace Webcam {
 			if (grant) {
 				json["codec"] = secrets.codec;
 				json["enc"]   = secrets.enc;
+			}
+			if (secrets.gate) {
+				json["gate"] = { { "id", secrets.gate->id }, { "secret", secrets.gate->secret } };
 			}
 			json["kid"] = secrets.kid;
 			json["key"] = toBase64(secrets.key);
@@ -369,6 +385,15 @@ namespace Webcam {
 			if (grant) {
 				secrets.codec = stringField(json, "codec").value_or(std::string());
 				secrets.enc   = stringField(json, "enc").value_or(std::string());
+			}
+			// A malformed ticket counts as none: the relay then refuses the read.
+			const auto gate = json.find("gate");
+			if (gate != json.end() && gate->is_object()) {
+				const std::optional< std::string > id     = stringField(*gate, "id");
+				const std::optional< std::string > secret = stringField(*gate, "secret");
+				if (id && secret && !id->empty() && !secret->empty()) {
+					secrets.gate = GateTicket{ *id, *secret };
+				}
 			}
 			return secrets;
 		}
@@ -462,9 +487,9 @@ namespace Webcam {
 		bool operator==(const Login &other) const { return user == other.user && pass == other.pass; }
 	};
 
-	/// The host and port of an RTSPS URL, lower-cased, with the default port filled in. Nothing
-	/// if it is not an RTSPS URL with a host.
-	inline std::optional< std::string > relayAuthority(const std::string &url) {
+	/// The host and port of an RTSPS URL, the host lower-cased (IPv6 in brackets), the port
+	/// defaulting to 322. Nothing if it is not an RTSPS URL with a host.
+	inline std::optional< std::pair< std::string, std::string > > relayHostPort(const std::string &url) {
 		const std::string scheme = "rtsps://";
 		if (url.size() <= scheme.size() || url.compare(0, scheme.size(), scheme) != 0) {
 			return std::nullopt;
@@ -479,15 +504,21 @@ namespace Webcam {
 		const std::size_t bracket = authority.rfind(']');
 		const std::size_t colon   = authority.rfind(':');
 		const bool hasPort        = colon != std::string::npos && (bracket == std::string::npos || colon > bracket);
-		if (hasPort && colon + 1 == authority.size()) {
-			authority += "322";
-		} else if (!hasPort) {
-			authority += ":322";
-		}
-		if (authority.empty() || authority[0] == ':') {
+		std::string host          = hasPort ? authority.substr(0, colon) : authority;
+		std::string port          = hasPort ? authority.substr(colon + 1) : std::string();
+		if (host.empty()) {
 			return std::nullopt;
 		}
-		return authority;
+		return std::make_pair(host, port.empty() ? std::string("322") : port);
+	}
+
+	/// The host:port of an RTSPS URL, as relayHostPort gives them.
+	inline std::optional< std::string > relayAuthority(const std::string &url) {
+		const auto hostPort = relayHostPort(url);
+		if (!hostPort) {
+			return std::nullopt;
+		}
+		return hostPort->first + ":" + hostPort->second;
 	}
 
 	/// The login a viewer reads the stream at url with. The relay wants one for every read, so

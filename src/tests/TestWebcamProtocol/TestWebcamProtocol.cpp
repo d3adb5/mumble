@@ -43,7 +43,10 @@ private slots:
 	void grantFitsMurmurLimit();
 	void rekeyKeyOnlyAndMove();
 	void rekeyIsNotAGrant();
+	void gateTicketInGrantAndRekey();
+	void gateTicketMalformed();
 	void pickUrl();
+	void relayHostPort();
 	void relayAuthority();
 	void readLogin();
 };
@@ -94,17 +97,17 @@ void TestWebcamProtocol::shareState() {
 	QVERIFY(off && !off->sharing);
 
 	// Unknown fields are ignored.
-	QVERIFY(decodeShareState(R"({"v":1,"sharing":true,"w":1,"h":1,"fps":1,"later":"x"})"));
+	QVERIFY(decodeShareState("{\"v\":1,\"sharing\":true,\"w\":1,\"h\":1,\"fps\":1,\"later\":\"x\"}"));
 }
 
 void TestWebcamProtocol::versionAndJunkIgnored() {
-	QVERIFY(!decodeShareState(R"({"v":2,"sharing":true})"));
-	QVERIFY(!decodeShareState(R"({"sharing":true})"));
-	QVERIFY(!decodeShareState(R"({"v":"1","sharing":true})"));
+	QVERIFY(!decodeShareState("{\"v\":2,\"sharing\":true}"));
+	QVERIFY(!decodeShareState("{\"sharing\":true}"));
+	QVERIFY(!decodeShareState("{\"v\":\"1\",\"sharing\":true}"));
 	QVERIFY(!decodeShareState("not json"));
 	QVERIFY(!decodeShareState("[1,2]"));
 	QVERIFY(!decodeShareState(std::string(MAX_MESSAGE_SIZE + 1, ' ')));
-	QVERIFY(!decodeEmpty(R"({"v":2})"));
+	QVERIFY(!decodeEmpty("{\"v\":2}"));
 }
 
 void TestWebcamProtocol::watchRequest() {
@@ -118,16 +121,16 @@ void TestWebcamProtocol::watchRequest() {
 	QCOMPARE(request->nonce, nonce);
 	QCOMPARE(request->publicKey, viewer->publicKey);
 
-	QVERIFY(!decodeWatchRequest(R"({"v":1,"nonce":"short"})"));
-	QVERIFY(!decodeWatchRequest(R"({"v":1,"nonce":"0123456789ABCDEF"})"));
+	QVERIFY(!decodeWatchRequest("{\"v\":1,\"nonce\":\"short\"}"));
+	QVERIFY(!decodeWatchRequest("{\"v\":1,\"nonce\":\"0123456789ABCDEF\"}"));
 }
 
 void TestWebcamProtocol::watchRequestWithoutKey() {
 	// A request without (or with a malformed) pk still parses, so the sender can deny it as
 	// unsupported instead of ignoring it.
-	std::optional< WatchRequest > request = decodeWatchRequest(R"({"v":1,"nonce":"0123456789abcdef"})");
+	std::optional< WatchRequest > request = decodeWatchRequest("{\"v\":1,\"nonce\":\"0123456789abcdef\"}");
 	QVERIFY(request && request->publicKey.empty());
-	request = decodeWatchRequest(R"({"v":1,"nonce":"0123456789abcdef","pk":"AAAA"})");
+	request = decodeWatchRequest("{\"v\":1,\"nonce\":\"0123456789abcdef\",\"pk\":\"AAAA\"}");
 	QVERIFY(request && request->publicKey.empty());
 }
 
@@ -138,7 +141,7 @@ void TestWebcamProtocol::watchDenyAndEmpty() {
 	QCOMPARE(deny->reason, std::string(DENY_POLICY));
 
 	QVERIFY(decodeEmpty(encodeEmpty()));
-	QCOMPARE(encodeEmpty(), std::string(R"({"v":1})"));
+	QCOMPARE(encodeEmpty(), std::string("{\"v\":1}"));
 }
 
 void TestWebcamProtocol::grantRoundTrip() {
@@ -240,6 +243,63 @@ void TestWebcamProtocol::rekeyKeyOnlyAndMove() {
 	QCOMPARE(opened->user, move.user);
 }
 
+void TestWebcamProtocol::gateTicketInGrantAndRekey() {
+	const std::optional< KeyPair > viewer = x25519KeyPair();
+	QVERIFY(viewer);
+	const std::string nonce = randomNonce();
+	StreamSecrets secrets   = sampleSecrets();
+
+	// v1 grants carry no ticket.
+	std::optional< std::string > message = encodeWatchGrant(nonce, viewer->publicKey, secrets);
+	QVERIFY(message);
+	std::optional< StreamSecrets > opened = decodeWatchGrant(*message, nonce, *viewer);
+	QVERIFY(opened);
+	QVERIFY(!opened->gate);
+
+	secrets.gate = GateTicket{ "t-1", "ticket-secret" };
+	message      = encodeWatchGrant(nonce, viewer->publicKey, secrets);
+	QVERIFY(message);
+	opened = decodeWatchGrant(*message, nonce, *viewer);
+	QVERIFY(opened);
+	QVERIFY(opened->gate == secrets.gate);
+	// The ticket is inside the box, like every other secret.
+	QVERIFY(message->find("ticket-secret") == std::string::npos);
+
+	// A move carries a ticket for the new path...
+	message = encodeWatchRekey(viewer->publicKey, secrets);
+	QVERIFY(message);
+	opened = decodeWatchRekey(*message, *viewer);
+	QVERIFY(opened);
+	QCOMPARE(opened->urls, secrets.urls);
+	QVERIFY(opened->gate == secrets.gate);
+
+	// ...and after the gate forgot the share, a rekey brings only a new ticket.
+	secrets.urls.clear();
+	secrets.gate = GateTicket{ "t-2", "other-secret" };
+	message      = encodeWatchRekey(viewer->publicKey, secrets);
+	QVERIFY(message);
+	opened = decodeWatchRekey(*message, *viewer);
+	QVERIFY(opened);
+	QVERIFY(opened->urls.empty());
+	QVERIFY(opened->gate == secrets.gate);
+	QCOMPARE(opened->key, secrets.key);
+}
+
+void TestWebcamProtocol::gateTicketMalformed() {
+	const std::string key = toBase64(randomBytes(KEY_SIZE));
+	auto decode           = [&key](const std::string &gate) {
+		return detail::decodeSecrets("{\"kid\":1,\"key\":\"" + key + "\",\"gate\":" + gate + "}", false);
+	};
+	QVERIFY(decode("{\"id\":\"a\",\"secret\":\"b\"}")->gate == (GateTicket{ "a", "b" }));
+	// Anything else is no ticket, and the rest of the box still counts.
+	for (const char *gate : { "{\"id\":\"a\"}", "{\"id\":\"\",\"secret\":\"b\"}", "{\"id\":1,\"secret\":\"b\"}",
+							  "\"a:b\"", "null", "[]" }) {
+		const std::optional< StreamSecrets > secrets = decode(gate);
+		QVERIFY2(secrets, gate);
+		QVERIFY2(!secrets->gate, gate);
+	}
+}
+
 void TestWebcamProtocol::rekeyIsNotAGrant() {
 	// The data id is in the AAD, so a rekey replayed as a grant (or the other way) is refused.
 	const std::optional< KeyPair > viewer = x25519KeyPair();
@@ -260,6 +320,15 @@ void TestWebcamProtocol::pickUrl() {
 			 std::optional< std::string >("rtsps://h:1/mcam/x"));
 	QVERIFY(!Mumble::Webcam::pickUrl({ "https://h/whep", "rtsp://h/plain" }));
 	QVERIFY(!Mumble::Webcam::pickUrl({}));
+}
+
+void TestWebcamProtocol::relayHostPort() {
+	using HostPort = std::optional< std::pair< std::string, std::string > >;
+	QCOMPARE(Mumble::Webcam::relayHostPort("rtsps://Relay.Example.org:8322/mcam/x"),
+			 HostPort(std::make_pair(std::string("relay.example.org"), std::string("8322"))));
+	QCOMPARE(Mumble::Webcam::relayHostPort("rtsps://[::1]/x"),
+			 HostPort(std::make_pair(std::string("[::1]"), std::string("322"))));
+	QVERIFY(!Mumble::Webcam::relayHostPort("https://relay.example.org/"));
 }
 
 void TestWebcamProtocol::relayAuthority() {
