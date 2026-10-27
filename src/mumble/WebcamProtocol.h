@@ -454,6 +454,27 @@ namespace Webcam {
 		return std::nullopt;
 	}
 
+	/// A relay login: a user and its password.
+	struct Login {
+		std::string user;
+		std::string pass;
+
+		bool operator==(const Login &other) const { return user == other.user && pass == other.pass; }
+	};
+
+	/// The login a viewer reads the stream with. The relay wants one for every read, so the
+	/// viewer brings its own; a login the sender put in the grant, if any, still wins. Nothing
+	/// if neither has a user.
+	inline std::optional< Login > readLogin(const StreamSecrets &secrets, const Login &own) {
+		if (!secrets.user.empty()) {
+			return Login{ secrets.user, secrets.pass };
+		}
+		if (!own.user.empty()) {
+			return own;
+		}
+		return std::nullopt;
+	}
+
 } // namespace Webcam
 } // namespace Mumble
 

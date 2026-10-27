@@ -15,6 +15,11 @@
 
 #include <QtCore/QReadLocker>
 #include <QtCore/QTimer>
+#include <QtWidgets/QDialog>
+#include <QtWidgets/QDialogButtonBox>
+#include <QtWidgets/QFormLayout>
+#include <QtWidgets/QLabel>
+#include <QtWidgets/QLineEdit>
 #include <QtWidgets/QMessageBox>
 #include <QtWidgets/QPushButton>
 
@@ -48,6 +53,42 @@ QString userName(unsigned int session) {
 
 void logInfo(const QString &message) {
 	Global::get().l->log(Log::Information, message);
+}
+
+/// The relay login set under Settings, Camera: the same one that shares, and the one that watches.
+Login ownLogin() {
+	const Settings &s = Global::get().s;
+	return { s.qsWebcamPublishUser.toStdString(), s.qsWebcamPublishPassword.toStdString() };
+}
+
+/// Asks for a relay login and keeps it in the settings. False if the user gave none.
+bool askRelayLogin() {
+	QDialog dialog(Global::get().mw);
+	dialog.setWindowTitle(QObject::tr("Relay login"));
+	auto *layout = new QFormLayout(&dialog);
+	auto *info   = new QLabel(QObject::tr("The camera relay wants your own login before you can watch. It is kept "
+										  "under Settings, Camera, and also used to share your camera."),
+							  &dialog);
+	info->setWordWrap(true);
+	layout->addRow(info);
+	auto *user     = new QLineEdit(&dialog);
+	auto *password = new QLineEdit(&dialog);
+	password->setEchoMode(QLineEdit::Password);
+	layout->addRow(QObject::tr("User"), user);
+	layout->addRow(QObject::tr("Password"), password);
+	auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+	QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+	QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+	layout->addRow(buttons);
+
+	if (dialog.exec() != QDialog::Accepted || user->text().isEmpty()) {
+		return false;
+	}
+	Settings &s               = Global::get().s;
+	s.qsWebcamPublishUser     = user->text();
+	s.qsWebcamPublishPassword = password->text();
+	s.save();
+	return true;
 }
 } // namespace
 
@@ -199,7 +240,7 @@ bool WebcamManager::startSharing() {
 		return false;
 	}
 	if (s.qsWebcamPublishUser.isEmpty()) {
-		logInfo(tr("Set the relay's publish login under Settings, Camera, before sharing your camera."));
+		logInfo(tr("Set your relay login under Settings, Camera, before sharing your camera."));
 		return false;
 	}
 	if (!Global::get().sh || Global::get().sh->m_version < Version::fromComponents(1, 4, 0)) {
@@ -443,13 +484,22 @@ void WebcamManager::watch(unsigned int session) {
 		}
 		return;
 	}
-	ClientUser *user = ClientUser::get(session);
-	if (!user || session == Global::get().uiSession) {
+	if (!ClientUser::get(session) || session == Global::get().uiSession) {
 		return;
 	}
 	QString error;
 	if (!WebcamStream::ensureInitialized(&error)) {
 		logInfo(tr("Watching cameras is unavailable: %1").arg(error.toHtmlEscaped()));
+		return;
+	}
+	// The relay lets nobody read without a login of their own. Watching needs only that: no
+	// camera, and no sharing.
+	if (ownLogin().user.empty() && !askRelayLogin()) {
+		return;
+	}
+	// The user may have left while the login was asked for.
+	ClientUser *user = ClientUser::get(session);
+	if (!user || m_watches.contains(session)) {
 		return;
 	}
 	std::optional< KeyPair > keys = x25519KeyPair();
@@ -598,10 +648,15 @@ void WebcamManager::connectWatch(unsigned int session) {
 	if (window) {
 		window->setStatus(tr("Connecting…"));
 	}
+	const std::optional< Login > login = readLogin(watch->secrets, ownLogin());
+	if (!login) {
+		endWatch(session, true, tr("Set your relay login under Settings, Camera, to watch cameras."));
+		return;
+	}
 	WebcamViewerStream::Config config;
 	config.url       = QString::fromStdString(*pickUrl(watch->secrets.urls));
-	config.user      = QString::fromStdString(watch->secrets.user);
-	config.password  = QString::fromStdString(watch->secrets.pass);
+	config.user      = QString::fromStdString(login->user);
+	config.password  = QString::fromStdString(login->pass);
 	config.caFile    = Global::get().s.qsWebcamCaFile;
 	config.latencyMs = Global::get().s.iWebcamViewLatency;
 	QString error;

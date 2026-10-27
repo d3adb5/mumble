@@ -18,6 +18,11 @@ anything that goes over the wire:
   random `mcam/<32 hex>` path per share.
 - **Revoking:** a revoke, and any viewer leaving, moves the stream to a new path, key and kid.
   The camera opens only while someone watches (setting, on by default).
+- **Relay logins:** the relay allows no anonymous read (secretlab 25eb481). A viewer reads with
+  its own relay login (the "Your login" setting, the same one that shares); a read login in
+  the grant still wins. "Watch camera" asks for a login when none is set. Watching never needs
+  a camera or a share. The mtx-gate (`~/projects/mtx-gate/DESIGN.md`) adds per-viewer tickets
+  in v1.1 grants; not implemented yet.
 
 The peer sessions were `mumla-f5` (Android, spec owner) and `retroid-bb` (relayed the user's
 requirements and took status reports). They may be gone. The spec and the git logs carry
@@ -77,8 +82,8 @@ ctest). They include the RFC 7748, RFC 5869 and spec vectors, cross-checked agai
    `$XDG_RUNTIME_DIR/MumbleSocket` and takes the running Mumble's RPC socket.
 2. **The settings page.** `WebcamConfig.cpp` has not been driven through the UI; the UI tests
    set the camera options in `mumble_settings.json` instead.
-3. **Production** (`rtsps://stream.d3adb5.ca:8322`, Let's Encrypt, anonymous read on `mcam/`).
-   Publishing needs the user's own `beaver` login; ask the user for it and never commit it.
+3. **Production** (`rtsps://stream.d3adb5.ca:8322`, Let's Encrypt, no anonymous read).
+   Publishing and watching need the user's own `beaver` login; ask the user for it and never commit it.
    Use production for the real-network checks only.
 4. **Windows/macOS.** The option is OFF there because the static dependency bundles have no
    GStreamer. Enabling it means adding GStreamer to those bundles (and the device-monitor source
@@ -108,9 +113,10 @@ ctest). They include the RFC 7748, RFC 5869 and spec vectors, cross-checked agai
   it.** Agents' auto mode is not allowed to run the downloaded binary; don't work around that.
 - **Listeners:** RTSPS only, on `:18322` (`rtspEncryption: strict`, TCP).
 - **Logins:** `desk` publishes for the desktop and `mumla` for Mumla, each limited to
-  `~^mcam/[0-9a-f]{32}$`. Read is anonymous on the same regex. Passwords are in the config file;
-  read them from there and never print them.
-- **In Mumble:** Settings → Camera → Relay `rtsps://127.0.0.1:18322`, publish login `desk`,
+  `~^mcam/[0-9a-f]{32}$`. Read is anonymous on the same regex (production no longer is; to
+  mirror it, give `desk` and `mumla` read on that regex and drop `any`). Passwords are in the
+  config file; read them from there and never print them.
+- **In Mumble:** Settings → Camera → Relay `rtsps://127.0.0.1:18322`, your login `desk`,
   Trusted CA `~/projects/webcam-test-mtx/ca.crt`.
 
 ## Privacy rules (the user's, binding)

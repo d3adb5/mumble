@@ -202,7 +202,7 @@
       <item row="0" column="0" colspan="2">
        <widget class="QLabel" name="qlRelayInfo">
         <property name="text">
-         <string>Your camera is sent to a MediaMTX relay over RTSPS, on a new random path every time, and encrypted end to end: the relay never sees the picture. Watching needs none of this.</string>
+         <string>Your camera is sent to a MediaMTX relay over RTSPS, on a new random path every time, and encrypted end to end: the relay never sees the picture. The relay wants your own login to share and to watch; watching needs no camera and no sharing.</string>
         </property>
         <property name="wordWrap">
          <bool>true</bool>
@@ -229,7 +229,7 @@
       <item row="2" column="0">
        <widget class="QLabel" name="qlPublishUser">
         <property name="text">
-         <string>Publish login</string>
+         <string>Your login</string>
         </property>
         <property name="buddy">
          <cstring>qlePublishUser</cstring>
@@ -240,6 +240,9 @@
        <layout class="QHBoxLayout" name="qhlPublish">
         <item>
          <widget class="QLineEdit" name="qlePublishUser">
+          <property name="toolTip">
+           <string>Your own login on the relay: it publishes your camera and reads the cameras you watch</string>
+          </property>
           <property name="placeholderText">
            <string>User</string>
           </property>
@@ -272,7 +275,7 @@
         <item>
          <widget class="QLineEdit" name="qleReadUser">
           <property name="toolTip">
-           <string>Only if the relay wants a login for reading: it is given to each viewer you let in, sealed to them</string>
+           <string>Only for relays that give viewers a shared read login: it is given to each viewer you let in, sealed to them, and used instead of their own</string>
           </property>
           <property name="placeholderText">
            <string>User (optional)</string>

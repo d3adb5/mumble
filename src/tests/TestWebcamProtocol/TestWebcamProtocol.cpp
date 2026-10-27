@@ -44,6 +44,7 @@ private slots:
 	void rekeyKeyOnlyAndMove();
 	void rekeyIsNotAGrant();
 	void pickUrl();
+	void readLogin();
 };
 
 void TestWebcamProtocol::base64_data() {
@@ -258,6 +259,22 @@ void TestWebcamProtocol::pickUrl() {
 			 std::optional< std::string >("rtsps://h:1/mcam/x"));
 	QVERIFY(!Mumble::Webcam::pickUrl({ "https://h/whep", "rtsp://h/plain" }));
 	QVERIFY(!Mumble::Webcam::pickUrl({}));
+}
+
+void TestWebcamProtocol::readLogin() {
+	using Mumble::Webcam::Login;
+	const Login own{ "viewer", "own-pass" };
+	StreamSecrets secrets = sampleSecrets();
+
+	secrets.user = "sender-read";
+	secrets.pass = "read-pass";
+	QCOMPARE(Mumble::Webcam::readLogin(secrets, own), std::optional< Login >(Login{ "sender-read", "read-pass" }));
+
+	secrets.user.clear();
+	secrets.pass.clear();
+	QCOMPARE(Mumble::Webcam::readLogin(secrets, own), std::optional< Login >(own));
+	QVERIFY(!Mumble::Webcam::readLogin(secrets, Login{}));
+	QVERIFY(!Mumble::Webcam::readLogin(secrets, Login{ "", "pass-without-user" }));
 }
 
 QTEST_MAIN(TestWebcamProtocol)
