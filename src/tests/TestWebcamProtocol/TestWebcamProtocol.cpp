@@ -47,6 +47,7 @@ private slots:
 	void gateTicketMalformed();
 	void pickUrl();
 	void relayHostPort();
+	void withDefaultPort();
 	void relayAuthority();
 	void readLogin();
 };
@@ -327,20 +328,42 @@ void TestWebcamProtocol::relayHostPort() {
 	QCOMPARE(Mumble::Webcam::relayHostPort("rtsps://Relay.Example.org:8322/mcam/x"),
 			 HostPort(std::make_pair(std::string("relay.example.org"), std::string("8322"))));
 	QCOMPARE(Mumble::Webcam::relayHostPort("rtsps://[::1]/x"),
-			 HostPort(std::make_pair(std::string("[::1]"), std::string("322"))));
+			 HostPort(std::make_pair(std::string("[::1]"), std::string("8322"))));
 	QVERIFY(!Mumble::Webcam::relayHostPort("https://relay.example.org/"));
+}
+
+void TestWebcamProtocol::withDefaultPort() {
+	using Mumble::Webcam::withDefaultPort;
+	// GStreamer would dial 554 for these, where MediaMTX does not listen.
+	QCOMPARE(withDefaultPort("rtsps://stream.example.org"), std::string("rtsps://stream.example.org:8322"));
+	QCOMPARE(withDefaultPort("rtsps://stream.example.org/mcam/x"),
+			 std::string("rtsps://stream.example.org:8322/mcam/x"));
+	QCOMPARE(withDefaultPort("rtsps://stream.example.org:/mcam/x"),
+			 std::string("rtsps://stream.example.org:8322/mcam/x"));
+	QCOMPARE(withDefaultPort("rtsps://[::1]/x"), std::string("rtsps://[::1]:8322/x"));
+	QCOMPARE(withDefaultPort("rtsps://u:p@stream.example.org/x"), std::string("rtsps://u:p@stream.example.org:8322/x"));
+	// A port given stays, and anything not RTSPS is left alone.
+	QCOMPARE(withDefaultPort("rtsps://stream.example.org:18322/x"), std::string("rtsps://stream.example.org:18322/x"));
+	QCOMPARE(withDefaultPort("rtsps://[::1]:18322"), std::string("rtsps://[::1]:18322"));
+	QCOMPARE(withDefaultPort("rtsp://stream.example.org/x"), std::string("rtsp://stream.example.org/x"));
+	QCOMPARE(withDefaultPort("https://stream.example.org/x"), std::string("https://stream.example.org/x"));
+	QCOMPARE(withDefaultPort("rtsps://"), std::string("rtsps://"));
+	QCOMPARE(withDefaultPort(""), std::string(""));
+	// Completed or not, a URL names the same relay.
+	QCOMPARE(Mumble::Webcam::relayAuthority(withDefaultPort("rtsps://stream.example.org/x")),
+			 Mumble::Webcam::relayAuthority("rtsps://stream.example.org/x"));
 }
 
 void TestWebcamProtocol::relayAuthority() {
 	using Mumble::Webcam::relayAuthority;
 	QCOMPARE(relayAuthority("rtsps://Relay.Example.org:8322/mcam/x"),
 			 std::optional< std::string >("relay.example.org:8322"));
-	QCOMPARE(relayAuthority("rtsps://relay.example.org"), std::optional< std::string >("relay.example.org:322"));
-	QCOMPARE(relayAuthority("rtsps://relay.example.org:/x"), std::optional< std::string >("relay.example.org:322"));
+	QCOMPARE(relayAuthority("rtsps://relay.example.org"), std::optional< std::string >("relay.example.org:8322"));
+	QCOMPARE(relayAuthority("rtsps://relay.example.org:/x"), std::optional< std::string >("relay.example.org:8322"));
 	QCOMPARE(relayAuthority("rtsps://u:p@relay.example.org:8322"),
 			 std::optional< std::string >("relay.example.org:8322"));
 	QCOMPARE(relayAuthority("rtsps://[::1]:18322/x"), std::optional< std::string >("[::1]:18322"));
-	QCOMPARE(relayAuthority("rtsps://[::1]/x"), std::optional< std::string >("[::1]:322"));
+	QCOMPARE(relayAuthority("rtsps://[::1]/x"), std::optional< std::string >("[::1]:8322"));
 	// A user part cannot pass off another host as the relay.
 	QCOMPARE(relayAuthority("rtsps://relay.example.org:8322@evil.example:8322/x"),
 			 std::optional< std::string >("evil.example:8322"));

@@ -287,6 +287,7 @@
 	PROCESS(webcam, WEBCAM_CA_FILE_KEY, qsWebcamCaFile)                   \
 	PROCESS(webcam, WEBCAM_GATE_URL_KEY, qsWebcamGateUrl)                 \
 	PROCESS(webcam, WEBCAM_ON_DEMAND_KEY, bWebcamOnDemand)                \
+	PROCESS(webcam, WEBCAM_PREVIEW_KEY, bWebcamPreview)                   \
 	PROCESS(webcam, WEBCAM_VIEW_LATENCY_KEY, iWebcamViewLatency)          \
 	PROCESS(webcam, WEBCAM_WINDOW_GEOMETRY_KEY, qbaWebcamWindowGeometry)
 

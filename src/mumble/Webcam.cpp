@@ -92,7 +92,7 @@ bool askRelayLogin(bool refused = false) {
 	if (dialog.exec() != QDialog::Accepted || relay->text().trimmed().isEmpty() || user->text().isEmpty()) {
 		return false;
 	}
-	s.qsWebcamRelay           = relay->text().trimmed();
+	s.qsWebcamRelay           = QString::fromStdString(withDefaultPort(relay->text().trimmed().toStdString()));
 	s.qsWebcamPublishUser     = user->text();
 	s.qsWebcamPublishPassword = password->text();
 	s.save();
@@ -150,13 +150,8 @@ void WebcamManager::broadcastShareState() {
 }
 
 Quality WebcamManager::wantedQuality() const {
-	const Settings &s                     = Global::get().s;
-	const std::vector< Quality > &presets = qualityPresets();
-	if (s.iWebcamQuality >= 0 && static_cast< std::size_t >(s.iWebcamQuality) < presets.size()) {
-		return presets[static_cast< std::size_t >(s.iWebcamQuality)];
-	}
-	const int height = std::max(96, s.iWebcamCustomHeight);
-	return { (height * 16 / 9) & ~1, height, std::max(1, s.iWebcamCustomFps), std::max(32, s.iWebcamCustomKbps) };
+	const Settings &s = Global::get().s;
+	return qualityAt(s.iWebcamQuality, s.iWebcamCustomHeight, s.iWebcamCustomFps, s.iWebcamCustomKbps);
 }
 
 QString WebcamManager::relayBase() const {
@@ -164,7 +159,8 @@ QString WebcamManager::relayBase() const {
 	while (relay.endsWith(QLatin1Char('/'))) {
 		relay.chop(1);
 	}
-	return relay;
+	// Without a port, GStreamer would publish to 554, where the relay is not.
+	return QString::fromStdString(withDefaultPort(relay.toStdString()));
 }
 
 QString WebcamManager::streamUrl() const {
@@ -242,6 +238,7 @@ void WebcamManager::serverDisconnected() {
 	m_staleShares.clear();
 	m_shareClaimed    = false;
 	m_publishClaiming = false;
+	closePreview();
 	m_path.clear();
 	m_key.clear();
 	if (m_sharing) {
@@ -292,6 +289,9 @@ bool WebcamManager::startSharing() {
 		self->setWebcamSharing(true);
 	}
 	broadcastShareState();
+	if (s.bWebcamPreview) {
+		showPreview();
+	}
 	logInfo(tr("You are sharing your camera. Others can ask to watch it from your context menu."));
 	emit sharingChanged(true);
 	return true;
@@ -321,6 +321,7 @@ void WebcamManager::stopSharing(const QString &reason) {
 	m_staleShares.clear();
 	m_shareClaimed    = false;
 	m_publishClaiming = false;
+	closePreview();
 	m_path.clear();
 	m_key.clear();
 
@@ -386,8 +387,15 @@ bool WebcamManager::publishNow() {
 	config.user     = s.qsWebcamPublishUser;
 	config.password = s.qsWebcamPublishPassword;
 	config.caFile   = s.qsWebcamCaFile;
+	// Cheap (small and leaky), and it lets a preview opened later show at once.
+	config.preview = true;
 
 	m_publisher = std::make_unique< WebcamPublisher >();
+	connect(m_publisher.get(), &WebcamPipeline::frame, this, [this](const QImage &image) {
+		if (m_preview) {
+			m_preview->setFrame(image);
+		}
+	});
 	connect(m_publisher.get(), &WebcamPipeline::failed, this, [this](const QString &message) { stopSharing(message); });
 	connect(m_publisher.get(), &WebcamPipeline::ended, this,
 			[this] { stopSharing(tr("the relay closed the stream.")); });
@@ -397,6 +405,7 @@ bool WebcamManager::publishNow() {
 		stopSharing(error);
 		return false;
 	}
+	updatePreviewStatus();
 	return true;
 }
 
@@ -407,6 +416,44 @@ void WebcamManager::stopPublishing() {
 		publisher->disconnect(this);
 		publisher->stop();
 		publisher->deleteLater();
+	}
+	updatePreviewStatus();
+}
+
+void WebcamManager::showPreview() {
+	if (!m_sharing) {
+		return;
+	}
+	if (!m_preview) {
+		m_preview = new WebcamWindow(tr("Your camera (only you see this)"), QByteArray(), nullptr);
+		connect(m_preview, &WebcamWindow::closedByUser, this, [this] { closePreview(); });
+		updatePreviewStatus();
+	}
+	m_preview->show();
+	m_preview->raise();
+	m_preview->activateWindow();
+}
+
+void WebcamManager::updatePreviewStatus() {
+	if (!m_preview) {
+		return;
+	}
+	if (m_publisher && m_publisher->isRunning()) {
+		// The first picture replaces this.
+		m_preview->setStatus(tr("Opening your camera…"));
+		return;
+	}
+	m_preview->clearFrame();
+	m_preview->setStatus(Global::get().s.bWebcamOnDemand ? tr("Your camera stays off until someone watches it.")
+														 : tr("Your camera is off."));
+}
+
+void WebcamManager::closePreview() {
+	if (WebcamWindow *preview = m_preview) {
+		m_preview = nullptr;
+		preview->disconnect(this);
+		preview->close();
+		preview->deleteLater();
 	}
 }
 
@@ -874,7 +921,7 @@ void WebcamManager::connectWatch(unsigned int session) {
 		watch->retry->stop();
 	}
 	// Our own login goes only to our own relay; a grant naming another one ends the view.
-	const std::string url              = *pickUrl(watch->secrets.urls);
+	const std::string url              = withDefaultPort(*pickUrl(watch->secrets.urls));
 	const std::optional< Login > login = readLogin(watch->secrets, url, ownLogin(), relayBase().toStdString());
 	if (!login) {
 		endWatch(session, true,

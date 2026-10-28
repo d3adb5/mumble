@@ -209,9 +209,10 @@ public:
 	WebcamManager *m_webcam = nullptr;
 
 protected:
-	QAction *qaSelfWebcam       = nullptr;
-	QAction *qaUserWebcamWatch  = nullptr;
-	QAction *qaUserWebcamRevoke = nullptr;
+	QAction *qaSelfWebcam        = nullptr;
+	QAction *qaSelfWebcamPreview = nullptr;
+	QAction *qaUserWebcamWatch   = nullptr;
+	QAction *qaUserWebcamRevoke  = nullptr;
 	void setupWebcam();
 #endif
 

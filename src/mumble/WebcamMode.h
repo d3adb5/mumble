@@ -238,6 +238,17 @@ namespace Webcam {
 		return presets;
 	}
 
+	/// The quality the settings ask for: preset \p index, or past the presets the custom height,
+	/// frame rate and bitrate (16:9, clamped to what an encoder takes).
+	inline Quality qualityAt(int index, int customHeight, int customFps, int customKbps) {
+		const std::vector< Quality > &presets = qualityPresets();
+		if (index >= 0 && static_cast< std::size_t >(index) < presets.size()) {
+			return presets[static_cast< std::size_t >(index)];
+		}
+		const int height = std::max(96, customHeight);
+		return { (height * 16 / 9) & ~1, height, std::max(1, customFps), std::max(32, customKbps) };
+	}
+
 	/// The size to encode at for a camera mode and a wanted size: the wanted height (never more
 	/// than the camera gives), with the camera's aspect, both even as H.264 needs.
 	inline std::pair< int, int > outputSize(const Mode &mode, int wantedHeight) {
@@ -246,6 +257,19 @@ namespace Webcam {
 		const double exact = static_cast< double >(mode.width) * height / mode.height;
 		const int width    = std::max(2, 2 * static_cast< int >(std::lround(exact / 2.0)));
 		return { width, height };
+	}
+
+	/// How wide the sender's own preview is at most: it is only looked at, so it need not be sharp.
+	constexpr int PREVIEW_MAX_WIDTH = 640;
+
+	/// The size of the sender's own preview for a picture of \p width x \p height: no wider than
+	/// \p maxWidth (never upscaled), with the picture's aspect, both even for the converters.
+	inline std::pair< int, int > previewSize(int width, int height, int maxWidth = PREVIEW_MAX_WIDTH) {
+		width             = std::max(2, width);
+		height            = std::max(2, height);
+		const int wide    = std::max(2, std::min(width, maxWidth) & ~1);
+		const double tall = static_cast< double >(height) * wide / width;
+		return { wide, std::max(2, 2 * static_cast< int >(std::lround(tall / 2.0))) };
 	}
 
 	/// The size a viewer window takes for a picture: the picture's shape at the window's current

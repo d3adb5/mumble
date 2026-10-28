@@ -22,6 +22,8 @@ public:
 	WebcamWindow(const QString &title, const QByteArray &geometry, QWidget *parent = nullptr);
 
 	void setStatus(const QString &status);
+	/// Drops the picture, back to the status alone.
+	void clearFrame();
 
 public slots:
 	void setFrame(const QImage &image);

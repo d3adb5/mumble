@@ -487,8 +487,13 @@ namespace Webcam {
 		bool operator==(const Login &other) const { return user == other.user && pass == other.pass; }
 	};
 
+	/// The port an RTSPS URL without one means: MediaMTX's RTSPS port. GStreamer's RTSP client
+	/// would take 554 instead, where a MediaMTX relay does not listen, so URLs are completed
+	/// (withDefaultPort) before anything connects.
+	constexpr const char *DEFAULT_RTSPS_PORT = "8322";
+
 	/// The host and port of an RTSPS URL, the host lower-cased (IPv6 in brackets), the port
-	/// defaulting to 322. Nothing if it is not an RTSPS URL with a host.
+	/// defaulting to DEFAULT_RTSPS_PORT. Nothing if it is not an RTSPS URL with a host.
 	inline std::optional< std::pair< std::string, std::string > > relayHostPort(const std::string &url) {
 		const std::string scheme = "rtsps://";
 		if (url.size() <= scheme.size() || url.compare(0, scheme.size(), scheme) != 0) {
@@ -509,7 +514,29 @@ namespace Webcam {
 		if (host.empty()) {
 			return std::nullopt;
 		}
-		return std::make_pair(host, port.empty() ? std::string("322") : port);
+		return std::make_pair(host, port.empty() ? std::string(DEFAULT_RTSPS_PORT) : port);
+	}
+
+	/// \p url with DEFAULT_RTSPS_PORT filled in when it is an RTSPS URL without a port; anything
+	/// else unchanged.
+	inline std::string withDefaultPort(const std::string &url) {
+		const std::string scheme = "rtsps://";
+		if (url.compare(0, scheme.size(), scheme) != 0) {
+			return url;
+		}
+		const std::size_t end     = url.find_first_of("/?#", scheme.size());
+		const std::size_t authEnd = end == std::string::npos ? url.size() : end;
+		const std::size_t at      = url.rfind('@', authEnd);
+		const std::size_t hostAt  = (at != std::string::npos && at >= scheme.size()) ? at + 1 : scheme.size();
+		const std::string host    = url.substr(hostAt, authEnd - hostAt);
+		const std::size_t bracket = host.rfind(']');
+		const std::size_t colon   = host.rfind(':');
+		const bool hasPort        = colon != std::string::npos && (bracket == std::string::npos || colon > bracket);
+		if (host.empty() || (hasPort && colon + 1 < host.size())) {
+			return url;
+		}
+		// A bare trailing colon gets the port after it.
+		return url.substr(0, authEnd) + (hasPort ? "" : ":") + DEFAULT_RTSPS_PORT + url.substr(authEnd);
 	}
 
 	/// The host:port of an RTSPS URL, as relayHostPort gives them.

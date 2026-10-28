@@ -107,7 +107,18 @@ ctest). They include the RFC 7748, RFC 5869 and spec vectors, cross-checked agai
    Still open: a picture through the gated relay, 410, the 45 s retry window, a MediaMTX 401
    → `open`, and a move with two viewers. The gated relay is the user's to start.
 6. **Optional:** a WHEP read path (`pickUrl()` only takes `rtsps://` today); a global shortcut to
-   toggle sharing; a self-preview.
+   toggle sharing.
+
+## Preview (2026-10-27)
+
+The sender sees its own camera, locally only. The publish pipeline tees the scaled picture
+before the encoder into a leaky queue and a small RGBx appsink (`addPreviewBranch`, at most
+640 px wide, `previewSize`), so the preview never reaches the relay and never holds the encoder
+back. "Your camera (only you see this)" opens when sharing starts (setting "Show my camera
+while I share it", on by default) and from Self → Show Camera Preview; with the camera opened
+on demand it says the camera is off until someone watches. The settings page has a Preview
+button: `WebcamCameraPreview`, the same camera chain without encoder or relay, at the chosen
+quality; leaving the page lets the camera go.
 
 ## Dependencies
 
@@ -147,6 +158,14 @@ ctest). They include the RFC 7748, RFC 5869 and spec vectors, cross-checked agai
 4. Unpublish as soon as a test ends. Leave nothing running on production. Keep tests short.
 
 ## Gotchas found on the way
+
+- **A relay URL without a port:** GStreamer's RTSP client dials 554 for `rtsps://host`, where
+  MediaMTX does not listen (it uses 8322). That broke production sharing on 2026-10-27: the
+  camera opened, the publish could not connect, the share stopped. Relay settings and grant URLs
+  are now completed with 8322 (`withDefaultPort`); grants always carry a port (spec rule).
+- The PipeWire test camera (`pipewiresink mode=provide`) stalls after ~18 frames for any
+  consumer: fine to see that a picture arrives, useless to judge motion. Test pipeline shapes
+  with `videotestsrc is-live=true` in gst-launch instead.
 
 - moc cannot parse a raw string literal that contains `"`. Spell such regexes out.
 - GLib's headers must be included before Qt's, because GLib uses `signals` as a name.

@@ -69,6 +69,8 @@ private slots:
 	void noModesIsNothing();
 	void devicePathFromPipewireAndV4l2();
 	void outputSizeKeepsAspectAndIsEven();
+	void previewIsSmallKeepsAspectAndIsEven();
+	void qualityAtPresetOrCustom();
 	void windowKeepsItsAreaInThePicturesShape();
 	void windowStaysOnTheScreenAndAboveTheMinimum();
 };
@@ -219,6 +221,36 @@ void TestWebcamMode::windowStaysOnTheScreenAndAboveTheMinimum() {
 	// Never below the minimum, and a broken picture size does not divide by zero.
 	QCOMPARE(windowSizeFor(160, 90, 100, 1000, 160, 90, 1920, 1080), std::make_pair(160, 379));
 	QCOMPARE(windowSizeFor(480, 270, 0, 0, 160, 90, 1920, 1080), std::make_pair(360, 360));
+}
+
+void TestWebcamMode::previewIsSmallKeepsAspectAndIsEven() {
+	using Mumble::Webcam::previewSize;
+	QCOMPARE(previewSize(1280, 720), std::make_pair(640, 360));
+	QCOMPARE(previewSize(1920, 1080), std::make_pair(640, 360));
+	// Portrait (a phone held upright, or a rotated camera) keeps its shape.
+	QCOMPARE(previewSize(720, 1280), std::make_pair(640, 1138));
+	// Never upscaled.
+	QCOMPARE(previewSize(320, 180), std::make_pair(320, 180));
+	// Odd sizes come out even.
+	QCOMPARE(previewSize(641, 481), std::make_pair(640, 480));
+	QCOMPARE(previewSize(427, 240), std::make_pair(426, 240));
+	QCOMPARE(previewSize(1280, 720, 300), std::make_pair(300, 168));
+	// Nonsense stays usable.
+	QCOMPARE(previewSize(0, 0), std::make_pair(2, 2));
+}
+
+void TestWebcamMode::qualityAtPresetOrCustom() {
+	using Mumble::Webcam::qualityAt;
+	const auto same = [](const Mumble::Webcam::Quality &a, const Mumble::Webcam::Quality &b) {
+		return a.width == b.width && a.height == b.height && a.fps == b.fps && a.bitrateKbps == b.bitrateKbps;
+	};
+	QVERIFY(same(qualityAt(0, 0, 0, 0), Mumble::Webcam::qualityPresets()[0]));
+	QVERIFY(same(qualityAt(3, 0, 0, 0), Mumble::Webcam::qualityPresets()[3]));
+	// Past the presets: the custom values, 16:9 and even.
+	QVERIFY(same(qualityAt(4, 540, 20, 900), { 960, 540, 20, 900 }));
+	QVERIFY(same(qualityAt(4, 481, 20, 900), { 854, 481, 20, 900 }));
+	// Clamped to what an encoder takes; a negative index counts as custom.
+	QVERIFY(same(qualityAt(-1, 10, 0, 1), { 170, 96, 1, 32 }));
 }
 
 QTEST_MAIN(TestWebcamMode)

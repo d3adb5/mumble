@@ -73,6 +73,16 @@
           </property>
          </widget>
         </item>
+        <item>
+         <widget class="QPushButton" name="qpbPreview">
+          <property name="toolTip">
+           <string>See the camera as it would be sent at the chosen quality. Only you see it: nothing is sent.</string>
+          </property>
+          <property name="text">
+           <string>Preview</string>
+          </property>
+         </widget>
+        </item>
        </layout>
       </item>
       <item row="2" column="0">
@@ -190,6 +200,16 @@
         </property>
        </widget>
       </item>
+      <item row="8" column="0" colspan="2">
+       <widget class="QCheckBox" name="qcbPreview">
+        <property name="toolTip">
+         <string>Open a window with your own camera when you start sharing. Only you see it; you can also open it from the Self menu.</string>
+        </property>
+        <property name="text">
+         <string>Show my camera while I share it</string>
+        </property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>
@@ -221,6 +241,9 @@
       </item>
       <item row="1" column="1">
        <widget class="QLineEdit" name="qleRelay">
+        <property name="toolTip">
+         <string>The relay's RTSPS address. Without a port, 8322 (MediaMTX's RTSPS port) is used.</string>
+        </property>
         <property name="placeholderText">
          <string>rtsps://relay.example.org:8322</string>
         </property>

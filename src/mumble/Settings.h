@@ -713,6 +713,8 @@ struct Settings {
 	QString qsWebcamGateUrl = {};
 	/// Open the camera only while someone is watching, rather than for the whole share.
 	bool bWebcamOnDemand = true;
+	/// Show the sender its own camera while it shares (local only, never sent).
+	bool bWebcamPreview = true;
 	/// How much the viewer buffers, in milliseconds.
 	int iWebcamViewLatency = 150;
 	/// Where the last camera window was, so the next one opens there.

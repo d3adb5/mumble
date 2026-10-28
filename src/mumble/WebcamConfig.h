@@ -9,6 +9,13 @@
 #include "ConfigDialog.h"
 #include "ui_WebcamConfig.h"
 
+#include <QtCore/QPointer>
+
+#include <memory>
+
+class WebcamCameraPreview;
+class WebcamWindow;
+
 /// The settings page for webcam sharing: who may watch, the camera and what it is sent at, and
 /// the relay it goes through.
 class WebcamConfig : public ConfigWidget, Ui::WebcamConfig {
@@ -19,6 +26,7 @@ public:
 	/// The unique name of this ConfigWidget
 	static const QString name;
 	WebcamConfig(Settings &st);
+	~WebcamConfig() override;
 	QString title() const Q_DECL_OVERRIDE;
 	const QString &getName() const Q_DECL_OVERRIDE;
 	QIcon icon() const Q_DECL_OVERRIDE;
@@ -29,9 +37,18 @@ public slots:
 	void on_qcbQuality_currentIndexChanged(int index);
 	void on_qpbRefreshDevices_clicked();
 	void on_qpbCaFile_clicked();
+	void on_qpbPreview_clicked();
+
+protected:
+	void hideEvent(QHideEvent *event) Q_DECL_OVERRIDE;
 
 private:
 	void fillDevices(const QString &selected);
+	/// Closes the preview and lets the camera go.
+	void stopPreview();
+
+	std::unique_ptr< WebcamCameraPreview > m_preview;
+	QPointer< WebcamWindow > m_previewWindow;
 };
 
 #endif

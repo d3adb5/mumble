@@ -51,6 +51,11 @@ void WebcamWindow::setStatus(const QString &status) {
 	update();
 }
 
+void WebcamWindow::clearFrame() {
+	m_frame = QImage();
+	update();
+}
+
 void WebcamWindow::setFrame(const QImage &image) {
 	if (image.isNull()) {
 		return;

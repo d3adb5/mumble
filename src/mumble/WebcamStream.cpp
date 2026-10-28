@@ -12,8 +12,12 @@
 
 #include "WebcamStream.h"
 
+#include "WebcamProtocol.h"
+
+#include <QtCore/QCoreApplication>
 #include <QtCore/QMetaObject>
 
+#include <algorithm>
 #include <chrono>
 #include <condition_variable>
 #include <map>
@@ -170,6 +174,98 @@ GstElement *parameterSetsBeforeIdr(GstElement *parse) {
 		g_object_set(parse, "config-interval", -1, nullptr);
 	}
 	return parse;
+}
+
+GstFlowReturn onNewSample(GstAppSink *sink, gpointer data);
+
+/// The camera, opened in the mode that best gives \p quality (raw where it keeps the rate, MJPG
+/// otherwise), then scaled to I420 at the size and rate it is sent at, set in \p sending. Empty
+/// with \p error set if it cannot be.
+std::vector< GstElement * > cameraChain(const QString &device, const Quality &quality, Quality &sending,
+										QString *error) {
+	std::optional< Mode > mode;
+	for (const WebcamDevice &camera : WebcamStream::listCameras()) {
+		if (device.isEmpty() || camera.id == device || camera.name == device) {
+			mode = chooseMode(camera.modes, quality.height, quality.fps);
+			break;
+		}
+	}
+	if (!mode) {
+		*error = QCoreApplication::translate("WebcamPublisher", "The camera could not be found.");
+		return {};
+	}
+	const std::pair< int, int > size = outputSize(*mode, quality.height);
+	const int fps                    = std::max(1, std::min(quality.fps, static_cast< int >(mode->fps() + 0.5)));
+	sending                          = { size.first, size.second, fps, quality.bitrateKbps };
+
+	GstElement *source = makeSource(device);
+	if (!source) {
+		*error = QCoreApplication::translate("WebcamPublisher", "The camera could not be opened.");
+		return {};
+	}
+	std::vector< GstElement * > chain = { source, capsFilter("srccaps", mode->caps()) };
+	if (mode->jpeg) {
+		chain.push_back(makeElement("jpegdec", nullptr));
+	}
+	const std::string rawCaps = "video/x-raw,format=I420,width=" + std::to_string(size.first)
+								+ ",height=" + std::to_string(size.second) + ",framerate=" + std::to_string(fps)
+								+ "/1,pixel-aspect-ratio=1/1";
+	chain.insert(chain.end(), { makeElement("videoconvert", nullptr), makeElement("videoscale", nullptr),
+								makeElement("videorate", nullptr), capsFilter("rawcaps", rawCaps) });
+	if (std::find(chain.begin(), chain.end(), nullptr) != chain.end()) {
+		for (GstElement *e : chain) {
+			if (e) {
+				gst_object_unref(e);
+			}
+		}
+		*error = QCoreApplication::translate("WebcamPublisher",
+											 "The camera pipeline could not be built: a GStreamer plugin is missing.");
+		return {};
+	}
+	return chain;
+}
+
+/// Shows the picture after \p upstream in \p self's frame(), small (previewSize). A leaky queue
+/// drops what the screen does not keep up with, so the preview never holds back anything else.
+bool addPreviewBranch(GstElement *pipeline, GstElement *upstream, const Quality &sending, WebcamPipeline *self) {
+	const std::pair< int, int > size = previewSize(sending.width, sending.height);
+	GstElement *queue                = makeElement("queue", nullptr);
+	GstElement *convert              = makeElement("videoconvert", nullptr);
+	GstElement *scale                = makeElement("videoscale", nullptr);
+	GstElement *rgb  = capsFilter(nullptr, "video/x-raw,format=RGBx,width=" + std::to_string(size.first)
+											   + ",height=" + std::to_string(size.second) + ",pixel-aspect-ratio=1/1");
+	GstElement *sink = makeElement("appsink", nullptr);
+	const std::vector< GstElement * > branch = { queue, convert, scale, rgb, sink };
+	if (std::find(branch.begin(), branch.end(), nullptr) != branch.end()) {
+		for (GstElement *e : branch) {
+			if (e) {
+				gst_object_unref(e);
+			}
+		}
+		return false;
+	}
+	g_object_set(queue, "max-size-buffers", 1u, "max-size-bytes", 0u, "max-size-time", guint64(0), nullptr);
+	gst_util_set_object_arg(G_OBJECT(queue), "leaky", "downstream");
+	g_object_set(sink, "sync", FALSE, "max-buffers", 1u, "drop", TRUE, nullptr);
+	GstAppSinkCallbacks callbacks = {};
+	callbacks.new_sample          = &onNewSample;
+	gst_app_sink_set_callbacks(GST_APP_SINK(sink), &callbacks, self, nullptr);
+
+	for (GstElement *e : branch) {
+		gst_bin_add(GST_BIN(pipeline), e);
+	}
+	return gst_element_link_many(upstream, queue, convert, scale, rgb, sink, nullptr);
+}
+
+/// The camera is held by another application.
+bool cameraBusy(GstMessage *message) {
+	GError *error = nullptr;
+	gst_message_parse_error(message, &error, nullptr);
+	const bool busy = error && error->domain == GST_RESOURCE_ERROR && error->code == GST_RESOURCE_ERROR_BUSY;
+	if (error) {
+		g_error_free(error);
+	}
+	return busy;
 }
 
 std::vector< std::string > capsStrings(GstCaps *caps) {
@@ -469,63 +565,49 @@ bool WebcamPublisher::start(const Config &config, std::uint8_t kid, const Bytes 
 		*error = tr("No key for the stream.");
 		return false;
 	}
+	m_relay = QString::fromStdString(relayAuthority(config.url.toStdString()).value_or(std::string()));
 
-	// The camera's modes decide how it is opened: raw where it keeps the rate, MJPG otherwise.
-	std::optional< Mode > mode;
-	for (const WebcamDevice &camera : WebcamStream::listCameras()) {
-		if (config.device.isEmpty() || camera.id == config.device || camera.name == config.device) {
-			mode = chooseMode(camera.modes, config.quality.height, config.quality.fps);
-			break;
-		}
-	}
-	if (!mode) {
-		*error = tr("The camera could not be found.");
+	std::vector< GstElement * > chain = cameraChain(config.device, config.quality, m_sending, error);
+	if (chain.empty()) {
 		return false;
 	}
-
-	const std::pair< int, int > size = outputSize(*mode, config.quality.height);
-	const int fps                    = std::max(1, std::min(config.quality.fps, static_cast< int >(mode->fps() + 0.5)));
-	m_sending                        = { size.first, size.second, fps, config.quality.bitrateKbps };
-
 	GstElement *encoder = makeEncoder(config.encoder, m_sending);
-	if (!encoder) {
-		*error = config.encoder.isEmpty() ? tr("No H.264 encoder is installed (x264, OpenH264 or VA-API).")
-										  : tr("The H.264 encoder %1 is not installed.").arg(config.encoder);
+	GstElement *sink    = makeElement("rtspclientsink", "sink");
+	if (!encoder || !sink) {
+		for (GstElement *e : chain) {
+			gst_object_unref(e);
+		}
+		if (encoder) {
+			gst_object_unref(encoder);
+		}
+		if (sink) {
+			gst_object_unref(sink);
+		}
+		*error = !sink ? tr("GStreamer's RTSP client (rtspclientsink, from gst-rtsp-server) is not installed.")
+				 : config.encoder.isEmpty() ? tr("No H.264 encoder is installed (x264, OpenH264 or VA-API).")
+											: tr("The H.264 encoder %1 is not installed.").arg(config.encoder);
 		return false;
 	}
 
-	GstElement *pipeline              = gst_pipeline_new("webcam-publish");
-	GstElement *source                = makeSource(config.device);
-	std::vector< GstElement * > chain = { source, capsFilter("srccaps", mode->caps()) };
-	if (mode->jpeg) {
-		chain.push_back(makeElement("jpegdec", nullptr));
+	// The preview branches off the scaled picture before the encoder, so it never reaches the
+	// relay.
+	GstElement *tee = config.preview ? makeElement("tee", "preview-tee") : nullptr;
+	if (tee) {
+		chain.insert(chain.end(), { tee, makeElement("queue", nullptr) });
 	}
-	const std::string rawCaps = "video/x-raw,format=I420,width=" + std::to_string(size.first)
-								+ ",height=" + std::to_string(size.second) + ",framerate=" + std::to_string(fps)
-								+ "/1,pixel-aspect-ratio=1/1";
-	GstElement *sink          = makeElement("rtspclientsink", "sink");
-	chain.insert(chain.end(), { makeElement("videoconvert", nullptr), makeElement("videoscale", nullptr),
-								makeElement("videorate", nullptr), capsFilter("rawcaps", rawCaps), encoder,
-								capsFilter("profile", "video/x-h264,profile=constrained-baseline"),
+	chain.insert(chain.end(), { encoder, capsFilter("profile", "video/x-h264,profile=constrained-baseline"),
 								parameterSetsBeforeIdr(makeElement("h264parse", nullptr)),
 								capsFilter("h264caps", "video/x-h264,stream-format=avc,alignment=au"),
 								makeElement("queue", nullptr), sink });
-	if (!source || !sink) {
-		for (GstElement *e : chain) {
-			if (e) {
-				gst_object_unref(e);
-			}
-		}
-		gst_object_unref(pipeline);
-		*error = !source ? tr("The camera could not be opened.")
-						 : tr("GStreamer's RTSP client (rtspclientsink, from gst-rtsp-server) is not installed.");
-		return false;
-	}
-
-	pipeline = buildChain(pipeline, chain);
+	GstElement *pipeline = gst_pipeline_new("webcam-publish");
+	pipeline             = buildChain(pipeline, chain);
 	if (!pipeline) {
 		*error = tr("The camera pipeline could not be built: a GStreamer plugin is missing.");
 		return false;
+	}
+	// Without its preview the share works all the same.
+	if (tee) {
+		addPreviewBranch(pipeline, tee, m_sending, this);
 	}
 
 	g_object_set(sink, "location", config.url.toUtf8().constData(), "latency", 0u, nullptr);
@@ -565,13 +647,74 @@ void WebcamPublisher::setKey(std::uint8_t kid, const Bytes &key) {
 }
 
 QString WebcamPublisher::describeError(GstMessage *message) const {
+	if (cameraBusy(message)) {
+		return tr("The camera is in use by another application.");
+	}
 	GError *error = nullptr;
-	gst_message_parse_error(message, &error, nullptr);
-	const bool busy = error && error->domain == GST_RESOURCE_ERROR && error->code == GST_RESOURCE_ERROR_BUSY;
+	gchar *debug  = nullptr;
+	gst_message_parse_error(message, &error, &debug);
+	// The RTSP client says only "Could not open resource for reading (and writing)", whether
+	// the relay is not there or refused us; its debug string tells which, but names the URL,
+	// so only the verdict is kept.
+	const bool fromSink = g_strcmp0(GST_OBJECT_NAME(GST_MESSAGE_SRC(message)), "sink") == 0;
+	const bool resource = error && error->domain == GST_RESOURCE_ERROR;
+	const bool refused  = fromSink && resource
+						  && (error->code == GST_RESOURCE_ERROR_NOT_AUTHORIZED
+							  || (debug
+								  && (g_strrstr(debug, "Unauthorized")
+									  || g_strrstr(debug, "401")
+									  // After its login was turned down, there is nothing left to try.
+									  || g_strrstr(debug, "No supported authentication protocol"))));
+	const bool unreachable =
+		fromSink && resource
+		&& (error->code == GST_RESOURCE_ERROR_OPEN_READ_WRITE || error->code == GST_RESOURCE_ERROR_OPEN_READ
+			|| error->code == GST_RESOURCE_ERROR_OPEN_WRITE);
 	if (error) {
 		g_error_free(error);
 	}
-	if (busy) {
+	g_free(debug);
+	if (refused) {
+		return tr("the relay refused the stream. Check your login under Settings, Camera, and that the relay's "
+				  "gate is reachable.");
+	}
+	if (unreachable && !m_relay.isEmpty()) {
+		return tr("the relay could not be reached at %1. Check its address and port under Settings, Camera.")
+			.arg(m_relay);
+	}
+	return WebcamPipeline::describeError(message);
+}
+
+// -- camera preview ----------------------------------------------------------------------------
+
+WebcamCameraPreview::WebcamCameraPreview(QObject *parent) : WebcamPipeline(parent) {
+}
+
+bool WebcamCameraPreview::start(const QString &device, const Quality &quality, QString *error) {
+	if (!WebcamStream::ensureInitialized(error)) {
+		return false;
+	}
+	Quality sending;
+	const std::vector< GstElement * > chain = cameraChain(device, quality, sending, error);
+	if (chain.empty()) {
+		return false;
+	}
+	GstElement *pipeline = buildChain(gst_pipeline_new("webcam-preview"), chain);
+	if (!pipeline || !addPreviewBranch(pipeline, chain.back(), sending, this)) {
+		if (pipeline) {
+			gst_object_unref(pipeline);
+		}
+		*error = tr("The camera pipeline could not be built: a GStreamer plugin is missing.");
+		return false;
+	}
+	if (!startPipeline(pipeline, {})) {
+		*error = tr("The camera could not be started.");
+		return false;
+	}
+	return true;
+}
+
+QString WebcamCameraPreview::describeError(GstMessage *message) const {
+	if (cameraBusy(message)) {
 		return tr("The camera is in use by another application.");
 	}
 	return WebcamPipeline::describeError(message);
@@ -709,7 +852,7 @@ void WebcamViewerStream::addKey(std::uint8_t kid, const Bytes &key) {
 	m_keys.set(kid, key);
 }
 
-void WebcamViewerStream::deliverFrame(const QImage &image) {
+void WebcamPipeline::deliverFrame(const QImage &image) {
 	markLive();
 	emit frame(image);
 }
@@ -762,7 +905,7 @@ GstFlowReturn onNewSample(GstAppSink *sink, gpointer data) {
 		const QImage image = view.copy();
 		gst_buffer_unmap(buffer, &map);
 
-		auto *self = static_cast< WebcamViewerStream * >(data);
+		auto *self = static_cast< WebcamPipeline * >(data);
 		QMetaObject::invokeMethod(self, [self, image] { self->deliverFrame(image); }, Qt::QueuedConnection);
 	}
 	gst_sample_unref(sample);

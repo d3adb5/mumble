@@ -65,9 +65,14 @@ public:
 	/// The last failure was the relay refusing our login (an RTSP 401).
 	bool wasRefused() const { return m_refused; }
 
+	/// Called on the Qt thread with each picture for the screen.
+	void deliverFrame(const QImage &image);
+
 signals:
 	/// Frames are flowing.
 	void live();
+	/// A picture to show: a watched camera, or the sender's own preview (never sent).
+	void frame(const QImage &image);
 	/// The pipeline stopped on an error; \p message is safe to show.
 	void failed(const QString &message);
 	/// The other end ended the stream.
@@ -114,6 +119,9 @@ public:
 		QString password;
 		/// A PEM file of CAs to trust for the relay, or empty for the system's.
 		QString caFile;
+		/// Also give the camera's picture to frame(), for the sender's own preview. It branches
+		/// off before the encoder and never reaches the relay.
+		bool preview = false;
 	};
 
 	explicit WebcamPublisher(QObject *parent = nullptr);
@@ -137,9 +145,29 @@ private:
 	std::uint8_t m_kid = 0;
 	Mumble::Webcam::Bytes m_key;
 	Mumble::Webcam::Quality m_sending{ 0, 0, 0, 0 };
+	/// The relay's host:port, for errors (the path is a secret, the host is not).
+	QString m_relay;
 };
 
 /// Reads a camera back from a relay and hands out decoded frames.
+/// The camera alone, opened and scaled as it would be sent at a quality, for a preview in the
+/// settings. Nothing leaves the machine.
+class WebcamCameraPreview : public WebcamPipeline {
+private:
+	Q_OBJECT
+	Q_DISABLE_COPY(WebcamCameraPreview)
+
+public:
+	explicit WebcamCameraPreview(QObject *parent = nullptr);
+
+	/// Opens \p device (empty for the first camera) as for \p quality. False with \p error set
+	/// when it cannot even start; later errors come as failed().
+	bool start(const QString &device, const Mumble::Webcam::Quality &quality, QString *error);
+
+protected:
+	QString describeError(GstMessage *message) const override;
+};
+
 class WebcamViewerStream : public WebcamPipeline {
 private:
 	Q_OBJECT
@@ -159,12 +187,6 @@ public:
 	bool start(const Config &config, QString *error);
 	/// Adds a key, keeping the previous one for the frames still in flight.
 	void addKey(std::uint8_t kid, const Mumble::Webcam::Bytes &key);
-
-	/// Called on the Qt thread with each decoded frame.
-	void deliverFrame(const QImage &image);
-
-signals:
-	void frame(const QImage &image);
 
 private:
 	static unsigned int decryptProbe(GstPad *pad, GstPadProbeInfo *info, void *self);

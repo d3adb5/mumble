@@ -6,7 +6,9 @@
 #include "WebcamConfig.h"
 
 #include "WebcamMode.h"
+#include "WebcamProtocol.h"
 #include "WebcamStream.h"
+#include "WebcamWindow.h"
 
 #include <QtWidgets/QFileDialog>
 
@@ -45,6 +47,10 @@ WebcamConfig::WebcamConfig(Settings &st) : ConfigWidget(st) {
 	for (const QString &encoder : WebcamStream::encoderFactories()) {
 		qcbEncoder->addItem(encoder, encoder);
 	}
+}
+
+WebcamConfig::~WebcamConfig() {
+	stopPreview();
 }
 
 QString WebcamConfig::title() const {
@@ -90,6 +96,7 @@ void WebcamConfig::load(const Settings &r) {
 	}
 	qcbEncoder->setCurrentIndex(encoder);
 	loadCheckBox(qcbOnDemand, r.bWebcamOnDemand);
+	loadCheckBox(qcbPreview, r.bWebcamPreview);
 
 	qleRelay->setText(r.qsWebcamRelay);
 	qlePublishUser->setText(r.qsWebcamPublishUser);
@@ -102,15 +109,17 @@ void WebcamConfig::load(const Settings &r) {
 }
 
 void WebcamConfig::save() const {
-	s.iWebcamPolicy           = qcbPolicy->currentIndex();
-	s.qsWebcamDevice          = qcbDevice->currentData().toString();
-	s.iWebcamQuality          = qcbQuality->currentIndex();
-	s.iWebcamCustomHeight     = qsbCustomHeight->value();
-	s.iWebcamCustomFps        = qsbCustomFps->value();
-	s.iWebcamCustomKbps       = qsbCustomKbps->value();
-	s.qsWebcamEncoder         = qcbEncoder->currentData().toString();
-	s.bWebcamOnDemand         = qcbOnDemand->isChecked();
-	s.qsWebcamRelay           = qleRelay->text().trimmed();
+	s.iWebcamPolicy       = qcbPolicy->currentIndex();
+	s.qsWebcamDevice      = qcbDevice->currentData().toString();
+	s.iWebcamQuality      = qcbQuality->currentIndex();
+	s.iWebcamCustomHeight = qsbCustomHeight->value();
+	s.iWebcamCustomFps    = qsbCustomFps->value();
+	s.iWebcamCustomKbps   = qsbCustomKbps->value();
+	s.qsWebcamEncoder     = qcbEncoder->currentData().toString();
+	s.bWebcamOnDemand     = qcbOnDemand->isChecked();
+	s.bWebcamPreview      = qcbPreview->isChecked();
+	// Saved with the port it means, so what is shown is where the camera goes.
+	s.qsWebcamRelay = QString::fromStdString(Mumble::Webcam::withDefaultPort(qleRelay->text().trimmed().toStdString()));
 	s.qsWebcamPublishUser     = qlePublishUser->text();
 	s.qsWebcamPublishPassword = qlePublishPassword->text();
 	s.qsWebcamReadUser        = qleReadUser->text();
@@ -138,4 +147,57 @@ void WebcamConfig::on_qpbCaFile_clicked() {
 	if (!file.isEmpty()) {
 		qleCaFile->setText(file);
 	}
+}
+
+void WebcamConfig::on_qpbPreview_clicked() {
+	if (m_preview) {
+		stopPreview();
+		return;
+	}
+	const Mumble::Webcam::Quality quality = Mumble::Webcam::qualityAt(
+		qcbQuality->currentIndex(), qsbCustomHeight->value(), qsbCustomFps->value(), qsbCustomKbps->value());
+
+	m_previewWindow = new WebcamWindow(tr("Camera preview (only you see this)"), QByteArray(), nullptr);
+	m_previewWindow->setStatus(tr("Opening the camera…"));
+	connect(m_previewWindow, &WebcamWindow::closedByUser, this, &WebcamConfig::stopPreview);
+	m_previewWindow->show();
+
+	m_preview = std::make_unique< WebcamCameraPreview >();
+	connect(m_preview.get(), &WebcamPipeline::frame, m_previewWindow, &WebcamWindow::setFrame);
+	connect(m_preview.get(), &WebcamPipeline::failed, this, [this](const QString &message) {
+		if (m_previewWindow) {
+			m_previewWindow->clearFrame();
+			m_previewWindow->setStatus(tr("The camera could not be shown: %1").arg(message));
+		}
+	});
+	QString error;
+	if (!m_preview->start(qcbDevice->currentData().toString(), quality, &error)) {
+		m_previewWindow->setStatus(tr("The camera could not be shown: %1").arg(error));
+		m_preview.reset();
+		return;
+	}
+	qpbPreview->setText(tr("Stop Preview"));
+}
+
+void WebcamConfig::stopPreview() {
+	if (m_preview) {
+		// Destroyed later: this may be reached from one of its own signals.
+		WebcamCameraPreview *preview = m_preview.release();
+		preview->disconnect();
+		preview->stop();
+		preview->deleteLater();
+	}
+	if (WebcamWindow *window = m_previewWindow) {
+		m_previewWindow = nullptr;
+		window->disconnect(this);
+		window->close();
+		window->deleteLater();
+	}
+	qpbPreview->setText(tr("Preview"));
+}
+
+void WebcamConfig::hideEvent(QHideEvent *event) {
+	// Leaving the page (or closing the settings) lets the camera go.
+	stopPreview();
+	ConfigWidget::hideEvent(event);
 }

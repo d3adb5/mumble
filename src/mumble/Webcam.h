@@ -50,6 +50,8 @@ public:
 	/// Stops letting \p session watch: the stream moves to a fresh path and key, which only the
 	/// remaining viewers learn.
 	void revoke(unsigned int session);
+	/// Shows our own camera, as it is sent, in a window only we see. Only while sharing.
+	void showPreview();
 
 	// -- watching ----------------------------------------------------------------------------
 	bool isWatching(unsigned int session) const { return m_watches.contains(session); }
@@ -129,6 +131,9 @@ private:
 	/// Publishes if not already, after claiming the path where there is a gate. False (with the
 	/// share stopped) if it fails at once.
 	bool ensurePublishing();
+	/// Tells the preview whether the camera is on, and drops its picture when it is not.
+	void updatePreviewStatus();
+	void closePreview();
 	/// Opens the publish connection now.
 	bool publishNow();
 	void stopPublishing();
@@ -177,6 +182,8 @@ private:
 	QTimer *m_shareRenew = nullptr;
 
 	QHash< unsigned int, Watch * > m_watches;
+	/// Our own camera, local only.
+	QPointer< WebcamWindow > m_preview;
 };
 
 #endif

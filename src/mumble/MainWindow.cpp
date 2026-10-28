@@ -2353,6 +2353,7 @@ void MainWindow::on_qmSelf_aboutToShow() {
 	if (qaSelfWebcam) {
 		qaSelfWebcam->setEnabled(user != nullptr);
 		qaSelfWebcam->setChecked(m_webcam->isSharing());
+		qaSelfWebcamPreview->setEnabled(m_webcam->isSharing());
 	}
 #endif
 }
@@ -2375,11 +2376,20 @@ void MainWindow::setupWebcam() {
 	});
 	connect(m_webcam, &WebcamManager::sharingChanged, qaSelfWebcam, &QAction::setChecked);
 
+	// Only we see it: the picture branches off before it is encoded and sent.
+	qaSelfWebcamPreview = new QAction(tr("Show Camera &Preview"), this);
+	qaSelfWebcamPreview->setObjectName(QLatin1String("qaSelfWebcamPreview"));
+	qaSelfWebcamPreview->setToolTip(tr("Show your own camera while you share it"));
+	qaSelfWebcamPreview->setEnabled(false);
+	connect(qaSelfWebcamPreview, &QAction::triggered, m_webcam, &WebcamManager::showPreview);
+	connect(m_webcam, &WebcamManager::sharingChanged, qaSelfWebcamPreview, &QAction::setEnabled);
+
 	// Right after recording, in the block of things others can see us do.
 	const QList< QAction * > selfActions = qmSelf->actions();
 	const qsizetype recording            = selfActions.indexOf(qaRecording);
-	qmSelf->insertAction(recording >= 0 && recording + 1 < selfActions.size() ? selfActions[recording + 1] : nullptr,
-						 qaSelfWebcam);
+	QAction *before = recording >= 0 && recording + 1 < selfActions.size() ? selfActions[recording + 1] : nullptr;
+	qmSelf->insertAction(before, qaSelfWebcam);
+	qmSelf->insertAction(before, qaSelfWebcamPreview);
 
 	// The target is the user the menu was opened on, stored when it opens.
 	qaUserWebcamWatch = new QAction(QIcon(QLatin1String("skin:actions/camera-web.svg")), tr("Watch &Camera"), this);
