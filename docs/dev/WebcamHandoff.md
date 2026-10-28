@@ -3,6 +3,55 @@
 Written 2026-10-26 when the session that built the desktop side ("mumble-9f") ran out of room.
 Start here to continue it.
 
+## Status 2026-10-27 (read first)
+
+- **Unpushed on master:** 4cc882209, ddf38bd77, 6a9d6b027, 5775871a7 (table below). **The user
+  pushes master and rebuilds mumble-git.** The PKGBUILD in `~/projects/packages/mumble-git` is
+  the user's to commit; agents don't touch it. The user's installed Mumble was 256ded1bc (v1):
+  it watches without a login, so it cannot watch on production, and it publishes to port 554
+  when the relay setting has no port. Both are fixed only once the new build is installed.
+- **Production bug (fixed in 5775871a7):** the user's relay setting is `rtsps://stream.d3adb5.ca`
+  without a port. GStreamer resolves that to 554 (not 322: `GstRtsp.rtsp_url_parse` says so);
+  production listens on 8322 (554 and 322 closed). The camera opened, the publish could not
+  connect, the share stopped ("camera light flashed once"), and grants carried the portless URL.
+  Rule agreed with Mumla (cf845e7) and in the spec: a portless relay means 8322, every grant URL
+  carries a port; normalised on save and on use (`withDefaultPort`).
+- **Preview (5775871a7):** see "Preview" below. Production can now be retried by the user.
+- **Next:** the end-to-end run through the gated relay waits for the user's go (coordinator
+  `retroid-fc`), together with Mumla's plan (`~/projects/mumla` HANDOVER.md). Untested so far:
+  a picture through MediaMTX with the gate enforcing for both directions, 410, the 45 s retry
+  window running out, a MediaMTX 401 → `open`, a move with two viewers, smooth preview motion
+  with a real camera (the PipeWire test camera stalls; see Gotchas).
+
+### How to test (isolated, never the user's Mumble)
+
+The user's real Mumble is often on a call: never take over its socket, config or Murmur.
+- **Clients:** `isolated.sh <binary> <profile dir> mumble://Name@127.0.0.1:<port>`: a wrapper
+  that sets its own `HOME`, `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_CACHE_HOME`,
+  `XDG_RUNTIME_DIR` and keeps `PIPEWIRE_RUNTIME_DIR`, `PULSE_RUNTIME_PATH`,
+  `DBUS_SESSION_BUS_ADDRESS` real, then runs `<binary> -m`. Write the webcam keys into
+  `<profile>/cfg/Mumble/Mumble/mumble_settings.json` (category `webcam`) before starting; read
+  passwords from files, never print them. Running the installed 256ded1bc on a profile drops
+  the v1.1-only keys (`webcam_gate_url`) when it exits.
+- **Server and display:** own `mumble-server -ini <scratch ini>` on 127.0.0.1 and an own
+  `Xvfb :98`. First start: cancel the certificate wizard (Cancel button), accept the server
+  certificate (Yes), then copy that client's `mumble.sqlite` to the other profile so it trusts
+  the server too.
+- **Driving the UI:** QMenus ignore xdotool clicks on the menu bar and accelerators inside
+  menus: open with `alt+s` (Self) / `alt+o` (Configure) and pick with Down/Return; context menus
+  open with a right click after `windowfocus`, and their items take clicks. Capture with
+  `xwd -id <win> | magick`, never ImageMagick `import` (its server grab closes popups).
+- **Camera:** use the real webcam only if no app holds it (Discord often does), and never
+  capture a viewer window fed by it: it shows the user. Otherwise a PipeWire test camera:
+  `gst-launch-1.0 videotestsrc is-live=true pattern=ball ! video/x-raw,format=YUY2,width=1280,height=720,framerate=30/1 ! pipewiresink mode=provide client-name=GateTestCam stream-properties="props,media.class=Video/Source,node.description=GateTestCam,node.name=GateTestCam"`
+  and set `webcam_device` to `GateTestCam`. Stop it afterwards (it shows up in the user's
+  PipeWire graph).
+- **Gate:** build `~/projects/mtx-gate` yourself (`go build -o <scratch>/mtx-gate .`), run it
+  `-enforce` on loopback ports of your own with throwaway owners (a password file per owner in a
+  scratch dir), and delete them afterwards. A small TLS proxy that logs only method, masked
+  route and status shows the call sequence. MediaMTX (and any gated test relay) is the user's
+  or the coordinator's to start; with none, a silent TCP listener stands in for it.
+
 ## What it is
 
 End-to-end encrypted webcam sharing between Mumble (desktop) and Mumla (Android) through a
@@ -51,9 +100,13 @@ everything they agreed.
 | a5886f22a | `WebcamStream.*`: GStreamer publisher and viewer; `webcam` CMake option; CI deps; .deb Recommends |
 | 24184110f | `Webcam.*` (manager), `WebcamWindow.*` (floating viewer), `WebcamConfig.*` (settings page), menus, tree icon, settings |
 | 5c69cadaf | viewer reads MediaMTX's RTSPS as plain RTP/AVP (it offers SRTP/MIKEY and refuses GStreamer's SETUP) |
+| 4cc882209 | viewers read with their own relay login; "Watch camera" asks for one |
+| ddf38bd77 | the own login goes only to a grant URL on the viewer's own relay (host:port) |
+| 6a9d6b027 | protocol v1.1: gate tickets (`WebcamGate*`, `TestWebcamGate`), "Relay gate" setting |
+| 5775871a7 | portless relay means 8322 (the 554 production bug); clearer publish errors; sender preview |
 
-Tests: `TestWebcamCrypto`, `TestWebcamProtocol` and `TestWebcamMode`, all passing (31/31 in
-ctest). They include the RFC 7748, RFC 5869 and spec vectors, cross-checked against Python's
+Tests: `TestWebcamCrypto`, `TestWebcamProtocol`, `TestWebcamMode` and `TestWebcamGate`, all
+passing on 2026-10-27 (25, 28, 22, 20 cases). They include the RFC 7748, RFC 5869 and spec vectors, cross-checked against Python's
 `cryptography`.
 
 ## Measured
@@ -133,6 +186,11 @@ quality; leaving the page lets the camera go.
   `libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev`.
 
 ## Local test relay
+
+(Since 2026-10-27 there is also a gated variant: `mediamtx-gate.yml` behind mtx-gate, RTSPS
+`rtsps://127.0.0.1:18322` via the gate's proxy, gate API `https://127.0.0.1:19443/gate/v1`
+(set "Relay gate" to it), owners `desk`/`mumla` with passwords in `gate-passwords/`. Started by
+the user or the coordinator, not by agents.)
 
 `~/projects/webcam-test-mtx/`: the official MediaMTX v1.21.3 release (checksum verified), with
 `mediamtx.yml`, a test CA (`ca.crt`) and a server cert for localhost, 127.0.0.1 and
