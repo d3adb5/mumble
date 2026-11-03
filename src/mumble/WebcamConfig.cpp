@@ -12,6 +12,8 @@
 
 #include <QtWidgets/QFileDialog>
 
+#include <algorithm>
+
 const QString WebcamConfig::name = QLatin1String("WebcamConfig");
 
 static ConfigWidget *WebcamConfigNew(Settings &st) {
@@ -97,6 +99,7 @@ void WebcamConfig::load(const Settings &r) {
 	qcbEncoder->setCurrentIndex(encoder);
 	loadCheckBox(qcbOnDemand, r.bWebcamOnDemand);
 	loadCheckBox(qcbPreview, r.bWebcamPreview);
+	qcbLayout->setCurrentIndex(std::max(0, std::min(qcbLayout->count() - 1, r.iWebcamLayout)));
 
 	qleRelay->setText(r.qsWebcamRelay);
 	qlePublishUser->setText(r.qsWebcamPublishUser);
@@ -118,6 +121,7 @@ void WebcamConfig::save() const {
 	s.qsWebcamEncoder     = qcbEncoder->currentData().toString();
 	s.bWebcamOnDemand     = qcbOnDemand->isChecked();
 	s.bWebcamPreview      = qcbPreview->isChecked();
+	s.iWebcamLayout       = qcbLayout->currentIndex();
 	// Saved with the port it means, so what is shown is where the camera goes.
 	s.qsWebcamRelay = QString::fromStdString(Mumble::Webcam::withDefaultPort(qleRelay->text().trimmed().toStdString()));
 	s.qsWebcamPublishUser     = qlePublishUser->text();

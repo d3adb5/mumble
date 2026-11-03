@@ -15,6 +15,33 @@
 #include <QtWidgets/QMenu>
 #include <QtWidgets/QToolButton>
 
+#include <algorithm>
+
+void paintWebcamPicture(QPainter &painter, const QRect &rect, const QImage &frame, const QString &status,
+						const QString &title, bool showTitle) {
+	painter.fillRect(rect, Qt::black);
+
+	if (!frame.isNull()) {
+		const QSize scaled = frame.size().scaled(rect.size(), Qt::KeepAspectRatio);
+		const QRect target(rect.x() + (rect.width() - scaled.width()) / 2,
+						   rect.y() + (rect.height() - scaled.height()) / 2, scaled.width(), scaled.height());
+		painter.setRenderHint(QPainter::SmoothPixmapTransform);
+		painter.drawImage(target, frame);
+	}
+
+	painter.setPen(Qt::white);
+	if (!status.isEmpty()) {
+		painter.drawText(rect.adjusted(12, 12, -12, -12), Qt::AlignCenter | Qt::TextWordWrap, status);
+	}
+	if (!title.isEmpty() && (showTitle || frame.isNull())) {
+		const QFontMetrics metrics = painter.fontMetrics();
+		const QRect bar(rect.x(), rect.y(), rect.width(), metrics.height() + 12);
+		painter.fillRect(bar, QColor(0, 0, 0, 140));
+		painter.drawText(bar.adjusted(8, 0, -40, 0), Qt::AlignVCenter | Qt::AlignLeft,
+						 metrics.elidedText(title, Qt::ElideRight, std::max(0, bar.width() - 48)));
+	}
+}
+
 namespace {
 /// How close to an edge a press resizes rather than moves.
 constexpr int EDGE          = 8;
@@ -30,7 +57,8 @@ WebcamWindow::WebcamWindow(const QString &title, const QByteArray &geometry, QWi
 
 	m_close = new QToolButton(this);
 	m_close->setText(QStringLiteral("✕"));
-	m_close->setToolTip(tr("Close"));
+	m_closeLabel = tr("Close");
+	m_close->setToolTip(m_closeLabel);
 	m_close->setAutoRaise(true);
 	m_close->setCursor(Qt::ArrowCursor);
 	m_close->hide();
@@ -49,6 +77,11 @@ WebcamWindow::WebcamWindow(const QString &title, const QByteArray &geometry, QWi
 void WebcamWindow::setStatus(const QString &status) {
 	m_status = status;
 	update();
+}
+
+void WebcamWindow::setCloseLabel(const QString &label) {
+	m_closeLabel = label;
+	m_close->setToolTip(label);
 }
 
 void WebcamWindow::clearFrame() {
@@ -71,26 +104,7 @@ void WebcamWindow::setFrame(const QImage &image) {
 
 void WebcamWindow::paintEvent(QPaintEvent *) {
 	QPainter painter(this);
-	painter.fillRect(rect(), Qt::black);
-
-	if (!m_frame.isNull()) {
-		const QSize scaled = m_frame.size().scaled(size(), Qt::KeepAspectRatio);
-		const QRect target((width() - scaled.width()) / 2, (height() - scaled.height()) / 2, scaled.width(),
-						   scaled.height());
-		painter.setRenderHint(QPainter::SmoothPixmapTransform);
-		painter.drawImage(target, m_frame);
-	}
-
-	painter.setPen(Qt::white);
-	if (!m_status.isEmpty()) {
-		painter.drawText(rect().adjusted(12, 12, -12, -12), Qt::AlignCenter | Qt::TextWordWrap, m_status);
-	}
-	if (m_hovered || m_frame.isNull()) {
-		const QRect bar(0, 0, width(), fontMetrics().height() + 12);
-		painter.fillRect(bar, QColor(0, 0, 0, 140));
-		painter.drawText(bar.adjusted(8, 0, -40, 0), Qt::AlignVCenter | Qt::AlignLeft,
-						 fontMetrics().elidedText(m_title, Qt::ElideRight, bar.width() - 48));
-	}
+	paintWebcamPicture(painter, rect(), m_frame, m_status, m_title, m_hovered);
 }
 
 void WebcamWindow::fitTo(const QSize &picture) {
@@ -179,7 +193,7 @@ void WebcamWindow::contextMenuEvent(QContextMenuEvent *event) {
 	QAction *fit = menu.addAction(tr("Fit to picture"));
 	fit->setEnabled(!m_frame.isNull());
 	menu.addSeparator();
-	QAction *close  = menu.addAction(tr("Close"));
+	QAction *close  = menu.addAction(m_closeLabel);
 	QAction *chosen = menu.exec(event->globalPos());
 	if (chosen == close) {
 		closeByUser();

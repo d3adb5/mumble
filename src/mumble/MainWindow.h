@@ -73,6 +73,7 @@ public:
 };
 
 #ifdef USE_WEBCAM
+class WebcamArea;
 class WebcamManager;
 #endif
 
@@ -209,11 +210,18 @@ public:
 	WebcamManager *m_webcam = nullptr;
 
 protected:
-	QAction *qaSelfWebcam        = nullptr;
-	QAction *qaSelfWebcamPreview = nullptr;
-	QAction *qaUserWebcamWatch   = nullptr;
-	QAction *qaUserWebcamRevoke  = nullptr;
+	/// The camera area: our own camera, who watches it, and the cameras we watch.
+	QDockWidget *qdwWebcam         = nullptr;
+	WebcamArea *m_webcamArea       = nullptr;
+	QAction *qaSelfWebcam          = nullptr;
+	QAction *qaSelfWebcamArea      = nullptr;
+	QAction *qaUserWebcamWatch     = nullptr;
+	QAction *qaUserWebcamStopWatch = nullptr;
+	QAction *qaUserWebcamRevoke    = nullptr;
 	void setupWebcam();
+	/// "Share Camera" or "Stop Sharing Camera", as the share stands.
+	void updateWebcamShareAction();
+	void showWebcamArea();
 #endif
 
 	PTTButtonWidget *qwPTTButtonWidget;

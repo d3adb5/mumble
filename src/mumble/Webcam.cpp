@@ -9,9 +9,9 @@
 #include "Log.h"
 #include "MainWindow.h"
 #include "ServerHandler.h"
+#include "WebcamArea.h"
 #include "WebcamGate.h"
 #include "WebcamStream.h"
-#include "WebcamWindow.h"
 #include "Global.h"
 
 #include <QtCore/QReadLocker>
@@ -114,6 +114,41 @@ WebcamManager::~WebcamManager() {
 	serverDisconnected();
 }
 
+void WebcamManager::setArea(WebcamArea *area) {
+	m_area = area;
+	connect(area, &WebcamArea::startSharingRequested, this, [this] { startSharing(); });
+	connect(area, &WebcamArea::stopSharingRequested, this, [this] { stopSharing(); });
+	connect(area, &WebcamArea::revokeRequested, this, &WebcamManager::revoke);
+	connect(area, &WebcamArea::stopWatchRequested, this, &WebcamManager::stopWatching);
+	connect(area, &WebcamArea::askAnswered, this, &WebcamManager::answerAsk);
+}
+
+QList< unsigned int > WebcamManager::viewers() const {
+	return m_viewerOrder;
+}
+
+void WebcamManager::updateViewers() {
+	// The order keeps only who still watches.
+	m_viewerOrder.erase(std::remove_if(m_viewerOrder.begin(), m_viewerOrder.end(),
+									   [this](unsigned int session) { return !m_viewers.contains(session); }),
+						m_viewerOrder.end());
+	if (!m_area) {
+		return;
+	}
+	QList< QPair< unsigned int, QString > > list;
+	for (unsigned int session : m_viewerOrder) {
+		const ClientUser *user = ClientUser::get(session);
+		list << qMakePair(session, user ? user->qsName : tr("Someone"));
+	}
+	m_area->setViewers(list);
+}
+
+void WebcamManager::setWatchStatus(unsigned int session, const QString &status) {
+	if (m_area) {
+		m_area->setWatchStatus(session, status);
+	}
+}
+
 // -- plumbing ----------------------------------------------------------------------------------
 
 void WebcamManager::send(const QList< unsigned int > &sessions, const char *dataId, const std::string &data) {
@@ -200,12 +235,7 @@ void WebcamManager::userJoined(unsigned int session) {
 }
 
 void WebcamManager::userLeft(unsigned int session) {
-	if (m_asks.contains(session)) {
-		PendingAsk ask = m_asks.take(session);
-		if (ask.box) {
-			ask.box->deleteLater();
-		}
-	}
+	dropAsk(session);
 	m_pendingGrants.remove(session);
 	if (m_viewers.contains(session)) {
 		viewerGone(session, false);
@@ -219,12 +249,7 @@ void WebcamManager::serverDisconnected() {
 	for (unsigned int session : m_watches.keys()) {
 		endWatch(session, false);
 	}
-	for (PendingAsk &ask : m_asks) {
-		if (ask.box) {
-			ask.box->deleteLater();
-		}
-	}
-	m_asks.clear();
+	clearAsks();
 	m_pendingGrants.clear();
 	m_viewers.clear();
 	stopPublishing();
@@ -238,7 +263,10 @@ void WebcamManager::serverDisconnected() {
 	m_staleShares.clear();
 	m_shareClaimed    = false;
 	m_publishClaiming = false;
-	closePreview();
+	updateViewers();
+	if (m_area) {
+		m_area->setSharing(false);
+	}
 	m_path.clear();
 	m_key.clear();
 	if (m_sharing) {
@@ -289,8 +317,13 @@ bool WebcamManager::startSharing() {
 		self->setWebcamSharing(true);
 	}
 	broadcastShareState();
+	if (m_area) {
+		m_area->setSharing(true);
+		updateViewers();
+		updatePreviewStatus();
+	}
 	if (s.bWebcamPreview) {
-		showPreview();
+		emit areaWanted();
 	}
 	logInfo(tr("You are sharing your camera. Others can ask to watch it from your context menu."));
 	emit sharingChanged(true);
@@ -302,12 +335,11 @@ void WebcamManager::stopSharing(const QString &reason) {
 		return;
 	}
 	m_sharing = false;
-	for (PendingAsk &ask : m_asks) {
-		if (ask.box) {
-			ask.box->deleteLater();
-		}
+	// Nobody can be let in any more: whoever still asks hears so.
+	for (auto it = m_asks.constBegin(); it != m_asks.constEnd(); ++it) {
+		deny(it.key(), it->nonce, DENY_NOT_SHARING);
 	}
-	m_asks.clear();
+	clearAsks();
 	m_pendingGrants.clear();
 	m_viewers.clear();
 	stopPublishing();
@@ -321,7 +353,10 @@ void WebcamManager::stopSharing(const QString &reason) {
 	m_staleShares.clear();
 	m_shareClaimed    = false;
 	m_publishClaiming = false;
-	closePreview();
+	updateViewers();
+	if (m_area) {
+		m_area->setSharing(false);
+	}
 	m_path.clear();
 	m_key.clear();
 
@@ -392,8 +427,8 @@ bool WebcamManager::publishNow() {
 
 	m_publisher = std::make_unique< WebcamPublisher >();
 	connect(m_publisher.get(), &WebcamPipeline::frame, this, [this](const QImage &image) {
-		if (m_preview) {
-			m_preview->setFrame(image);
+		if (m_area) {
+			m_area->setOwnFrame(image);
 		}
 	});
 	connect(m_publisher.get(), &WebcamPipeline::failed, this, [this](const QString &message) { stopSharing(message); });
@@ -420,41 +455,18 @@ void WebcamManager::stopPublishing() {
 	updatePreviewStatus();
 }
 
-void WebcamManager::showPreview() {
-	if (!m_sharing) {
-		return;
-	}
-	if (!m_preview) {
-		m_preview = new WebcamWindow(tr("Your camera (only you see this)"), QByteArray(), nullptr);
-		connect(m_preview, &WebcamWindow::closedByUser, this, [this] { closePreview(); });
-		updatePreviewStatus();
-	}
-	m_preview->show();
-	m_preview->raise();
-	m_preview->activateWindow();
-}
-
 void WebcamManager::updatePreviewStatus() {
-	if (!m_preview) {
+	if (!m_area || !m_sharing) {
 		return;
 	}
 	if (m_publisher && m_publisher->isRunning()) {
 		// The first picture replaces this.
-		m_preview->setStatus(tr("Opening your camera…"));
+		m_area->setOwnStatus(tr("Opening your camera…"));
 		return;
 	}
-	m_preview->clearFrame();
-	m_preview->setStatus(Global::get().s.bWebcamOnDemand ? tr("Your camera stays off until someone watches it.")
+	m_area->clearOwnFrame();
+	m_area->setOwnStatus(Global::get().s.bWebcamOnDemand ? tr("Your camera stays off until someone watches it.")
 														 : tr("Your camera is off."));
-}
-
-void WebcamManager::closePreview() {
-	if (WebcamWindow *preview = m_preview) {
-		m_preview = nullptr;
-		preview->disconnect(this);
-		preview->close();
-		preview->deleteLater();
-	}
 }
 
 void WebcamManager::onRequest(unsigned int sender, const std::string &data) {
@@ -482,33 +494,93 @@ void WebcamManager::onRequest(unsigned int sender, const std::string &data) {
 		return;
 	}
 
-	if (m_asks.contains(sender) && m_asks[sender].box) {
-		m_asks[sender].box->deleteLater();
-	}
+	dropAsk(sender);
 	auto *box =
 		new QMessageBox(QMessageBox::Question, tr("Camera"), tr("%1 wants to watch your camera.").arg(userName(sender)),
 						QMessageBox::NoButton, Global::get().mw);
 	box->setTextFormat(Qt::RichText);
 	QPushButton *allow = box->addButton(tr("Allow"), QMessageBox::AcceptRole);
+	QPushButton *later = box->addButton(tr("Later"), QMessageBox::NoRole);
+	later->setToolTip(tr("Answer later, from the camera area. The request runs out after a minute."));
 	box->addButton(tr("Deny"), QMessageBox::RejectRole);
 	box->setAttribute(Qt::WA_DeleteOnClose);
 	box->setModal(false);
-	m_asks.insert(sender, { request->nonce, request->publicKey, box });
 
-	connect(box, &QMessageBox::buttonClicked, this, [this, sender, allow, box](QAbstractButton *button) {
+	PendingAsk ask{ request->nonce, request->publicKey, box, new QTimer(this) };
+	ask.expiry->setSingleShot(true);
+	connect(ask.expiry, &QTimer::timeout, this, [this, sender] {
+		if (m_asks.contains(sender)) {
+			dropAsk(sender);
+			logInfo(tr("%1's request to watch your camera ran out.").arg(userName(sender)));
+		}
+	});
+	ask.expiry->start(ANSWER_TIMEOUT_MS);
+	m_asks.insert(sender, ask);
+	m_askOrder << sender;
+	updateAsks();
+
+	connect(box, &QMessageBox::buttonClicked, this, [this, sender, allow, later, box](QAbstractButton *button) {
 		if (!m_asks.contains(sender) || m_asks[sender].box != box) {
 			return;
 		}
-		const PendingAsk ask = m_asks.take(sender);
-		if (!m_sharing) {
-			deny(sender, ask.nonce, DENY_NOT_SHARING);
-		} else if (button == allow) {
-			grant(sender, ask.nonce, ask.publicKey);
-		} else {
-			deny(sender, ask.nonce, DENY_DECLINED);
+		if (button == later) {
+			// Stays pending in the camera area until answered there or it runs out.
+			m_asks[sender].box = nullptr;
+			emit areaWanted();
+			return;
 		}
+		answerAsk(sender, button == allow);
 	});
 	box->show();
+}
+
+void WebcamManager::answerAsk(unsigned int session, bool allow) {
+	if (!m_asks.contains(session)) {
+		return;
+	}
+	const PendingAsk ask = m_asks.value(session);
+	dropAsk(session);
+	if (!m_sharing) {
+		deny(session, ask.nonce, DENY_NOT_SHARING);
+	} else if (allow) {
+		grant(session, ask.nonce, ask.publicKey);
+	} else {
+		deny(session, ask.nonce, DENY_DECLINED);
+	}
+}
+
+void WebcamManager::dropAsk(unsigned int session) {
+	if (!m_asks.contains(session)) {
+		return;
+	}
+	PendingAsk ask = m_asks.take(session);
+	m_askOrder.removeAll(session);
+	if (ask.box) {
+		ask.box->disconnect(this);
+		ask.box->deleteLater();
+	}
+	if (ask.expiry) {
+		ask.expiry->deleteLater();
+	}
+	updateAsks();
+}
+
+void WebcamManager::clearAsks() {
+	for (unsigned int session : m_asks.keys()) {
+		dropAsk(session);
+	}
+}
+
+void WebcamManager::updateAsks() {
+	if (!m_area) {
+		return;
+	}
+	QList< QPair< unsigned int, QString > > list;
+	for (unsigned int session : m_askOrder) {
+		const ClientUser *user = ClientUser::get(session);
+		list << qMakePair(session, user ? user->qsName : tr("Someone"));
+	}
+	m_area->setAsks(list);
 }
 
 void WebcamManager::grant(unsigned int session, const std::string &nonce, const Bytes &publicKey) {
@@ -531,6 +603,8 @@ void WebcamManager::grant(unsigned int session, const std::string &nonce, const 
 		m_viewers.insert(session, { publicKey, ticketId });
 		send({ session }, ID_WATCH_GRANT, *message);
 		if (!already) {
+			m_viewerOrder << session;
+			updateViewers();
 			logInfo(tr("%1 is watching your camera.").arg(userName(session)));
 		}
 	};
@@ -706,6 +780,7 @@ void WebcamManager::revoke(unsigned int session) {
 
 void WebcamManager::viewerGone(unsigned int session, bool sendRevoke) {
 	const Viewer gone = m_viewers.take(session);
+	updateViewers();
 	if (sendRevoke) {
 		send({ session }, ID_WATCH_REVOKE, encodeEmpty());
 	}
@@ -739,11 +814,9 @@ void WebcamManager::viewerGone(unsigned int session, bool sendRevoke) {
 // -- watching ----------------------------------------------------------------------------------
 
 void WebcamManager::watch(unsigned int session) {
-	if (Watch *existing = m_watches.value(session)) {
-		if (existing->window) {
-			existing->window->show();
-			existing->window->raise();
-			existing->window->activateWindow();
+	if (m_watches.contains(session)) {
+		if (!m_area || !m_area->raiseWatch(session)) {
+			emit areaWanted();
 		}
 		return;
 	}
@@ -766,14 +839,11 @@ void WebcamManager::watch(unsigned int session) {
 		return;
 	}
 	auto *watch = new Watch();
-	watch->window =
-		new WebcamWindow(tr("%1's camera").arg(user->qsName), Global::get().s.qbaWebcamWindowGeometry, nullptr);
-	// Every window restores the same geometry, so step each further one aside instead of
-	// stacking it exactly on top of the others.
-	const int cascade = static_cast< int >(m_watches.size()) * 32;
-	watch->window->move(watch->window->pos() - QPoint(cascade, cascade));
-	connect(watch->window, &WebcamWindow::closedByUser, this, [this, session] { endWatch(session, true); });
-	watch->window->show();
+	// Any number of cameras play side by side in the area, also while we share our own.
+	if (m_area) {
+		m_area->addWatch(session, user->qsName);
+	}
+	emit areaWanted();
 
 	watch->answerTimeout = new QTimer(this);
 	watch->answerTimeout->setSingleShot(true);
@@ -812,10 +882,8 @@ void WebcamManager::requestWatch(unsigned int session) {
 	watch->redeemed = false;
 	watch->attempts = 0;
 	watch->gateRefusedSince.invalidate();
-	if (watch->window) {
-		const ClientUser *user = ClientUser::get(session);
-		watch->window->setStatus(tr("Asking %1…").arg(user ? user->qsName : QString()));
-	}
+	const ClientUser *user = ClientUser::get(session);
+	setWatchStatus(session, tr("Asking %1…").arg(user ? user->qsName : QString()));
 	watch->answerTimeout->start(ANSWER_TIMEOUT_MS);
 	send({ session }, ID_WATCH_REQUEST, encodeWatchRequest({ nonce, keys->publicKey }));
 }
@@ -942,8 +1010,11 @@ void WebcamManager::connectWatch(unsigned int session) {
 	watch->stream   = std::make_unique< WebcamViewerStream >();
 	watch->stream->addKey(watch->secrets.kid, watch->secrets.key);
 
-	WebcamWindow *window = watch->window;
-	connect(watch->stream.get(), &WebcamViewerStream::frame, window, &WebcamWindow::setFrame);
+	connect(watch->stream.get(), &WebcamViewerStream::frame, this, [this, session](const QImage &image) {
+		if (m_area) {
+			m_area->setWatchFrame(session, image);
+		}
+	});
 	connect(watch->stream.get(), &WebcamPipeline::live, this, [this, session] {
 		if (Watch *w = m_watches.value(session)) {
 			w->attempts = 0;
@@ -960,9 +1031,7 @@ void WebcamManager::connectWatch(unsigned int session) {
 	connect(watch->stream.get(), &WebcamPipeline::ended, this,
 			[this, session] { scheduleRetry(session, tr("The stream paused.")); });
 
-	if (window) {
-		window->setStatus(tr("Connecting…"));
-	}
+	setWatchStatus(session, tr("Connecting…"));
 	WebcamViewerStream::Config config;
 	config.url       = QString::fromStdString(url);
 	config.user      = QString::fromStdString(login->user);
@@ -1008,8 +1077,8 @@ void WebcamManager::redeemWatch(unsigned int session, bool reconnect) {
 						 tr("%1's camera could not be reached: the relay refused the ticket.").arg(userName(session)));
 				return;
 			}
-			if (reconnect && w->window) {
-				w->window->setStatus(tr("Waiting for the camera…"));
+			if (reconnect) {
+				setWatchStatus(session, tr("Waiting for the camera…"));
 			}
 			armRetry(session, reconnect);
 			return;
@@ -1099,10 +1168,14 @@ void WebcamManager::scheduleRetry(unsigned int session, const QString &status) {
 				 tr("%1's camera could not be reached: %2").arg(userName(session), status.toHtmlEscaped()));
 		return;
 	}
-	if (watch->window) {
-		watch->window->setStatus(tr("Waiting for the camera…"));
-	}
+	setWatchStatus(session, tr("Waiting for the camera…"));
 	armRetry(session, true);
+}
+
+void WebcamManager::stopWatching(unsigned int session) {
+	if (m_watches.contains(session)) {
+		endWatch(session, true, tr("You stopped watching %1's camera.").arg(userName(session)));
+	}
 }
 
 void WebcamManager::endWatch(unsigned int session, bool notify, const QString &message) {
@@ -1116,11 +1189,8 @@ void WebcamManager::endWatch(unsigned int session, bool notify, const QString &m
 	discardStream(watch->stream);
 	delete watch->answerTimeout;
 	delete watch->retry;
-	if (watch->window) {
-		Global::get().s.qbaWebcamWindowGeometry = watch->window->saveGeometry();
-		watch->window->disconnect(this);
-		watch->window->close();
-		watch->window->deleteLater();
+	if (m_area) {
+		m_area->removeWatch(session);
 	}
 	// The keys, path and credentials go with it.
 	watch->keys.privateKey.assign(watch->keys.privateKey.size(), 0);

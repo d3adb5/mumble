@@ -66,6 +66,7 @@
 #include "VoiceRecorderDialog.h"
 #ifdef USE_WEBCAM
 #	include "Webcam.h"
+#	include "WebcamArea.h"
 #endif
 #include "Global.h"
 
@@ -1126,6 +1127,9 @@ QMenu *MainWindow::createPopupMenu() {
 		QMenu *menu = new QMenu(this);
 		menu->addAction(qdwChat->toggleViewAction());
 		menu->addAction(qdwLog->toggleViewAction());
+#ifdef USE_WEBCAM
+		menu->addAction(qdwWebcam->toggleViewAction());
+#endif
 		menu->addAction(qtIconToolbar->toggleViewAction());
 
 		return menu;
@@ -2352,8 +2356,7 @@ void MainWindow::on_qmSelf_aboutToShow() {
 #ifdef USE_WEBCAM
 	if (qaSelfWebcam) {
 		qaSelfWebcam->setEnabled(user != nullptr);
-		qaSelfWebcam->setChecked(m_webcam->isSharing());
-		qaSelfWebcamPreview->setEnabled(m_webcam->isSharing());
+		updateWebcamShareAction();
 	}
 #endif
 }
@@ -2362,34 +2365,47 @@ void MainWindow::on_qmSelf_aboutToShow() {
 void MainWindow::setupWebcam() {
 	m_webcam = new WebcamManager(this);
 
+	// The camera area, a dock like the log and the chat: it can be moved, closed and floated as a
+	// window of its own. Closing it never ends a share or a watch.
+	qdwWebcam = new QDockWidget(tr("Cameras"), this);
+	qdwWebcam->setObjectName(QLatin1String("qdwWebcam"));
+	qdwWebcam->setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable
+						   | QDockWidget::DockWidgetFloatable);
+	m_webcamArea = new WebcamArea(qdwWebcam);
+	qdwWebcam->setWidget(m_webcamArea);
+	m_webcam->setArea(m_webcamArea);
+	// The window's state was restored before the dock existed: where it was last time, if anywhere.
+	if (!restoreDockWidget(qdwWebcam)) {
+		addDockWidget(Qt::RightDockWidgetArea, qdwWebcam);
+		qdwWebcam->hide();
+	}
+	connect(m_webcam, &WebcamManager::areaWanted, this, &MainWindow::showWebcamArea);
+
 	qaSelfWebcam = new QAction(QIcon(QLatin1String("skin:actions/camera-web.svg")), tr("Share &Camera"), this);
 	qaSelfWebcam->setObjectName(QLatin1String("qaSelfWebcam"));
-	qaSelfWebcam->setCheckable(true);
-	qaSelfWebcam->setToolTip(tr("Let others ask to watch your camera"));
-	connect(qaSelfWebcam, &QAction::triggered, this, [this](bool checked) {
-		if (checked) {
-			m_webcam->startSharing();
-		} else {
+	connect(qaSelfWebcam, &QAction::triggered, this, [this] {
+		if (m_webcam->isSharing()) {
 			m_webcam->stopSharing();
+		} else {
+			m_webcam->startSharing();
 		}
-		qaSelfWebcam->setChecked(m_webcam->isSharing());
+		updateWebcamShareAction();
 	});
-	connect(m_webcam, &WebcamManager::sharingChanged, qaSelfWebcam, &QAction::setChecked);
+	connect(m_webcam, &WebcamManager::sharingChanged, this, [this] { updateWebcamShareAction(); });
+	updateWebcamShareAction();
 
-	// Only we see it: the picture branches off before it is encoded and sent.
-	qaSelfWebcamPreview = new QAction(tr("Show Camera &Preview"), this);
-	qaSelfWebcamPreview->setObjectName(QLatin1String("qaSelfWebcamPreview"));
-	qaSelfWebcamPreview->setToolTip(tr("Show your own camera while you share it"));
-	qaSelfWebcamPreview->setEnabled(false);
-	connect(qaSelfWebcamPreview, &QAction::triggered, m_webcam, &WebcamManager::showPreview);
-	connect(m_webcam, &WebcamManager::sharingChanged, qaSelfWebcamPreview, &QAction::setEnabled);
+	qaSelfWebcamArea = new QAction(tr("Show Ca&meras"), this);
+	qaSelfWebcamArea->setObjectName(QLatin1String("qaSelfWebcamArea"));
+	qaSelfWebcamArea->setToolTip(tr("Show the camera area: your own camera, who watches it, and the cameras you "
+									"watch"));
+	connect(qaSelfWebcamArea, &QAction::triggered, this, &MainWindow::showWebcamArea);
 
 	// Right after recording, in the block of things others can see us do.
 	const QList< QAction * > selfActions = qmSelf->actions();
 	const qsizetype recording            = selfActions.indexOf(qaRecording);
 	QAction *before = recording >= 0 && recording + 1 < selfActions.size() ? selfActions[recording + 1] : nullptr;
 	qmSelf->insertAction(before, qaSelfWebcam);
-	qmSelf->insertAction(before, qaSelfWebcamPreview);
+	qmSelf->insertAction(before, qaSelfWebcamArea);
 
 	// The target is the user the menu was opened on, stored when it opens.
 	qaUserWebcamWatch = new QAction(QIcon(QLatin1String("skin:actions/camera-web.svg")), tr("Watch &Camera"), this);
@@ -2397,10 +2413,28 @@ void MainWindow::setupWebcam() {
 	connect(qaUserWebcamWatch, &QAction::triggered, this,
 			[this] { m_webcam->watch(qaUserWebcamWatch->data().toUInt()); });
 
+	qaUserWebcamStopWatch = new QAction(tr("Stop Watching Their Camera"), this);
+	qaUserWebcamStopWatch->setObjectName(QLatin1String("qaUserWebcamStopWatch"));
+	connect(qaUserWebcamStopWatch, &QAction::triggered, this,
+			[this] { m_webcam->stopWatching(qaUserWebcamStopWatch->data().toUInt()); });
+
 	qaUserWebcamRevoke = new QAction(tr("Stop Letting Them Watch Your Camera"), this);
 	qaUserWebcamRevoke->setObjectName(QLatin1String("qaUserWebcamRevoke"));
 	connect(qaUserWebcamRevoke, &QAction::triggered, this,
 			[this] { m_webcam->revoke(qaUserWebcamRevoke->data().toUInt()); });
+}
+
+void MainWindow::updateWebcamShareAction() {
+	const bool sharing = m_webcam->isSharing();
+	qaSelfWebcam->setText(sharing ? tr("Stop Sharing &Camera") : tr("Share &Camera"));
+	qaSelfWebcam->setToolTip(sharing ? tr("Stop sharing your camera: everyone watching it is cut off")
+									 : tr("Let others ask to watch your camera"));
+}
+
+void MainWindow::showWebcamArea() {
+	m_webcamArea->reloadLayout();
+	qdwWebcam->show();
+	qdwWebcam->raise();
 }
 #endif
 
@@ -2551,8 +2585,14 @@ void MainWindow::qmUser_aboutToShow() {
 	// Watching needs no camera of one's own: only that the other side shares theirs.
 	if (p && !isSelf && (p->bWebcamSharing || m_webcam->isWatching(p->uiSession))) {
 		qmUser->addSeparator();
+		const bool watching = m_webcam->isWatching(p->uiSession);
+		qaUserWebcamWatch->setText(watching ? tr("Show Their &Camera") : tr("Watch &Camera"));
 		qaUserWebcamWatch->setData(p->uiSession);
 		qmUser->addAction(qaUserWebcamWatch);
+		if (watching) {
+			qaUserWebcamStopWatch->setData(p->uiSession);
+			qmUser->addAction(qaUserWebcamStopWatch);
+		}
 	}
 	if (p && !isSelf && m_webcam->isWatchedBy(p->uiSession)) {
 		qaUserWebcamRevoke->setData(p->uiSession);

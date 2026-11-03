@@ -319,6 +319,7 @@ const SettingsKey WEBCAM_CA_FILE_KEY          = { "webcam_ca_file" };
 const SettingsKey WEBCAM_GATE_URL_KEY         = { "webcam_gate_url" };
 const SettingsKey WEBCAM_ON_DEMAND_KEY        = { "webcam_on_demand" };
 const SettingsKey WEBCAM_PREVIEW_KEY          = { "webcam_preview" };
+const SettingsKey WEBCAM_LAYOUT_KEY           = { "webcam_layout" };
 const SettingsKey WEBCAM_VIEW_LATENCY_KEY     = { "webcam_view_latency" };
 const SettingsKey WEBCAM_WINDOW_GEOMETRY_KEY  = { "webcam_window_geometry" };
 

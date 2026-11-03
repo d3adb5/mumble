@@ -1154,6 +1154,8 @@ if(webcam)
 		PRIVATE
 			"Webcam.cpp"
 			"Webcam.h"
+			"WebcamArea.cpp"
+			"WebcamArea.h"
 			"WebcamConfig.cpp"
 			"WebcamConfig.h"
 			"WebcamConfig.ui"
@@ -1161,6 +1163,7 @@ if(webcam)
 			"WebcamGate.cpp"
 			"WebcamGate.h"
 			"WebcamGateApi.h"
+			"WebcamLayout.h"
 			"WebcamMode.h"
 			"WebcamProtocol.h"
 			"WebcamStream.cpp"

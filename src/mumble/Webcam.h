@@ -21,10 +21,10 @@
 
 class QMessageBox;
 class QTimer;
+class WebcamArea;
 class WebcamGate;
 class WebcamPublisher;
 class WebcamViewerStream;
-class WebcamWindow;
 
 /// Webcam sharing (protocol v1.1, shared with Mumla): this client's camera share and the cameras
 /// it watches. Signalling goes over PluginDataTransmission to single sessions; the video goes
@@ -40,6 +40,9 @@ public:
 	explicit WebcamManager(QObject *parent = nullptr);
 	~WebcamManager() override;
 
+	/// The camera area in the main window, where our own camera and the ones we watch are shown.
+	void setArea(WebcamArea *area);
+
 	// -- sharing -----------------------------------------------------------------------------
 	bool isSharing() const { return m_sharing; }
 	/// Announces the share, after checking the relay is configured. False (with a message
@@ -50,13 +53,16 @@ public:
 	/// Stops letting \p session watch: the stream moves to a fresh path and key, which only the
 	/// remaining viewers learn.
 	void revoke(unsigned int session);
-	/// Shows our own camera, as it is sent, in a window only we see. Only while sharing.
-	void showPreview();
+	/// The users watching our camera, in the order they were let in.
+	QList< unsigned int > viewers() const;
 
 	// -- watching ----------------------------------------------------------------------------
 	bool isWatching(unsigned int session) const { return m_watches.contains(session); }
-	/// Asks \p session to let us watch their camera, or raises the window if it is open.
+	/// Asks \p session to let us watch their camera, or shows it if we already do.
 	void watch(unsigned int session);
+	/// Stops watching \p session's camera (and tells them). Closing its window does not: the
+	/// camera then goes back into the camera area.
+	void stopWatching(unsigned int session);
 
 	// -- hooks -------------------------------------------------------------------------------
 	/// Plugin data with a "webcam/" data id from \p sender.
@@ -68,6 +74,8 @@ public:
 
 signals:
 	void sharingChanged(bool sharing);
+	/// The camera area should be shown: a camera was added to it, or the user asked for it.
+	void areaWanted();
 
 private:
 	struct Viewer {
@@ -85,13 +93,15 @@ private:
 		std::string nonce;
 		Mumble::Webcam::Bytes publicKey;
 		QPointer< QMessageBox > box;
+		/// The asker gives up after ANSWER_TIMEOUT_MS, and so does the ask: a late "allow" must not
+		/// let in someone who has left.
+		QTimer *expiry = nullptr;
 	};
 	struct Watch {
 		std::string nonce;
 		Mumble::Webcam::KeyPair keys;
 		bool granted = false;
 		Mumble::Webcam::StreamSecrets secrets;
-		QPointer< WebcamWindow > window;
 		std::unique_ptr< WebcamViewerStream > stream;
 		QTimer *answerTimeout = nullptr;
 		QTimer *retry         = nullptr;
@@ -124,6 +134,13 @@ private:
 	/// Mints a ticket for every viewer and sends it in a rekey, with the urls when \p moved.
 	void reticket(bool moved);
 	void deny(unsigned int session, const std::string &nonce, const char *reason);
+	/// Answers \p session's pending request to watch, from the prompt or the camera area.
+	void answerAsk(unsigned int session, bool allow);
+	/// Forgets \p session's pending request (and closes its prompt) without answering it.
+	void dropAsk(unsigned int session);
+	void clearAsks();
+	/// Shows the pending requests in the camera area.
+	void updateAsks();
 	/// The stream's secrets as one viewer receives them.
 	Mumble::Webcam::StreamSecrets currentSecrets() const;
 	/// A fresh path and key (and the next kid); the old ones are forgotten.
@@ -131,9 +148,11 @@ private:
 	/// Publishes if not already, after claiming the path where there is a gate. False (with the
 	/// share stopped) if it fails at once.
 	bool ensurePublishing();
-	/// Tells the preview whether the camera is on, and drops its picture when it is not.
+	/// Tells our own tile whether the camera is on, and drops its picture when it is not.
 	void updatePreviewStatus();
-	void closePreview();
+	/// Shows who watches our camera in the camera area.
+	void updateViewers();
+	void setWatchStatus(unsigned int session, const QString &status);
 	/// Opens the publish connection now.
 	bool publishNow();
 	void stopPublishing();
@@ -167,7 +186,11 @@ private:
 	std::uint8_t m_kid = 0;
 	std::unique_ptr< WebcamPublisher > m_publisher;
 	QHash< unsigned int, Viewer > m_viewers;
+	/// The order the viewers were let in, for the camera area.
+	QList< unsigned int > m_viewerOrder;
 	QHash< unsigned int, PendingAsk > m_asks;
+	/// The order the requests came in, for the camera area.
+	QList< unsigned int > m_askOrder;
 	QHash< unsigned int, PendingGrant > m_pendingGrants;
 	WebcamGate *m_gate  = nullptr;
 	GateMode m_gateMode = GateMode::Unknown;
@@ -182,8 +205,7 @@ private:
 	QTimer *m_shareRenew = nullptr;
 
 	QHash< unsigned int, Watch * > m_watches;
-	/// Our own camera, local only.
-	QPointer< WebcamWindow > m_preview;
+	QPointer< WebcamArea > m_area;
 };
 
 #endif
