@@ -218,6 +218,13 @@ std::vector< GstElement * > cameraChain(const QString &device, const Quality &qu
 	for (const char *factory : { "videoconvert", "videoscale", "videorate" }) {
 		chain.push_back(makeElement(factory, nullptr));
 	}
+	// Only ever drop frames, never duplicate them. A PipeWire camera stamps its buffers with its own
+	// clock (the time since boot, hours ahead of the segment), and a videorate allowed to duplicate
+	// fills that gap with copies of the first frame as fast as it can: the picture froze on that
+	// frame and two streaming threads sat at 100% CPU for as long as the share ran.
+	if (GstElement *rate = chain.back()) {
+		g_object_set(rate, "drop-only", TRUE, nullptr);
+	}
 	chain.push_back(capsFilter("rawcaps", rawCaps));
 	if (std::find(chain.begin(), chain.end(), nullptr) != chain.end()) {
 		for (GstElement *e : chain) {
