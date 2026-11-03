@@ -26,8 +26,9 @@ env:
   CMAKE_OPTIONS: -Dtests=ON -Dserver=OFF -Dwebrtc-audio-processing=ON -Ddeepfilternet=ON -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache
   CCACHE_COMPRESSLEVEL: 10
   # Build artifacts count against the repository's storage quota, which has run out before.
-  # They are superseded by the next push anyway, and the release keeps the packages for good.
-  ARTIFACT_RETENTION_DAYS: 7
+  # They only need to outlive the release job (which keeps the packages for good) and leave
+  # some time to look at a failed build.
+  ARTIFACT_RETENTION_DAYS: 3
 
 
 jobs:
@@ -282,13 +283,87 @@ jobs:
         path: build/*.deb
 
 
+  # Build the Arch Linux package (packaging/arch/PKGBUILD) once per CPU target, like the
+  # optimized repositories of CachyOS: generic x86-64, the x86-64-v2/v3/v4 levels and the
+  # Zen 3/4 microarchitectures. Every variant is the same "mumble-git" package, so installing
+  # one replaces any other. Built on Arch's own container, so it links against Arch's (and
+  # with that CachyOS') libraries.
+  package_arch:
+    needs: [ fetch_build_number ]
+
+    strategy:
+        fail-fast: false
+        matrix:
+            # The tests can only run where the runner's CPU can execute the build: every GitHub
+            # runner has AVX2 (x86-64-v3), but not necessarily AVX-512 or a Zen CPU.
+            include:
+              - { march: x86-64,    check: true }
+              - { march: x86-64-v2, check: true }
+              - { march: x86-64-v3, check: true }
+              - { march: x86-64-v4, check: false }
+              - { march: znver3,    check: false }
+              - { march: znver4,    check: false }
+
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+
+    steps:
+      # multilib provides lib32-gcc-libs, which the 32-bit overlay is built with.
+    - name: Prepare the container
+      shell: bash
+      run: |
+        printf '\n[multilib]\nInclude = /etc/pacman.d/mirrorlist\n' >> /etc/pacman.conf
+        pacman -Syu --noconfirm --needed git
+        # makepkg refuses to run as root; the build user installs the makedepends via sudo.
+        useradd --create-home builder
+        echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
+
+    - uses: actions/checkout@v6
+      with:
+          submodules: 'recursive'
+          fetch-depth: 1
+
+      # The PKGBUILD builds from this clone, which makepkg reads as the build user.
+    - name: Hand the checkout to the build user
+      shell: bash
+      run: |
+        chown -R builder: "$GITHUB_WORKSPACE"
+        sudo -u builder git config --global --add safe.directory '*'
+
+    - name: Build package
+      working-directory: packaging/arch
+      shell: bash
+      run: |
+        sudo -u builder env \
+          MUMBLE_MARCH='${{ matrix.march }}' \
+          MUMBLE_BUILD_NUMBER='${{ needs.fetch_build_number.outputs.build_number }}' \
+          makepkg --syncdeps --noconfirm ${{ !matrix.check && '--nocheck' || '' }}
+
+        # The package file name carries the epoch ("1:"), which is awkward in a download, and
+        # does not say which CPU it is built for. pacman reads both from the package itself.
+        pkg="$(ls mumble-git-[0-9]*.pkg.tar.zst)"
+        name="${pkg#mumble-git-*:}"
+        mv "$pkg" "mumble-git-${name%.pkg.tar.zst}-${{ matrix.march }}.pkg.tar.zst"
+        ls -l *.pkg.tar.zst
+
+    - name: Publish package
+      uses: actions/upload-artifact@v7
+      with:
+        name: 'Mumble-arch-${{ matrix.march }}'
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
+        # Already zstd-compressed
+        compression-level: 0
+        path: packaging/arch/mumble-git-*-${{ matrix.march }}.pkg.tar.zst
+
+
   # Every push to master becomes a GitHub release carrying the installable client
-  # packages: the macOS (arm64) disk image and the Ubuntu .deb of each targeted release. The tag reuses the exact version the builds were stamped
+  # packages: the macOS (arm64) disk image, the Ubuntu .deb of each targeted release and
+  # the Arch Linux package for each CPU target. The tag reuses the exact version the builds were stamped
   # with (mumble-version.py plus the monotonic build number), so it increments on every
   # push and always matches what the packages report about themselves.
   release:
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
-    needs: [ fetch_build_number, build, package_deb ]
+    needs: [ fetch_build_number, build, package_deb, package_arch ]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -315,15 +390,24 @@ jobs:
           label="${label#Mumble-}"; label="${label%-deb}"
           cp "$deb" "release/$(basename "$deb" .deb)_${label}.deb"
         done
+        find artifacts -path '*/Mumble-arch-*/*.pkg.tar.zst' -exec cp {} release/ \;
         ls -l release
 
     - name: Create release
       shell: bash
       run: |
         version="$(./scripts/mumble-version.py).${{ needs.fetch_build_number.outputs.build_number }}"
+        cat > notes.md <<EOF
+        Automated build of ${{ github.sha }}.
+
+        Arch Linux / CachyOS: pick the \`mumble-git-*.pkg.tar.zst\` for your CPU (on CachyOS, the one
+        matching your repositories) and install it with \`sudo pacman -U <file>\`: \`x86-64\` runs
+        anywhere, \`x86-64-v2\`/\`v3\`/\`v4\` need a CPU of that level (\`/lib/ld-linux-x86-64.so.2 --help\`
+        lists the supported ones), \`znver3\`/\`znver4\` are for AMD Zen 3/Zen 4 (and later).
+        EOF
         gh release create "v${version}" \
           --title "Mumble ${version}" \
-          --notes "Automated build of ${{ github.sha }}." \
+          --notes-file notes.md \
           --latest \
           release/*
       env:
