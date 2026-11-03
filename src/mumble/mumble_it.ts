@@ -670,6 +670,14 @@ Questo valore ti permette di impostare il numero massimo di utenti consentiti ne
         <translation>Informazioni su Mumble</translation>
     </message>
     <message>
+        <source>Third-party Dependencies</source>
+        <translation>Dipendenze di terze parti</translation>
+    </message>
+    <message>
+        <source>Depending on the build configuration, your version of Mumble might not depend on all of the listed entries</source>
+        <translation>In base alla configurazione di compilazione, la tua versione di Mumble potrebbe non dipendere da tutte le voci elencate</translation>
+    </message>
+    <message>
         <source>&amp;About Mumble</source>
         <translation>&amp;Informazioni su Mumble</translation>
     </message>
@@ -696,10 +704,6 @@ Questo valore ti permette di impostare il numero massimo di utenti consentiti ne
     <message>
         <source>Authors</source>
         <translation>Autori</translation>
-    </message>
-    <message>
-        <source>Third-party license agreements</source>
-        <translation>Accordi di licenze di terze parti</translation>
     </message>
     <message>
         <source>For a list of authors, please see &lt;a href=&quot;https://github.com/mumble-voip/mumble/graphs/contributors&quot;&gt;https://github.com/mumble-voip/mumble/graphs/contributors&lt;/a&gt;</source>
@@ -3695,6 +3699,18 @@ Nome del server. Questo è il nome che apparirà sulla tua lista dei server pref
         <source>Cancel</source>
         <translation>Annulla</translation>
     </message>
+    <message>
+        <source>Save password on this device</source>
+        <translation>Salva password su questo dispositivo</translation>
+    </message>
+    <message>
+        <source>Passwords can only be saved for servers in your favorites.</source>
+        <translation>Le password possono essere salvate solo per i server nei tuoi preferiti.</translation>
+    </message>
+    <message>
+        <source>Passwords can only be saved for servers in your favorites</source>
+        <translation>Le password possono essere salvate solo per i server nei tuoi preferiti</translation>
+    </message>
 </context>
 <context>
     <name>GlobalShortcut</name>
@@ -5209,6 +5225,14 @@ Questa impostazione si applica solo ai nuovi messaggi, quelli già mostrati mant
     <message>
         <source>Restore window geometry on startup</source>
         <translation>Ripristina geometria della finestra all&apos;avvio</translation>
+    </message>
+    <message>
+        <source>Whether to change the local volume adjustment for the selected user when scrolling the mouse wheel up (increase) or down (decrease) while Control is pressed.</source>
+        <translation>Se cambiare la regolazione del volume locale per l&apos;utente selezionato quando si scorre la rotella del mouse su (aumentare) o giù (diminuire) mentre Control viene premuto.</translation>
+    </message>
+    <message>
+        <source>CTRL + Scroll to change selected user&apos;s volume</source>
+        <translation>CTRL + Scorri per cambiare il volume dell&apos;utente selezionato</translation>
     </message>
 </context>
 <context>
@@ -7457,14 +7481,6 @@ contestuale del canale.</translation>
         <translation>Non inviare certificati al server e non salvare le password. (Non salvato).</translation>
     </message>
     <message>
-        <source>&lt;b&gt;This will suppress identity information from the client.&lt;/b&gt;&lt;p&gt;The client will not identify itself with a certificate, even if defined, and will not cache passwords for connections. This is primarily a test-option and is not saved.&lt;/p&gt;</source>
-        <translation>&lt;b&gt;Questo evita l&apos;invio di informazioni di identità da parte del client. &lt;/b&gt;&lt;p&gt; Il client non si identificherà con un certificato, anche se definito, e non salverà le password per le connessioni. Ciò è principalmente un&apos;opzione di prova e non viene salvata.&lt;/p&gt;</translation>
-    </message>
-    <message>
-        <source>Suppress certificate and password storage</source>
-        <translation>Disabilita conservazione certificati e password</translation>
-    </message>
-    <message>
         <source>&lt;b&gt;Type of proxy to connect through.&lt;/b&gt;&lt;br /&gt;This makes Mumble connect through a proxy for all outgoing connections. Note: Proxy tunneling forces Mumble into TCP compatibility mode, causing all voice data to be sent via the control channel.</source>
         <translation>&lt;b&gt;Tipo di proxy tramite cui connettersi.&lt;/b&gt;&lt;br /&gt;Ciò fà connettere Mumble attraverso un proxy per tutte le connessioni in uscita. Nota: il proxy tunneling forza Mumble nella modalita di compatibilità TCP, causando l&apos;invio di tutti i dati vocali tramite il canale di controllo.</translation>
     </message>
@@ -7605,6 +7621,14 @@ Previene l&apos;invio da parte del client di informazioni potenzialmente identif
     <message>
         <source>Proxy password</source>
         <translation>Password proxy</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;This will suppress identity information from the client.&lt;/b&gt;&lt;p&gt;The client will not identify itself with a certificate, even if defined. This is primarily a test-option and is not saved.&lt;/p&gt;</source>
+        <translation>&lt;b&gt;Questo sopprimerà le informazioni di identità dal client.&lt;/b&gt;&lt;p&gt;Il client non identificherà se stesso con un certificato, anche se definito. Questa è principalmente un&apos;opzione di test e non viene salvata.&lt;/p&gt;</translation>
+    </message>
+    <message>
+        <source>Suppress certificate information</source>
+        <translation>Sopprimi informazioni certificato</translation>
     </message>
 </context>
 <context>
@@ -8387,6 +8411,10 @@ Per aggiornare questi file all&apos;ultima versione, premi il pulsante sottostan
     <message>
         <source>Update for plugin &quot;%1&quot; failed due to too many redirects</source>
         <translation>Aggiornamento del plugin &quot;%1&quot; fallito a causa di eccessivi re-indirizzamenti</translation>
+    </message>
+    <message>
+        <source>Update for plugin &quot;%1&quot; failed because it redirected to a non-HTTPS URL (%2)</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Unable to download plugin update for &quot;%1&quot; from &quot;%2&quot; (HTTP status code %3)</source>

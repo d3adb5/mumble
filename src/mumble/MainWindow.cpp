@@ -73,7 +73,7 @@
 #	include "TaskList.h"
 #endif
 
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
 #	include "AppNap.h"
 #	include "TouchBar_macx.h"
 #endif
@@ -132,7 +132,7 @@ MainWindow::MainWindow(QWidget *p)
 	SvgIcon::addSvgPixmapsToIcon(qiTalkingWhisper, QLatin1String("skin:talking_whisper.svg"));
 	SvgIcon::addSvgPixmapsToIcon(m_iconInformation, QLatin1String("skin:Information_icon.svg"));
 
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
 	if (QFile::exists(QLatin1String("skin:mumble.icns")))
 		qiIcon.addFile(QLatin1String("skin:mumble.icns"));
 	else
@@ -520,7 +520,7 @@ void MainWindow::setupGui() {
 	setCentralWidget(qtvUsers);
 	setAcceptDrops(true);
 
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
 	QMenu *qmWindow = new QMenu(tr("&Window"), this);
 	menubar->insertMenu(qmHelp->menuAction(), qmWindow);
 #	if QT_VERSION >= QT_VERSION_CHECK(6, 4, 0)
@@ -605,7 +605,7 @@ void MainWindow::setupGui() {
 
 	setShowDockTitleBars((Global::get().s.wlWindowLayout == Settings::LayoutCustom) && !Global::get().s.bLockLayout);
 
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
 	// Workaround for QTBUG-3116 -- using a unified toolbar on Mac OS X
 	// and using restoreGeometry before the window has updated its frameStrut
 	// causes the MainWindow to jump around on screen on launch.  Workaround
@@ -694,7 +694,7 @@ void MainWindow::setupGui() {
 
 	setupView(false);
 
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
 	setWindowOpacity(1.0f);
 #endif
 }
@@ -859,7 +859,7 @@ void MainWindow::hideEvent(QHideEvent *e) {
 void MainWindow::showEvent(QShowEvent *e) {
 	QMainWindow::showEvent(e);
 
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
 	// The native window exists by now; a no-op if the bar is already in place.
 	MUInstallTouchBar(this);
 #endif
@@ -953,7 +953,7 @@ void MainWindow::updateAudioToolTips() {
 	else
 		qaAudioDeaf->setToolTip(tr("Deafen yourself"));
 
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
 	MUUpdateTouchBar();
 #endif
 }
@@ -983,7 +983,7 @@ void MainWindow::updateNoiseCancelComboBox(Settings::NoiseCancel newMode) {
 		qcbNoiseCancel->setCurrentIndex(index);
 	}
 
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
 	MUUpdateTouchBar();
 #endif
 }
@@ -1109,7 +1109,7 @@ void MainWindow::populateEchoCancelComboBox() {
 	// stereo transmission.
 	qcbEchoCancel->setEnabled(hasUsableOption && !Global::get().s.bStereoInput);
 
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
 	MUUpdateTouchBar();
 #endif
 }
@@ -2586,7 +2586,7 @@ void MainWindow::qmUser_aboutToShow() {
 		qmUser->addAction(qaAudioDeaf);
 	}
 
-#ifndef Q_OS_MAC
+#ifndef Q_OS_MACOS
 	if (Global::get().s.bMinimalView) {
 		qmUser->addSeparator();
 		qmUser->addMenu(qmServer);
@@ -3129,7 +3129,7 @@ void MainWindow::qmChannel_aboutToShow() {
 		qmChannel->addAction(qaChannelPin);
 	}
 
-#ifndef Q_OS_MAC
+#ifndef Q_OS_MACOS
 	if (Global::get().s.bMinimalView) {
 		qmChannel->addSeparator();
 		qmChannel->addMenu(qmServer);
@@ -4368,7 +4368,7 @@ void MainWindow::serverConnected() {
 	Global::get().uiSession    = 0;
 	Global::get().pPermissions = ChanACL::None;
 
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
 	// Suppress AppNap while we're connected to a server.
 	MUSuppressAppNap(true);
 #endif
@@ -4441,7 +4441,7 @@ void MainWindow::serverDisconnected(QAbstractSocket::SocketError err, QString re
 	qtvUsers->setCurrentIndex(QModelIndex());
 	qteChat->setEnabled(false);
 
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
 	// Remove App Nap suppression now that we're disconnected.
 	MUSuppressAppNap(false);
 #endif
@@ -4874,8 +4874,9 @@ void MainWindow::openServerConnectDialog(bool autoconnect) {
 	ConnectDialog *cd = new ConnectDialog(this, autoconnect);
 	int res           = cd->exec();
 
-	if (cd->qsServer.isEmpty() || (cd->usPort == 0) || cd->qsUsername.isEmpty())
+	if (cd->qsServer.isEmpty() || (cd->usPort == 0) || cd->qsUsername.isEmpty()) {
 		res = QDialog::Rejected;
+	}
 
 	if (res == QDialog::Accepted) {
 		recreateServerHandler();

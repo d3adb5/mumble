@@ -42,6 +42,7 @@
 #endif
 
 #ifdef Q_OS_WIN
+#	include <delayimp.h>
 #	include <qos2.h>
 #else
 #	include <pwd.h>
@@ -54,12 +55,45 @@ std::unique_ptr< MetaParams > Meta::mp;
 
 #ifdef Q_OS_WIN
 HANDLE Meta::hQoS = nullptr;
+
+static HANDLE loadQoS() {
+	HRESULT res = E_FAIL;
+
+	// We don't support delay-loading QoS on MinGW. Only enable it for MSVC.
+#	ifdef _MSC_VER
+	__try {
+		res = __HrLoadAllImportsForDll("qwave.dll");
+	}
+
+	__except (EXCEPTION_EXECUTE_HANDLER) {
+		res = E_FAIL;
+	}
+#	endif
+
+	if (!SUCCEEDED(res)) {
+		qWarning("Meta: Failed to load qWave.dll, no QoS available");
+		return nullptr;
+	}
+
+	qInfo("Meta: QOS2 loaded");
+
+	QOS_VERSION ver{ .MajorVersion = 1, .MinorVersion = 0 };
+
+	HANDLE handle;
+	if (!QOSCreateHandle(&ver, &handle)) {
+		qWarning("Meta: Failed to create QOS2 handle");
+		return nullptr;
+	}
+
+	return handle;
+}
 #endif
 
 MetaParams::MetaParams() {
-	qsPassword = QString();
-	usPort     = DEFAULT_MUMBLE_PORT;
-	iTimeout   = 30;
+	qsPassword       = QString();
+	usPort           = DEFAULT_MUMBLE_PORT;
+	iTimeout         = 30;
+	handshakeTimeout = std::chrono::seconds(10);
 	// This represents the maximum possible bandwidth using 10 ms audio TCP packets with position data
 	// (restricted by the maximum bitrate Opus supports)
 	// 558000 = 510000 (Opus) + 9600 (position) + 38400 (TCP overhead)
@@ -83,6 +117,7 @@ MetaParams::MetaParams() {
 	iDBPort                    = 0;
 	qsDBDriver                 = "SQLITE";
 	qsLogfile                  = "mumble-server.log";
+	logSys                     = "mumble-server";
 
 	iLogDays = 31;
 
@@ -107,8 +142,8 @@ MetaParams::MetaParams() {
 	iChannelNestingLimit = 10;
 	iChannelCountLimit   = 1000;
 
-	qrUserName    = QRegularExpression(QLatin1String("[ -=\\w\\[\\]\\{\\}\\(\\)\\@\\|\\.]+"));
-	qrChannelName = QRegularExpression(QLatin1String("[ -=\\w\\#\\[\\]\\{\\}\\(\\)\\@\\|]+"));
+	userNamePattern    = QLatin1String("[ -=\\w\\[\\]\\{\\}\\(\\)\\@\\|\\.]+");
+	channelNamePattern = QLatin1String("[ -=\\w\\#\\[\\]\\{\\}\\(\\)\\@\\|]+");
 
 	iMessageLimit = 1;
 	iMessageBurst = 5;
@@ -191,7 +226,7 @@ void MetaParams::read(QString fname) {
 		datapaths << QDir::homePath() + QLatin1String("/.config/Mumble");
 #endif
 
-#if defined(Q_OS_MAC)
+#if defined(Q_OS_MACOS)
 		/* Old Mac data path. */
 		datapaths << QDir::homePath() + QLatin1String("/Library/Preferences/Mumble/");
 #endif
@@ -217,6 +252,10 @@ void MetaParams::read(QString fname) {
 		if (qsAbsSettingsFilePath.isEmpty()) {
 			qdBasePath            = QDir(datapaths.at(0));
 			qsAbsSettingsFilePath = qdBasePath.absolutePath() + QLatin1String("/mumble-server.ini");
+
+			if (!qdBasePath.exists()) {
+				qdBasePath.mkpath(".");
+			}
 		}
 	} else {
 		QFile f(fname);
@@ -280,10 +319,12 @@ void MetaParams::read(QString fname) {
 		qlBind << QHostAddress(QHostAddress::Any);
 	}
 
-	qsPassword            = typeCheckedFromSettings("serverpassword", qsPassword);
-	usPort                = static_cast< unsigned short >(typeCheckedFromSettings("port", static_cast< uint >(usPort)));
-	iTimeout              = typeCheckedFromSettings("timeout", iTimeout);
-	iMaxTextMessageLength = typeCheckedFromSettings("textmessagelength", iMaxTextMessageLength);
+	qsPassword = typeCheckedFromSettings("serverpassword", qsPassword);
+	usPort     = static_cast< unsigned short >(typeCheckedFromSettings("port", static_cast< uint >(usPort)));
+	iTimeout   = typeCheckedFromSettings("timeout", iTimeout);
+	handshakeTimeout =
+		std::chrono::seconds(typeCheckedFromSettings("handshaketimeout", static_cast< int >(handshakeTimeout.count())));
+	iMaxTextMessageLength      = typeCheckedFromSettings("textmessagelength", iMaxTextMessageLength);
 	iMaxImageMessageLength     = typeCheckedFromSettings("imagemessagelength", iMaxImageMessageLength);
 	legacyPasswordHash         = typeCheckedFromSettings("legacypasswordhash", legacyPasswordHash);
 	kdfIterations              = typeCheckedFromSettings("kdfiterations", -1);
@@ -320,6 +361,7 @@ void MetaParams::read(QString fname) {
 	iLogDays = typeCheckedFromSettings("logdays", iLogDays);
 
 	qsLogfile = typeCheckedFromSettings("logfile", qsLogfile);
+	logSys    = typeCheckedFromSettings("logsys", logSys);
 	qsPid     = typeCheckedFromSettings("pidfile", qsPid);
 
 	qsRegName     = typeCheckedFromSettings("registerName", qsRegName);
@@ -381,8 +423,8 @@ void MetaParams::read(QString fname) {
 	}
 #endif
 
-	qrUserName    = QRegularExpression(typeCheckedFromSettings("username", qrUserName.pattern()));
-	qrChannelName = QRegularExpression(typeCheckedFromSettings("channelname", qrChannelName.pattern()));
+	userNamePattern    = typeCheckedFromSettings("username", userNamePattern);
+	channelNamePattern = typeCheckedFromSettings("channelname", channelNamePattern);
 
 	iMessageLimit = typeCheckedFromSettings< unsigned int >("messagelimit", 1);
 	iMessageBurst = typeCheckedFromSettings< unsigned int >("messageburst", 5);
@@ -434,8 +476,8 @@ void MetaParams::read(QString fname) {
 	qmConfig.insert(QLatin1String("certificate"), QString::fromUtf8(qscCert.toPem()));
 	qmConfig.insert(QLatin1String("key"), QString::fromUtf8(qskKey.toPem()));
 	qmConfig.insert(QLatin1String("obfuscate"), bObfuscate ? QLatin1String("true") : QLatin1String("false"));
-	qmConfig.insert(QLatin1String("username"), qrUserName.pattern());
-	qmConfig.insert(QLatin1String("channelname"), qrChannelName.pattern());
+	qmConfig.insert(QLatin1String("username"), userNamePattern);
+	qmConfig.insert(QLatin1String("channelname"), channelNamePattern);
 	qmConfig.insert(QLatin1String("certrequired"), bCertRequired ? QLatin1String("true") : QLatin1String("false"));
 	qmConfig.insert(QLatin1String("forceExternalAuth"),
 					bForceExternalAuth ? QLatin1String("true") : QLatin1String("false"));
@@ -656,22 +698,8 @@ bool MetaParams::loadSSLSettings() {
 
 Meta::Meta(const ::mumble::db::ConnectionParameter &connectParam) : dbWrapper(connectParam) {
 #ifdef Q_OS_WIN
-	QOS_VERSION qvVer;
-	qvVer.MajorVersion = 1;
-	qvVer.MinorVersion = 0;
-
-	hQoS = nullptr;
-
-	HMODULE hLib = LoadLibrary(L"qWave.dll");
-	if (!hLib) {
-		qWarning("Meta: Failed to load qWave.dll, no QoS available");
-	} else {
-		FreeLibrary(hLib);
-		if (!QOSCreateHandle(&qvVer, &hQoS))
-			qWarning("Meta: Failed to create QOS2 handle");
-		else
-			Connection::setQoS(hQoS);
-	}
+	hQoS = loadQoS();
+	Connection::setQoS(hQoS);
 #endif
 }
 

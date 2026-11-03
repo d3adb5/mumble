@@ -45,19 +45,25 @@ static void qtMessageHandler(const QtMsgType type, const QMessageLogContext &, c
 			break;
 		case QtFatalMsg:
 			log::fatal("{}", qPrintable(msg));
-			break;
 	}
 }
 
-void log::addSink(std::shared_ptr< spdlog::sinks::sink > sink) {
+void log::addSink(SinkPtr sink) {
 	if (!masterSink) {
 		log::fatal("Attempted to addSink before master sink has been initialized");
-		return;
 	}
 
 	sink->set_pattern("%^<%L>%$%Y-%m-%d %H:%M:%S.%e %v");
 
 	masterSink->add_sink(std::move(sink));
+}
+
+void log::removeSink(SinkPtr sink) {
+	if (!masterSink) {
+		log::fatal("Attempted to removeSink before master sink has been initialized");
+	}
+
+	masterSink->remove_sink(std::move(sink));
 }
 
 void log::init(spdlog::level::level_enum logLevel) {
@@ -71,6 +77,8 @@ void log::init(spdlog::level::level_enum logLevel) {
 	auto logger = std::make_shared< spdlog::logger >(MainLoggerName, masterSink);
 
 	logger->set_level(logLevel);
+	// Flush to log file immediately with info or higher severity messages.
+	logger->flush_on(spdlog::level::info);
 
 	set_default_logger(std::move(logger));
 

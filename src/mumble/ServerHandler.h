@@ -32,6 +32,7 @@
 
 #define SERVERSEND_EVENT 3501
 
+#include "HostAddress.h"
 #include "Mumble.pb.h"
 #include "MumbleProtocol.h"
 #include "ServerAddress.h"
@@ -40,6 +41,7 @@
 #include <memory>
 
 class Connection;
+class CryptState;
 class Database;
 class PacketDataStream;
 class QUdpSocket;
@@ -106,8 +108,8 @@ protected:
 	DWORD dwFlowUDP;
 #endif
 
-	QHostAddress qhaRemote;
-	QHostAddress qhaLocal;
+	HostAddress qhaRemote;
+	HostAddress qhaLocal;
 	QUdpSocket *qusUdp;
 	QMutex qmUdp;
 
@@ -132,7 +134,7 @@ protected:
 
 	/// Re-evaluates whether the UDP path is still carrying traffic, from the change in the
 	/// crypt counters since the previous ping rather than their absolute values.
-	void updateVoiceLink(const ConnectionPtr &connection);
+	void updateVoiceLink();
 	/// Switches voice between the UDP socket and the TCP tunnel, telling the server about it.
 	void setUdpMode(bool useUdp, const QString &warning);
 	/// Re-opens the UDP socket, giving us a new source port. Returns false when re-binding is
@@ -150,6 +152,7 @@ public:
 	QList< QSslError > qlErrors;
 	QList< QSslCertificate > qscCert;
 	QSslCipher qscCipher;
+	std::unique_ptr< CryptState > csCrypt;
 	ConnectionPtr cConnection;
 	QByteArray qbaDigest;
 	std::shared_ptr< VoiceRecorder > recorder;

@@ -7,20 +7,11 @@
 #include "EnvUtils.h"
 #include "ExceptionUtils.h"
 #include "License.h"
-#include "LogEmitter.h"
+#include "Logger.h"
 #include "Meta.h"
 #include "SSL.h"
 #include "ServerApplication.h"
 #include "Version.h"
-
-#include <QSslSocket>
-
-#include <cassert>
-#include <csignal>
-#include <fstream>
-#include <iostream>
-
-#include <nlohmann/json.hpp>
 
 #ifdef Q_OS_WIN
 #	include "About.h"
@@ -29,134 +20,70 @@
 #	include "UnixMurmur.h"
 #endif
 
+#include <cassert>
+#include <csignal>
+#include <fstream>
+#include <iostream>
+#include <optional>
+#include <sstream>
+#include <tuple>
+
+#include <QSslSocket>
+
+#include <nlohmann/json.hpp>
+
 #include <openssl/crypto.h>
 
+#include <spdlog/sinks/dist_sink.h>
+#include <spdlog/sinks/rotating_file_sink.h>
+
 #ifdef Q_OS_WIN
+#	include <spdlog/sinks/win_eventlog_sink.h>
+
 #	include <intrin.h>
 #else
-#	include <fcntl.h>
-#	include <sys/syslog.h>
-#endif
+#	include <spdlog/sinks/syslog_sink.h>
 
-#include <optional>
-#include <tuple>
+#	include <fcntl.h>
+#	include <unistd.h>
+#endif
 
 #include <CLI/CLI.hpp>
 
-extern QFile *qfLog;
-
-static bool bVerbose = false;
-#ifdef QT_NO_DEBUG
-static bool detach = true;
-#else
-static bool detach = false;
-#endif
-
-#ifdef Q_OS_UNIX
-static UnixMurmur *unixMurmur = nullptr;
-#endif
+using namespace mumble;
 
 extern Meta *meta;
 
-static LogEmitter le;
-
 static QStringList qlErrors;
 
-static void murmurMessageOutputQString(QtMsgType type, const QString &msg) {
-#ifdef Q_OS_UNIX
-	if (unixMurmur->logToSyslog) {
-		int level;
-		switch (type) {
-			case QtDebugMsg:
-				level = LOG_DEBUG;
-				break;
-			case QtWarningMsg:
-				level = LOG_WARNING;
-				break;
-			case QtCriticalMsg:
-				level = LOG_CRIT;
-				break;
-			case QtFatalMsg:
-			default:
-				level = LOG_ALERT;
-				break;
-		}
-		syslog(level, "%s", qPrintable(msg));
-		if (type == QtFatalMsg) {
-			exit(1);
-		}
-		return;
-	}
-#endif
-
-	char c;
-	switch (type) {
-		case QtDebugMsg:
-			if (!bVerbose)
-				return;
-			c = 'D';
-			break;
-		case QtWarningMsg:
-			c = 'W';
-			break;
-		case QtCriticalMsg:
-			c = 'C';
-			break;
-		case QtFatalMsg:
-			c = 'F';
-			break;
-		default:
-			c = 'X';
-	}
-	QString m = QString::fromLatin1("<%1>%2 %3")
-					.arg(QChar::fromLatin1(c))
-					.arg(QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz"))
-					.arg(msg);
-
-	if (!qfLog || !qfLog->isOpen()) {
-#ifdef Q_OS_UNIX
-		if (!detach)
-			fprintf(stderr, "%s\n", qPrintable(m));
-		else
-			qlErrors << m;
+void initLog(const bool verbose) {
+#ifdef QT_NO_DEBUG
+	log::init(verbose ? spdlog::level::debug : spdlog::level::info);
 #else
-		qlErrors << m;
-#	ifndef QT_NO_DEBUG
-		fprintf(stderr, "%s\n", qPrintable(m));
-#	endif
+	log::init(verbose ? spdlog::level::trace : spdlog::level::debug);
 #endif
-	} else {
-		if (!qlErrors.isEmpty()) {
-			for (const QString &e : qlErrors) {
-				qfLog->write(e.toUtf8());
-				qfLog->write("\n");
-			}
-			qlErrors.clear();
-		}
-		qfLog->write(m.toUtf8());
-		qfLog->write("\n");
-		qfLog->flush();
-	}
-	le.addLogEntry(m);
-	if (type == QtFatalMsg) {
-#ifdef Q_OS_UNIX
-		if (detach) {
-			if (qlErrors.isEmpty())
-				qlErrors << msg;
-			qlErrors << QString();
-			m = qlErrors.join(QLatin1String("\n"));
-			fprintf(stderr, "%s", qPrintable(m));
-		}
+	if (!Meta::mp->logSys.isEmpty()) {
+		// Set up system log
+		const auto id = Meta::mp->logSys.toStdString();
+#ifdef Q_OS_WIN
+		using SysSink = spdlog::sinks::win_eventlog_sink_st;
+		log::addSink(std::make_shared< SysSink >(id));
 #else
-		::MessageBoxA(nullptr, qPrintable(m), "Murmur", MB_OK | MB_ICONWARNING);
+		using SysSink = spdlog::sinks::syslog_sink_st;
+		log::addSink(std::make_shared< SysSink >(id, LOG_PID, LOG_DAEMON, true));
 #endif
-		exit(1);
 	}
-}
 
-static void murmurMessageOutputWithContext(QtMsgType type, const QMessageLogContext &ctx, const QString &msg) {
-	Q_UNUSED(ctx);
-	murmurMessageOutputQString(type, msg);
+	if (!Meta::mp->qsLogfile.isEmpty()) {
+		// Set up file log
+		using FileSink = spdlog::sinks::rotating_file_sink_st;
+		// 5MB
+		static constexpr std::size_t maxSize  = 5 * 1024 * 1024;
+		static constexpr std::size_t maxFiles = 3;
+
+		const auto filePath = Meta::mp->qsLogfile.toStdString();
+		log::addSink(std::make_shared< FileSink >(filePath, maxSize, maxFiles));
+	}
 }
 
 #ifdef USE_ICE
@@ -176,12 +103,7 @@ void cleanup(int signum) {
 	IceStop();
 #endif
 
-	delete qfLog;
-	qfLog = nullptr;
-
 	delete meta;
-
-	qInstallMessageHandler(nullptr);
 
 #ifdef Q_OS_UNIX
 	if (!Meta::mp->qsPid.isEmpty()) {
@@ -201,7 +123,7 @@ struct CLIOptions {
 	std::tuple< std::string, std::optional< unsigned int > > supwSrv;
 	std::optional< unsigned int > disableSuSrv;
 	bool verboseLogging = false;
-	bool cliDetach      = detach;
+	bool detach         = false;
 	bool wipeSsl        = false;
 	bool wipeLogs       = false;
 	bool logGroups      = false;
@@ -211,10 +133,8 @@ struct CLIOptions {
 	bool printLicense            = false;
 	bool printThirdPartyLicenses = false;
 
-#ifdef Q_OS_UNIX
 	bool limits = false;
 	std::optional< unsigned int > readSupwSrv;
-#endif
 
 	static constexpr const char *const CLI_ABOUT_SECTION          = "About";
 	static constexpr const char *const CLI_LOGGING_SECTION        = "Logging";
@@ -271,7 +191,7 @@ CLIOptions parseCLI(int argc, char **argv) {
 
 	app.add_flag("-v,--verbose", options.verboseLogging, "Use verbose logging (include debug-logs).")
 		->group(CLIOptions::CLI_LOGGING_SECTION);
-	app.add_flag("--detach,!--no-detach,--background,!--foreground", options.cliDetach,
+	app.add_flag("--detach,!--no-detach,--background,!--foreground", options.detach,
 				 "Whether to run in detached/background mode. In this mode, the program will detach and run as an "
 				 "independent process in the background. Furthermore, logs will be written to the database instead of "
 				 "to the console.")
@@ -303,17 +223,17 @@ CLIOptions parseCLI(int argc, char **argv) {
 		app.exit(e, info_stream, error_stream);
 
 		if (e.get_exit_code() != static_cast< int >(CLI::ExitCodes::Success)) {
-			const std::string err  = error_stream.str();
-			const std::string info = info_stream.str();
-
-			if (!err.empty()) {
-				std::cerr << err;
+			std::string msg = error_stream.str();
+			if (!msg.empty() && !info_stream.str().empty()) {
+				msg += "\n";
 			}
-			if (!info.empty()) {
-				std::cerr << info;
+			msg += info_stream.str();
+
+			if (!msg.empty()) {
+				std::cerr << msg << std::endl;
 			}
 		} else {
-			std::cout << info_stream.str();
+			std::cout << info_stream.str() << std::endl;
 		}
 
 		options.quit     = true;
@@ -356,11 +276,10 @@ int main(int argc, char **argv) {
 		icon.addFile(QLatin1String(":/murmur.64x64.png"));
 		a.setWindowIcon(icon);
 #else
-#	ifndef Q_OS_MAC
+#	ifndef Q_OS_MACOS
 		EnvUtils::setenv(QLatin1String("AVAHI_COMPAT_NOWARN"), QLatin1String("1"));
 #	endif
 		UnixMurmur unixhandler;
-		unixMurmur = &unixhandler;
 		unixhandler.initialcap();
 #endif
 		a.setApplicationName("Murmur");
@@ -372,11 +291,6 @@ int main(int argc, char **argv) {
 
 		MumbleSSL::initialize();
 
-		qInstallMessageHandler(murmurMessageOutputWithContext);
-
-#ifdef Q_OS_WIN
-		Tray tray(nullptr, &le);
-#endif
 		CLIOptions cli_options = parseCLI(argc, argv);
 		if (cli_options.quit)
 			return cli_options.exitCode;
@@ -387,7 +301,7 @@ int main(int argc, char **argv) {
 			ad.exec();
 			return 0;
 #else
-			qInfo("%s\n", qPrintable(License::license()));
+			std::cout << License::license().toStdString() << std::endl;
 			return 0;
 #endif
 		} else if (cli_options.printAuthors) {
@@ -396,8 +310,8 @@ int main(int argc, char **argv) {
 			ad.exec();
 			return 0;
 #else
-			qInfo("%s\n",
-				  "For a list of authors, please see https://github.com/mumble-voip/mumble/graphs/contributors");
+			std::cout << "For a list of authors, please see https://github.com/mumble-voip/mumble/graphs/contributors"
+					  << std::endl;
 			return 0;
 #endif
 		} else if (cli_options.printThirdPartyLicenses) {
@@ -406,25 +320,21 @@ int main(int argc, char **argv) {
 			ad.exec();
 			return 0;
 #else
-			qInfo("%s", qPrintable(License::printableThirdPartyLicenseInfo()));
+			std::cout << License::printableThirdPartyLicenseInfo().toStdString() << std::endl;
 			return 0;
 #endif
 		}
 
-		detach          = cli_options.cliDetach;
 		QString inifile = QString::fromStdString(cli_options.iniFile.value_or(""));
 		QString supw;
-		bool disableSu     = false;
-		bool wipeSsl       = cli_options.wipeSsl;
-		bool wipeLogs      = cli_options.wipeLogs;
-		unsigned int sunum = 0;
-#ifdef Q_OS_UNIX
-		bool readPw = false;
-#endif
-		bool logGroups = cli_options.logGroups;
-		bool logACL    = cli_options.logAcls;
-
-		bVerbose = cli_options.verboseLogging;
+		[[maybe_unused]] bool detach = cli_options.detach;
+		bool disableSu               = false;
+		bool wipeSsl                 = cli_options.wipeSsl;
+		bool wipeLogs                = cli_options.wipeLogs;
+		unsigned int sunum           = 0;
+		[[maybe_unused]] bool readPw = false;
+		bool logGroups               = cli_options.logGroups;
+		bool logACL                  = cli_options.logAcls;
 
 		if (cli_options.disableSuSrv) {
 			detach    = false;
@@ -435,7 +345,6 @@ int main(int argc, char **argv) {
 		if (!std::get< 0 >(cli_options.supwSrv).empty()) {
 			supw  = QString::fromStdString(std::get< 0 >(cli_options.supwSrv));
 			sunum = std::get< 1 >(cli_options.supwSrv).value_or< unsigned int >(0);
-#ifdef Q_OS_UNIX
 		} else if (cli_options.readSupwSrv) {
 			// Note that it is essential to set detach = false here. If this is ever to be changed, the code part
 			// handling the readPw = true part has to be moved up so that it is executed before fork is called on Unix
@@ -445,6 +354,8 @@ int main(int argc, char **argv) {
 			readPw = true;
 			sunum  = *cli_options.readSupwSrv;
 		}
+#ifdef Q_OS_UNIX
+		inifile = unixhandler.trySystemIniFiles(inifile);
 
 		if (cli_options.limits) {
 			detach = false;
@@ -452,20 +363,24 @@ int main(int argc, char **argv) {
 			unixhandler.setuid();
 			unixhandler.finalcap();
 			LimitTest::testLimits(a);
-#endif
 		}
+#endif
 
-		if (QSslSocket::supportsSsl()) {
-			qInfo("SSL: OpenSSL version is '%s'", SSLeay_version(SSLEAY_VERSION));
-		} else {
+		if (!QSslSocket::supportsSsl()) {
 			qFatal("SSL: this version of Murmur is built against Qt without SSL Support. Aborting.");
 		}
 
-#ifdef Q_OS_UNIX
-		inifile = unixhandler.trySystemIniFiles(inifile);
+		Meta::mp->read(inifile);
+
+		initLog(cli_options.verboseLogging);
+
+#ifdef Q_OS_WIN
+		Tray tray;
+#else
+		unixhandler.setuid();
 #endif
 
-		Meta::mp->read(inifile);
+		qInfo("SSL: OpenSSL version is '%s'", SSLeay_version(SSLEAY_VERSION));
 
 		if (cli_options.dbDumpPath) {
 			DBWrapper wrapper(Meta::getConnectionParameter());
@@ -499,48 +414,6 @@ int main(int argc, char **argv) {
 		if (logACL) {
 			Meta::mp->bLogACLChanges = logACL;
 		}
-
-		// need to open log file early so log dir can be root owned:
-		// http://article.gmane.org/gmane.comp.security.oss.general/4404
-#ifdef Q_OS_UNIX
-		unixhandler.logToSyslog = Meta::mp->qsLogfile == QLatin1String("syslog");
-		if (detach && !Meta::mp->qsLogfile.isEmpty() && !unixhandler.logToSyslog) {
-#else
-		if (detach && !Meta::mp->qsLogfile.isEmpty()) {
-#endif
-			qfLog = new QFile(Meta::mp->qsLogfile);
-			if (!qfLog->open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
-				delete qfLog;
-				qfLog = nullptr;
-#ifdef Q_OS_UNIX
-				fprintf(stderr, "murmurd: failed to open logfile %s: no logging will be done\n",
-						qPrintable(Meta::mp->qsLogfile));
-#else
-				qWarning("Failed to open logfile %s. No logging will be performed.", qPrintable(Meta::mp->qsLogfile));
-#endif
-			} else {
-				qfLog->setTextModeEnabled(true);
-				QFileInfo qfi(*qfLog);
-				Meta::mp->qsLogfile = qfi.absoluteFilePath();
-#ifdef Q_OS_UNIX
-				if (Meta::mp->uiUid != 0 && fchown(qfLog->handle(), Meta::mp->uiUid, Meta::mp->uiGid) == -1) {
-					qFatal("can't change log file owner to %d %d:%d - %s", qfLog->handle(), Meta::mp->uiUid,
-						   Meta::mp->uiGid, strerror(errno));
-				}
-#endif
-			}
-#ifdef Q_OS_UNIX
-		} else if (detach && unixhandler.logToSyslog) {
-			openlog("murmurd", LOG_PID, LOG_DAEMON);
-			syslog(LOG_DEBUG, "murmurd syslog adapter up and running");
-#endif
-		} else {
-			detach = false;
-		}
-
-#ifdef Q_OS_UNIX
-		unixhandler.setuid();
-#endif
 
 #ifdef Q_OS_UNIX
 		// It is really important that these fork calls come before creating the
@@ -671,11 +544,12 @@ int main(int argc, char **argv) {
 
 		return res;
 	} catch (const std::exception &e) {
-		std::cerr << "[ERROR]: Exiting due to unhandled exception:\n";
-		mumble::printExceptionMessage(std::cerr, e, 2);
+		std::stringstream sstream;
+		mumble::printExceptionMessage(sstream, e, 2, false);
+		mumble::log::error("Exiting due to unhandled exception:\n{}", sstream.str());
 		return 1;
 	} catch (...) {
-		std::cerr << "[ERROR]: Caught unknown error (this is a bug, please report it)" << std::endl;
+		mumble::log::error("Caught unknown error (this is a bug, please report it)");
 		return 2;
 	}
 }

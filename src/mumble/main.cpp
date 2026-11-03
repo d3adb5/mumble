@@ -107,7 +107,7 @@ void initLog(QTextBrowser *textBox = nullptr) {
 	// Set up file log
 	using FileSink = spdlog::sinks::rotating_file_sink_st;
 	// 5MB
-	static constexpr std::size_t maxSize  = 5 * 1024 * 2024;
+	static constexpr std::size_t maxSize  = 5 * 1024 * 1024;
 	static constexpr std::size_t maxFiles = 3;
 
 #ifndef Q_OS_MACOS
@@ -367,9 +367,9 @@ CLIOptions parseCLI(int argc, char **argv) {
 		app.exit(e, info_stream, error_stream);
 
 		if (e.get_exit_code() != static_cast< int >(CLI::ExitCodes::Success)) {
-			qWarning("%s", error_stream.str().c_str());
+			std::cerr << error_stream.str() << std::endl;
 		} else {
-			qInfo("%s", info_stream.str().c_str());
+			std::cout << info_stream.str() << std::endl;
 		}
 		options.quit     = true;
 		options.exitCode = e.get_exit_code();
@@ -391,7 +391,7 @@ int main(int argc, char **argv) {
 #if defined(Q_OS_WIN)
 	SetDllDirectory(L"");
 #else
-#	ifndef Q_OS_MAC
+#	ifndef Q_OS_MACOS
 	EnvUtils::setenv(QLatin1String("AVAHI_COMPAT_NOWARN"), QLatin1String("1"));
 #	endif
 #endif
@@ -500,7 +500,7 @@ int main(int argc, char **argv) {
 		localeOverwrite = QString::fromStdString(*options.locale);
 	}
 	if (options.startHiddenInTray) {
-#ifndef Q_OS_MAC
+#ifndef Q_OS_MACOS
 		qInfo("Starting hidden in system tray");
 #else
 		// When Qt addresses hide() on macOS to use native hiding, this can be fixed.
@@ -700,7 +700,7 @@ int main(int argc, char **argv) {
 
 	QLocale systemLocale = QLocale::system();
 
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
 	if (os_lang) {
 		const QLocale macOSLocale = QLocale(QString::fromLatin1(os_lang));
 
@@ -919,7 +919,7 @@ int main(int argc, char **argv) {
 	if (url.isValid()) {
 		OpenURLEvent *oue = new OpenURLEvent(url);
 		qApp->postEvent(Global::get().mw, oue);
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
 	} else if (!a.quLaunchURL.isEmpty()) {
 		OpenURLEvent *oue = new OpenURLEvent(a.quLaunchURL);
 		qApp->postEvent(Global::get().mw, oue);

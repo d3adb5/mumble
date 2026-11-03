@@ -670,6 +670,14 @@ Cette valeur vous permet de définir un nombre maximum d&apos;utilisateurs autor
         <translation>À propos de Mumble</translation>
     </message>
     <message>
+        <source>Third-party Dependencies</source>
+        <translation>Dépendances tierces parties</translation>
+    </message>
+    <message>
+        <source>Depending on the build configuration, your version of Mumble might not depend on all of the listed entries</source>
+        <translation>En fonction de la configuration de la compilation, votre version de Mumble pourrait ne pas dépendre de tous les éléments listés</translation>
+    </message>
+    <message>
         <source>&amp;About Mumble</source>
         <translation>&amp;À propos de Mumble</translation>
     </message>
@@ -696,10 +704,6 @@ Cette valeur vous permet de définir un nombre maximum d&apos;utilisateurs autor
     <message>
         <source>Authors</source>
         <translation>Auteurs</translation>
-    </message>
-    <message>
-        <source>Third-party license agreements</source>
-        <translation>Accords de licence tierce</translation>
     </message>
     <message>
         <source>For a list of authors, please see &lt;a href=&quot;https://github.com/mumble-voip/mumble/graphs/contributors&quot;&gt;https://github.com/mumble-voip/mumble/graphs/contributors&lt;/a&gt;</source>
@@ -1260,7 +1264,7 @@ Cette valeur vous permet de définir un nombre maximum d&apos;utilisateurs autor
     </message>
     <message>
         <source>Access to the microphone was denied. Please allow Mumble to use the microphone by changing the settings in System Settings -&gt; Privacy &amp; Security -&gt; Microphone.</source>
-        <translation type="unfinished"></translation>
+        <translation>L&apos;accès au microphone a été refusé. Veuillez autoriser Mumble à utiliser le microphone en modifiant les réglages dans Réglages système -&gt; Vie privée et sécurité -&gt; Microphone.</translation>
     </message>
     <message>
         <source>%1 ms</source>
@@ -3695,6 +3699,18 @@ Nom du serveur. C&apos;est le nom du serveur tel qu&apos;il apparaîtra dans vos
         <source>Cancel</source>
         <translation>Annuler</translation>
     </message>
+    <message>
+        <source>Save password on this device</source>
+        <translation>Sauvegarder le mot de passe sur cet appareil</translation>
+    </message>
+    <message>
+        <source>Passwords can only be saved for servers in your favorites.</source>
+        <translation>Les mots de passe ne peuvent être enregistrés que pour les serveurs se trouvant dans vos favoris.</translation>
+    </message>
+    <message>
+        <source>Passwords can only be saved for servers in your favorites</source>
+        <translation>Les mots de passe ne peuvent être enregistrés que pour les serveurs se trouvant dans vos favoris</translation>
+    </message>
 </context>
 <context>
     <name>GlobalShortcut</name>
@@ -3891,7 +3907,7 @@ Sans cette option, l&apos;utilisation des raccourcis globaux de Mumble dans les 
     </message>
     <message>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Mumble can currently only use mouse buttons and keyboard modifier keys (Alt, Ctrl, Cmd, etc.) for global shortcuts.&lt;/p&gt;&lt;p&gt;If you want more flexibility, you can add Mumble as a trusted accessibility program in the Privacy &amp; Security section of your Mac&apos;s System Settings.&lt;/p&gt;&lt;p&gt;In System Settings, open Privacy &amp; Security, then scroll to find Accessibility in the list. Finally, add Mumble to the list of trusted accessibility programs.&lt;/body&gt;&lt;/html&gt;</source>
-        <translation type="unfinished"></translation>
+        <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Mumble peut actuellement n&apos;utiliser que les bouton s de la souris et les touches de modification du clavier (Alt, Ctrl, Cmd, etc.) pour les raccourcis généraux. &lt;/p&gt;&lt;p&gt;Si vous voulez davantage de flexibilité, vous pouvez ajouter Mumble en tant que programme d&apos;accessibilité de confiance dans la section Vie privée et sécurité des réglages système de votre Mac.&lt;/p&gt;&lt;p&gt;Dans les Réglages système, ouvrez Vie privée et sécurité, puis faites dérouler la liste pour trouver Accessibilité. Enfin, ajoutez Mumble à la liste des programmes d&apos;accessibilité de confiance.&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
     <message>
         <source>Unassigned</source>
@@ -5209,6 +5225,14 @@ Le paramètre ne s&apos;applique qu&apos;aux nouveaux messages, ceux déjà affi
     <message>
         <source>Restore window geometry on startup</source>
         <translation>Rétablir la géométrie de la fenêtre au démarrage</translation>
+    </message>
+    <message>
+        <source>Whether to change the local volume adjustment for the selected user when scrolling the mouse wheel up (increase) or down (decrease) while Control is pressed.</source>
+        <translation>Détermine si le volume local pour l&apos;utilisateur sélectionné doit être modifié lors du défilement de la roulette de la souris vers le haut (augmentation) ou vers le bas (diminution) alors que la touche Contrôle est maintenue appuyée.</translation>
+    </message>
+    <message>
+        <source>CTRL + Scroll to change selected user&apos;s volume</source>
+        <translation>CTRL + Défilement pour modifier le volume de l&apos;utilisateur sélectionné</translation>
     </message>
 </context>
 <context>
@@ -7457,14 +7481,6 @@ pour filtrage depuis le menu du salon.</translation>
         <translation>N&apos;envoie pas de certificat au serveur et ne sauvegarde pas les mots de passe. (Option non enregistrée).</translation>
     </message>
     <message>
-        <source>&lt;b&gt;This will suppress identity information from the client.&lt;/b&gt;&lt;p&gt;The client will not identify itself with a certificate, even if defined, and will not cache passwords for connections. This is primarily a test-option and is not saved.&lt;/p&gt;</source>
-        <translation>&lt;b&gt;Désactive les informations d&apos;identification du client.&lt;/b&gt;&lt;p&gt;Le client ne va pas s&apos;identifier à l&apos;aide d&apos;un certificat même si celui-ci existe, et il ne mémorisera pas les mots de passe de la connexion. Cette option est principalement utilisée à des fins de tests et n&apos;est pas mémorisée.&lt;/p&gt;</translation>
-    </message>
-    <message>
-        <source>Suppress certificate and password storage</source>
-        <translation>Désactiver le certificat et l&apos;enregistrement des mots de passe</translation>
-    </message>
-    <message>
         <source>&lt;b&gt;Type of proxy to connect through.&lt;/b&gt;&lt;br /&gt;This makes Mumble connect through a proxy for all outgoing connections. Note: Proxy tunneling forces Mumble into TCP compatibility mode, causing all voice data to be sent via the control channel.</source>
         <translation>&lt;b&gt;Type de connexion via le proxy.&lt;/b&gt;&lt;br /&gt;Permet à Mumble de se connecter au travers d&apos;un proxy pour toutes les connexions sortantes. Notez que l&apos;usage du proxy force Mumble à utiliser le mode de compatibilité TCP, la voix est donc envoyée via le canal de contrôle.</translation>
     </message>
@@ -7605,6 +7621,14 @@ Empêche le client d&apos;envoyer des informations pouvant identifier le systèm
     <message>
         <source>Proxy password</source>
         <translation>Mot de passe du mandataire</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;This will suppress identity information from the client.&lt;/b&gt;&lt;p&gt;The client will not identify itself with a certificate, even if defined. This is primarily a test-option and is not saved.&lt;/p&gt;</source>
+        <translation>&lt;b&gt;Cela masquera les informations d&apos;identité provenant du client.&lt;/b&gt;&lt;p&gt;Le client ne s&apos;identifiera pas avec un certificat, même s&apos;il est défini. Cela est avant tout une option de test et n&apos;est pas sauvegardée.&lt;/p&gt;</translation>
+    </message>
+    <message>
+        <source>Suppress certificate information</source>
+        <translation>Masquer les informations de certificat</translation>
     </message>
 </context>
 <context>
@@ -8389,6 +8413,10 @@ Pour mettre à jour l&apos;overlay, cliquez sur le bouton ci-dessous.</translati
         <translation>La mise à jour du plug-in « %1 » a échoué en raison d&apos;un trop grand nombre de redirections</translation>
     </message>
     <message>
+        <source>Update for plugin &quot;%1&quot; failed because it redirected to a non-HTTPS URL (%2)</source>
+        <translation>Échec de la mise à jour pour l&apos;extension « %1 » car elle redirige vers un URL non HTTPS (%2)</translation>
+    </message>
+    <message>
         <source>Unable to download plugin update for &quot;%1&quot; from &quot;%2&quot; (HTTP status code %3)</source>
         <translation>Impossible de télécharger la mise à jour du plug-in « %1 » depuis « %2 » (code d&apos;état HTTP %3)</translation>
     </message>
@@ -8581,7 +8609,7 @@ Pour mettre à jour l&apos;overlay, cliquez sur le bouton ci-dessous.</translati
     </message>
     <message>
         <source>Access to the microphone was denied. Please allow Mumble to use the microphone by changing the settings in System Settings -&gt; Privacy &amp; Security -&gt; Microphone.</source>
-        <translation type="unfinished"></translation>
+        <translation>L&apos;accès au microphone a été refusé. Veuillez autoriser Mumble à utiliser le microphone en modifiant les réglages dans Réglages système -&gt; Vie privée et sécurité -&gt; Microphone.</translation>
     </message>
     <message>
         <source>If enabled this tries to cancel out echo from the audio stream.</source>

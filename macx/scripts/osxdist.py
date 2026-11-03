@@ -329,7 +329,7 @@ def package_client():
 		if codesign(bundle_nested_code(bundle) + [bundle]) != 0:
 			raise Exception('signing failed')
 		print()
-	elif options.ad_hoc_sign:
+	else:
 		print(' * Ad-hoc signing the App Bundle')
 		if adhoc_codesign(bundle) != 0:
 			raise Exception('ad-hoc signing failed')
@@ -407,7 +407,7 @@ if __name__ == '__main__':
 	parser.add_argument('--min-macos-version', help='The macOS version to advertise as the minimum requirement of the App Bundle. (Defaults to "15.0.0", must match the deployment target the build was made with)', default='15.0.0')
 	parser.add_argument('--only-appbundle', help='Only prepare the appbundle. Do not package.', action='store_true', default=False)
 	parser.add_argument('--developer-id', help='Identity (Developer ID) to use for code signing. The name is also used for GPG signing. (If not set, no code signing will occur)')
-	parser.add_argument('--ad-hoc-sign', help='Sign the App Bundle without a certificate. Used for unofficial (e.g. CI) builds, which have no Developer ID available, as ARM macOS refuses to run unsigned binaries. Ignored if --developer-id is given.', action='store_true', default=False)
+	parser.add_argument('--ad-hoc-sign', help='Deprecated, kept for compatibility: without --developer-id the App Bundle is always signed without a certificate (ad-hoc), as ARM macOS refuses to run unsigned binaries.', action='store_true', default=False)
 	parser.add_argument('--keychain', help='The keychain to use when invoking code signing utilities. (Defaults to "login.keychain")', default='login.keychain')
 	parser.add_argument('--server', help='Build a Murmur package.', action='store_true', default=False)
 

@@ -39,7 +39,7 @@ LookConfig::LookConfig(Settings &st) : ConfigWidget(st) {
 		qgbTray->hide();
 	}
 
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
 	// Qt can not hide the window via the native macOS hide function. This should be re-evaluated with new Qt versions.
 	qcbHideTray->hide();
 #endif
@@ -311,6 +311,7 @@ void LookConfig::load(const Settings &r) {
 	loadCheckBox(qcbAbbreviateChannelNames, r.bTalkingUI_AbbreviateChannelNames);
 	loadCheckBox(qcbAbbreviateCurrentChannel, r.bTalkingUI_AbbreviateCurrentChannel);
 	loadCheckBox(qcbShowLocalListeners, r.bTalkingUI_ShowLocalListeners);
+	loadCheckBox(qcbCtrlScrollLocalVolAdj, r.ctrlScrollLocalVolAdj);
 	qsbRelFontSize->setValue(r.iTalkingUI_RelativeFontSize);
 	qsbSilentUserLifetime->setValue(r.iTalkingUI_SilentUserLifeTime);
 	qsbSilenceHold->setValue(r.iSilenceDetectionHoldMs);
@@ -420,6 +421,7 @@ void LookConfig::save() const {
 	s.bTalkingUI_AbbreviateChannelNames   = qcbAbbreviateChannelNames->isChecked();
 	s.bTalkingUI_AbbreviateCurrentChannel = qcbAbbreviateCurrentChannel->isChecked();
 	s.bTalkingUI_ShowLocalListeners       = qcbShowLocalListeners->isChecked();
+	s.ctrlScrollLocalVolAdj               = qcbCtrlScrollLocalVolAdj->isChecked();
 	s.iTalkingUI_RelativeFontSize         = qsbRelFontSize->value();
 	s.iTalkingUI_SilentUserLifeTime       = qsbSilentUserLifetime->value();
 	s.iSilenceDetectionHoldMs             = qsbSilenceHold->value();

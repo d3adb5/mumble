@@ -3,7 +3,7 @@
 # that can be found in the LICENSE file at the root of the
 # Mumble source tree or at <https://www.mumble.info/LICENSE>.
 
-find_pkg(Qt6 COMPONENTS Widgets REQUIRED)
+find_package("Qt6" COMPONENTS Widgets REQUIRED)
 
 # The helper is header-only and only depends on Qt, so there is nothing to
 # compile besides the test itself.

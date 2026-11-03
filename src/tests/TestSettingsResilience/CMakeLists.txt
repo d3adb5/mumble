@@ -3,13 +3,13 @@
 # that can be found in the LICENSE file at the root of the
 # Mumble source tree or at <https://www.mumble.info/LICENSE>.
 
-find_pkg(Qt6 COMPONENTS Widgets REQUIRED)
+find_package("Qt6" COMPONENTS Widgets REQUIRED)
 
 add_executable(TestSettingsResilience TestSettingsResilience.cpp)
 
 set_target_properties(TestSettingsResilience PROPERTIES AUTOMOC ON)
 
-target_link_libraries(TestSettingsResilience PRIVATE mumble_client_object_lib Qt6::Test)
+target_link_libraries(TestSettingsResilience PRIVATE mumble_client_lib Qt6::Test)
 
 add_test(
 	NAME TestSettingsResilience

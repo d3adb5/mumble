@@ -670,6 +670,14 @@ This value allows you to set the maximum number of users allowed in the channel.
         <translation>Про Mumble</translation>
     </message>
     <message>
+        <source>Third-party Dependencies</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Depending on the build configuration, your version of Mumble might not depend on all of the listed entries</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>&amp;About Mumble</source>
         <translation>&amp;Про Mumble</translation>
     </message>
@@ -696,10 +704,6 @@ This value allows you to set the maximum number of users allowed in the channel.
     <message>
         <source>Authors</source>
         <translation>Автори</translation>
-    </message>
-    <message>
-        <source>Third-party license agreements</source>
-        <translation>Ліцензійні угоди третіх сторін</translation>
     </message>
     <message>
         <source>For a list of authors, please see &lt;a href=&quot;https://github.com/mumble-voip/mumble/graphs/contributors&quot;&gt;https://github.com/mumble-voip/mumble/graphs/contributors&lt;/a&gt;</source>
@@ -3696,6 +3700,18 @@ Label of the server. This is what the server will be named like in your server l
         <source>Cancel</source>
         <translation>Скасувати</translation>
     </message>
+    <message>
+        <source>Save password on this device</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Passwords can only be saved for servers in your favorites.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Passwords can only be saved for servers in your favorites</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>GlobalShortcut</name>
@@ -5209,6 +5225,14 @@ The setting only applies for new messages, the already shown ones will retain th
     </message>
     <message>
         <source>Restore window geometry on startup</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Whether to change the local volume adjustment for the selected user when scrolling the mouse wheel up (increase) or down (decrease) while Control is pressed.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>CTRL + Scroll to change selected user&apos;s volume</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -7458,14 +7482,6 @@ the channel&apos;s context menu.</source>
         <translation>Не надсилайте сертифікат на сервер і не зберігайте паролі. (Не збережено).</translation>
     </message>
     <message>
-        <source>&lt;b&gt;This will suppress identity information from the client.&lt;/b&gt;&lt;p&gt;The client will not identify itself with a certificate, even if defined, and will not cache passwords for connections. This is primarily a test-option and is not saved.&lt;/p&gt;</source>
-        <translation>&lt;b&gt;Це приховає ідентифікаційну інформацію від клієнта.&lt;/b&gt;&lt;p&gt;Клієнт не ідентифікуватиме себе за допомогою сертифіката, навіть якщо його визначено, і не кешуватиме паролі для з’єднань. Це переважно тестовий варіант, який не зберігається.&lt;/p&gt;</translation>
-    </message>
-    <message>
-        <source>Suppress certificate and password storage</source>
-        <translation>Заблокувати зберігання сертифікатів і паролів</translation>
-    </message>
-    <message>
         <source>&lt;b&gt;Type of proxy to connect through.&lt;/b&gt;&lt;br /&gt;This makes Mumble connect through a proxy for all outgoing connections. Note: Proxy tunneling forces Mumble into TCP compatibility mode, causing all voice data to be sent via the control channel.</source>
         <translation>&lt;b&gt;Тип проксі для підключення.&lt;/b&gt;&lt;br /&gt;Це змушує Mumble підключатися через проксі для всіх вихідних з’єднань. Примітка. Тунелювання проксі-сервера перемикає Mumble у режим сумісності з TCP, у результаті чого всі голосові дані надсилаються через канал керування.</translation>
     </message>
@@ -7606,6 +7622,14 @@ Prevents the client from sending potentially identifying information about the o
     <message>
         <source>Proxy password</source>
         <translation>Пароль проксі</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;This will suppress identity information from the client.&lt;/b&gt;&lt;p&gt;The client will not identify itself with a certificate, even if defined. This is primarily a test-option and is not saved.&lt;/p&gt;</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Suppress certificate information</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -8388,6 +8412,10 @@ To upgrade these files to their latest versions, click the button below.</source
     <message>
         <source>Update for plugin &quot;%1&quot; failed due to too many redirects</source>
         <translation>Не вдалося оновити плагін &quot;%1&quot; через забагато перенаправлень</translation>
+    </message>
+    <message>
+        <source>Update for plugin &quot;%1&quot; failed because it redirected to a non-HTTPS URL (%2)</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <source>Unable to download plugin update for &quot;%1&quot; from &quot;%2&quot; (HTTP status code %3)</source>

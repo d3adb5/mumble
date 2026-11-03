@@ -111,8 +111,7 @@ int UnixMurmur::iTermFd[2];
 int UnixMurmur::iUsr1Fd[2];
 
 UnixMurmur::UnixMurmur() {
-	bRoot       = true;
-	logToSyslog = false;
+	bRoot = true;
 
 	if (geteuid() != 0 && getuid() != 0) {
 		bRoot = false;
@@ -195,6 +194,20 @@ void UnixMurmur::usr1SignalHandler(int) {
 	Q_UNUSED(len);
 }
 
+void UnixMurmur::reloadSettings() {
+	if (!meta) {
+		return;
+	}
+
+	qWarning("UnixMurmur: Trying to reload SSL settings...");
+
+	if (const bool ok = meta->reloadSSLSettings(); ok) {
+		qWarning("UnixMurmur: Done reloading SSL settings.");
+	} else {
+		qWarning("UnixMurmur: Failed to reload SSL settings. Server state is intact and fully operational. No "
+				 "configuration changes were made.");
+	}
+}
 
 void UnixMurmur::handleSigHup() {
 	qsnHup->setEnabled(false);
@@ -202,31 +215,10 @@ void UnixMurmur::handleSigHup() {
 	ssize_t len = ::read(iHupFd[1], &tmp, sizeof(tmp));
 	Q_UNUSED(len);
 
-	if (logToSyslog) {
-		qWarning("Caught SIGHUP, but logging to syslog");
-	} else if (!qfLog) {
-		qWarning("Caught SIGHUP, but logfile not in use");
-	} else if (!qfLog->isOpen()) {
-		qWarning("Caught SIGHUP, but logfile not in use -- interpreting as hint to quit");
-		QCoreApplication::instance()->quit();
-	} else {
-		qWarning("Caught SIGHUP, will reopen %s", qPrintable(Meta::mp->qsLogfile));
+	qDebug("Caught SIGHUP");
 
-		QFile *newlog = new QFile(Meta::mp->qsLogfile);
-		bool result   = newlog->open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text);
-		if (!result) {
-			delete newlog;
-			qCritical("Failed to reopen logfile for writing, keeping old log");
-		} else {
-			QFile *oldlog = qfLog;
+	reloadSettings();
 
-			newlog->setTextModeEnabled(true);
-			qfLog = newlog;
-			oldlog->close();
-			delete oldlog;
-			qWarning("Log rotated successfully");
-		}
-	}
 	qsnHup->setEnabled(true);
 }
 
@@ -249,16 +241,9 @@ void UnixMurmur::handleSigUsr1() {
 	ssize_t len = ::read(iUsr1Fd[1], &tmp, sizeof(tmp));
 	Q_UNUSED(len);
 
-	if (meta) {
-		qWarning("UnixMurmur: Trying to reload SSL settings...");
-		bool ok = meta->reloadSSLSettings();
-		if (ok) {
-			qWarning("UnixMurmur: Done reloading SSL settings.");
-		} else {
-			qWarning("UnixMurmur: Failed to reload SSL settings. Server state is intact and fully operational. No "
-					 "configuration changes were made.");
-		}
-	}
+	qDebug("Caught SIGUSR1");
+
+	reloadSettings();
 
 	qsnUsr1->setEnabled(true);
 }
@@ -270,25 +255,25 @@ void UnixMurmur::setuid() {
 				  "special privileges to set itself up on these systems, so this behavior is highly discouraged.");
 
 		if (::setgid(Meta::mp->uiGid) != 0)
-			qFatal("Failed to switch to gid %d", Meta::mp->uiGid);
+			qFatal("Failed to switch to gid %u", Meta::mp->uiGid);
 		if (::setuid(Meta::mp->uiUid) != 0)
-			qFatal("Failed to switch to uid %d", Meta::mp->uiUid);
+			qFatal("Failed to switch to uid %u", Meta::mp->uiUid);
 
 		uid_t uid = getuid(), euid = geteuid();
 		gid_t gid = getgid(), egid = getegid();
 		if (uid == Meta::mp->uiUid && euid == Meta::mp->uiUid && gid == Meta::mp->uiGid && egid == Meta::mp->uiGid) {
-			qCritical("Successfully switched to uid %d", Meta::mp->uiUid);
+			qCritical("Successfully switched to uid %u", Meta::mp->uiUid);
 		} else
 			qFatal("Couldn't switch uid/gid.");
 #else
 		if (::initgroups(qPrintable(Meta::mp->qsName), Meta::mp->uiGid) != 0)
 			qCritical("Can't initialize supplementary groups");
 		if (::setgid(Meta::mp->uiGid) != 0)
-			qCritical("Failed to switch to gid %d", Meta::mp->uiGid);
+			qCritical("Failed to switch to gid %u", Meta::mp->uiGid);
 		if (::setuid(Meta::mp->uiUid) != 0) {
-			qFatal("Failed to become uid %d", Meta::mp->uiUid);
+			qFatal("Failed to become uid %u", Meta::mp->uiUid);
 		} else {
-			qCritical("Successfully switched to uid %d", Meta::mp->uiUid);
+			qCritical("Successfully switched to uid %u", Meta::mp->uiUid);
 			initialcap();
 		}
 		if (!Meta::mp->qsHome.isEmpty()) {

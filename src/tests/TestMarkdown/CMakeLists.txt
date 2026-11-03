@@ -3,7 +3,7 @@
 # that can be found in the LICENSE file at the root of the
 # Mumble source tree or at <https://www.mumble.info/LICENSE>.
 
-find_pkg(Qt6 COMPONENTS Gui REQUIRED)
+find_package("Qt6" COMPONENTS Gui REQUIRED)
 
 set(MUMBLE_SOURCE_DIR "${CMAKE_SOURCE_DIR}/src/mumble")
 

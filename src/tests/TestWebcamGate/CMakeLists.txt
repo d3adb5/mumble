@@ -3,6 +3,8 @@
 # that can be found in the LICENSE file at the root of the
 # Mumble source tree or at <https://www.mumble.info/LICENSE>.
 
+find_package("nlohmann_json" REQUIRED)
+
 add_executable(TestWebcamGate TestWebcamGate.cpp)
 
 set_target_properties(TestWebcamGate PROPERTIES AUTOMOC ON)

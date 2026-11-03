@@ -47,7 +47,7 @@ else()
 		link_directories("/usr/local/lib")
 	endif()
 
-	find_pkg(OpenSSL QUIET)
+	find_package("OpenSSL" QUIET)
 
 	if(NOT OpenSSL_FOUND)
 		if(APPLE)

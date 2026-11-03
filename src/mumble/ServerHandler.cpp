@@ -32,6 +32,8 @@
 #include "Utils.h"
 #include "Global.h"
 
+#include "crypto/CryptStateOCB2.h"
+
 #include <QPainter>
 #include <QtCore/QtEndian>
 #include <QtGui/QImageReader>
@@ -103,7 +105,7 @@ static HANDLE loadQoS() {
 			qWarning("ServerHandler: Failed to create QOS2 handle");
 			hQoS = nullptr;
 		} else {
-			qWarning("ServerHandler: QOS2 loaded");
+			qInfo("ServerHandler: QOS2 loaded");
 		}
 	}
 	return hQoS;
@@ -163,6 +165,7 @@ ServerHandler::ServerHandler() : database(new Database(QLatin1String("ServerHand
 	hQoS = loadQoS();
 	if (hQoS)
 		Connection::setQoS(hQoS);
+	dwFlowUDP = 0;
 #endif
 
 	QObject::connect(this, &ServerHandler::pingRequested, this, &ServerHandler::sendPingInternal, Qt::QueuedConnection);
@@ -255,7 +258,7 @@ void ServerHandler::udpReady() {
 		if (!connection)
 			continue;
 
-		if (!connection->csCrypt->isValid())
+		if (!csCrypt->isValid())
 			continue;
 
 		if (buflen < 5)
@@ -266,11 +269,10 @@ void ServerHandler::udpReady() {
 		// 4 bytes is the overhead of the encryption
 		assert(buffer.size() >= buflen - 4);
 
-		if (!connection->csCrypt->decrypt(reinterpret_cast< const unsigned char * >(encrypted), buffer.data(),
-										  buflen)) {
-			if (connection->csCrypt->tLastGood.elapsed() > std::chrono::seconds(5)) {
-				if (connection->csCrypt->tLastRequest.elapsed() > std::chrono::seconds(5)) {
-					connection->csCrypt->tLastRequest.restart();
+		if (!csCrypt->decrypt(reinterpret_cast< const unsigned char * >(encrypted), buffer.data(), buflen)) {
+			if (csCrypt->tLastGood.elapsed() > std::chrono::seconds(5)) {
+				if (csCrypt->tLastRequest.elapsed() > std::chrono::seconds(5)) {
+					csCrypt->tLastRequest.restart();
 					MumbleProto::CryptSetup mpcs;
 					sendMessage(mpcs);
 				}
@@ -331,7 +333,7 @@ void ServerHandler::sendMessage(const unsigned char *data, int len, bool force) 
 		return;
 
 	ConnectionPtr connection(cConnection);
-	if (!connection || !connection->csCrypt->isValid())
+	if (!connection || !csCrypt->isValid())
 		return;
 
 	if (!force && (NetworkConfig::TcpModeEnabled() || !bUdp)) {
@@ -347,19 +349,23 @@ void ServerHandler::sendMessage(const unsigned char *data, int len, bool force) 
 		QApplication::postEvent(this,
 								new ServerHandlerMessageEvent(qba, Mumble::Protocol::TCPMessageType::UDPTunnel, true));
 	} else {
-		if (!connection->csCrypt->encrypt(reinterpret_cast< const unsigned char * >(data), crypto.data(),
-										  static_cast< unsigned int >(len))) {
+		if (!csCrypt->encrypt(reinterpret_cast< const unsigned char * >(data), crypto.data(),
+							  static_cast< unsigned int >(len))) {
 			return;
 		}
-		qusUdp->writeDatagram(reinterpret_cast< const char * >(crypto.data()), len + 4, qhaRemote, usResolvedPort);
+		qusUdp->writeDatagram(reinterpret_cast< const char * >(crypto.data()), len + 4, qhaRemote.toAddress(),
+							  usResolvedPort);
 	}
 }
 
 void ServerHandler::sendProtoMessage(const ::google::protobuf::Message &msg, Mumble::Protocol::TCPMessageType type) {
 	QByteArray qba;
+	if (!Connection::messageToNetwork(msg, type, qba)) {
+		qWarning("Connection::messageToNetwork() failed");
+		return;
+	}
 
 	if (QThread::currentThread() != thread()) {
-		Connection::messageToNetwork(msg, type, qba);
 		ServerHandlerMessageEvent *shme = new ServerHandlerMessageEvent(qba, type, false);
 		QApplication::postEvent(this, shme);
 	} else {
@@ -367,7 +373,7 @@ void ServerHandler::sendProtoMessage(const ::google::protobuf::Message &msg, Mum
 		if (!connection)
 			return;
 
-		connection->sendMessage(msg, type, qba);
+		connection->sendMessage(qba);
 	}
 }
 
@@ -525,6 +531,7 @@ void ServerHandler::run() {
 		if (qusUdp) {
 			QMutexLocker qml(&qmUdp);
 
+			csCrypt.reset();
 #ifdef Q_OS_WIN
 			if (hQoS) {
 				if (!QOSRemoveSocketFromFlow(hQoS, 0, dwFlowUDP, 0)) {
@@ -565,7 +572,7 @@ void ServerHandler::setSslErrors(const QList< QSslError > &errors) {
 	if (!connection)
 		return;
 
-	qscCert                      = connection->peerCertificateChain();
+	const QSslCertificate cert   = connection->peerCertificate();
 	QList< QSslError > newErrors = errors;
 
 #ifdef Q_OS_WIN
@@ -583,8 +590,8 @@ void ServerHandler::setSslErrors(const QList< QSslError > &errors) {
 		}
 	}
 
-	if (bRevalidate) {
-		QByteArray der    = qscCert.first().toDer();
+	if (bRevalidate && !cert.isNull()) {
+		QByteArray der    = cert.toDer();
 		DWORD errorStatus = WinVerifySslCert(der);
 		if (errorStatus == CERT_TRUST_NO_ERROR) {
 			for (const QSslError &e : errorsToRemove) {
@@ -599,12 +606,14 @@ void ServerHandler::setSslErrors(const QList< QSslError > &errors) {
 #endif
 
 	bStrong = false;
-	if ((qscCert.size() > 0)
-		&& (QString::fromLatin1(qscCert.at(0).digest(QCryptographicHash::Sha1).toHex())
-			== database->getDigest(qsHostName, usPort)))
+	if (!cert.isNull()
+		&& (QString::fromLatin1(cert.digest(QCryptographicHash::Sha1).toHex())
+			== database->getDigest(qsHostName, usPort))) {
 		connection->proceedAnyway();
-	else
+	} else {
 		qlErrors = newErrors;
+		qscCert  = connection->peerCertificateChain();
+	}
 }
 
 void ServerHandler::sendPing() {
@@ -632,7 +641,12 @@ void ServerHandler::sendPingInternal() {
 
 	quint64 t = static_cast< quint64 >(tTimestamp.elapsed().count());
 
-	if (qusUdp) {
+	// Skip the UDP ping while TCP mode is forced. Sending it anyway would let the server discover a
+	// working UDP path for this client and start routing voice packets over UDP again, defeating
+	// "Force TCP Mode". Upstream also skips it once UDP has been given up on, but the voice link
+	// watchdog (updateVoiceLink()) depends on these pings to notice that UDP works again and to
+	// probe a re-bound socket, so an automatic fallback to the tunnel must keep pinging.
+	if (qusUdp && !NetworkConfig::TcpModeEnabled()) {
 		Mumble::Protocol::PingData pingData;
 		pingData.timestamp                    = t;
 		pingData.requestAdditionalInformation = false;
@@ -646,10 +660,10 @@ void ServerHandler::sendPingInternal() {
 	MumbleProto::Ping mpp;
 
 	mpp.set_timestamp(t);
-	mpp.set_good(connection->csCrypt->m_statsLocal.good);
-	mpp.set_late(connection->csCrypt->m_statsLocal.late);
-	mpp.set_lost(connection->csCrypt->m_statsLocal.lost);
-	mpp.set_resync(connection->csCrypt->m_statsLocal.resync);
+	mpp.set_good(csCrypt->m_statsLocal.good);
+	mpp.set_late(csCrypt->m_statsLocal.late);
+	mpp.set_lost(csCrypt->m_statsLocal.lost);
+	mpp.set_resync(csCrypt->m_statsLocal.resync);
 
 
 	if (boost::accumulators::count(accUDP)) {
@@ -675,9 +689,9 @@ bool ServerHandler::bindUdpSocket() {
 		qFatal("ServerHandler: qusUdp is unexpectedly a null addr");
 	}
 	if (Global::get().s.bUdpForceTcpAddr) {
-		qusUdp->bind(qhaLocal, 0);
+		qusUdp->bind(qhaLocal.toAddress(), 0);
 	} else {
-		if (qhaRemote.protocol() == QAbstractSocket::IPv6Protocol) {
+		if (qhaRemote.isV6()) {
 			qusUdp->bind(QHostAddress(QHostAddress::AnyIPv6), 0);
 		} else {
 			qusUdp->bind(QHostAddress(QHostAddress::Any), 0);
@@ -688,11 +702,36 @@ bool ServerHandler::bindUdpSocket() {
 
 	if (Global::get().s.bQoS) {
 #if defined(Q_OS_UNIX)
-		int val = 0xe0;
-		if (setsockopt(static_cast< int >(qusUdp->socketDescriptor()), IPPROTO_IP, IP_TOS, &val, sizeof(val))) {
+		int val     = 0xe0;
+		auto setTos = [&](const int level, const int optname) {
+			if (setsockopt(static_cast< int >(qusUdp->socketDescriptor()), level, optname, &val, sizeof(val))
+				== 0) {
+				return true;
+			}
+
 			val = 0x80;
-			if (setsockopt(static_cast< int >(qusUdp->socketDescriptor()), IPPROTO_IP, IP_TOS, &val, sizeof(val)))
-				qWarning("ServerHandler: Failed to set TOS for UDP Socket");
+			return setsockopt(static_cast< int >(qusUdp->socketDescriptor()), level, optname, &val, sizeof(val))
+				   == 0;
+		};
+
+		bool ok = false;
+		if (qhaRemote.isV6()) {
+			ok = setTos(IPPROTO_IPV6, IPV6_TCLASS);
+			// Dual-stack: IPv4-mapped datagrams still use IP_TOS on Linux.
+			int v6only    = 1;
+			socklen_t len = sizeof(v6only);
+			if (getsockopt(static_cast< int >(qusUdp->socketDescriptor()), IPPROTO_IPV6, IPV6_V6ONLY, &v6only, &len)
+					== 0
+				&& v6only == 0) {
+				val = 0xe0;
+				setTos(IPPROTO_IP, IP_TOS);
+			}
+		} else {
+			ok = setTos(IPPROTO_IP, IP_TOS);
+		}
+
+		if (!ok) {
+			qWarning("ServerHandler: Failed to set TOS/TCLASS for UDP");
 		}
 #	if defined(SO_PRIORITY)
 		socklen_t optlen = sizeof(val);
@@ -706,14 +745,18 @@ bool ServerHandler::bindUdpSocket() {
 		}
 #	endif
 #elif defined(Q_OS_WIN)
-		if (hQoS) {
-			struct sockaddr_in addr;
-			memset(&addr, 0, sizeof(addr));
-			addr.sin_family      = AF_INET;
-			addr.sin_port        = htons(usPort);
-			addr.sin_addr.s_addr = htonl(qhaRemote.toIPv4Address());
+		if (!dwFlowUDP && !qhaRemote.toAddress().isLoopback() && hQoS) {
+			struct sockaddr_storage addr;
+			qhaRemote.toSockaddr(&addr);
 
-			dwFlowUDP = 0;
+			if (qhaRemote.isV6()) {
+				auto addrIn       = reinterpret_cast< sockaddr_in6 * >(&addr);
+				addrIn->sin6_port = htons(usResolvedPort);
+			} else {
+				auto addrIn      = reinterpret_cast< sockaddr_in * >(&addr);
+				addrIn->sin_port = htons(usResolvedPort);
+			}
+
 			if (!QOSAddSocketToFlow(hQoS, qusUdp->socketDescriptor(), reinterpret_cast< sockaddr * >(&addr),
 									QOSTrafficTypeVoice, QOS_NON_ADAPTIVE_FLOW,
 									reinterpret_cast< PQOS_FLOWID >(&dwFlowUDP)))
@@ -725,12 +768,12 @@ bool ServerHandler::bindUdpSocket() {
 	return qusUdp->state() == QAbstractSocket::BoundState;
 }
 
-void ServerHandler::updateVoiceLink(const ConnectionPtr &connection) {
+void ServerHandler::updateVoiceLink() {
 	const std::chrono::milliseconds now = std::chrono::duration_cast< std::chrono::milliseconds >(
 		tTimestamp.elapsed());
 
-	const unsigned int localGood  = connection->csCrypt->m_statsLocal.good;
-	const unsigned int remoteGood = connection->csCrypt->m_statsRemote.good;
+	const unsigned int localGood  = csCrypt->m_statsLocal.good;
+	const unsigned int remoteGood = csCrypt->m_statsRemote.good;
 
 	// The server counted more good packets from us than last time, so our UDP is getting
 	// through. This used to be a test for zero on counters that are cumulative for the whole
@@ -860,6 +903,14 @@ bool ServerHandler::rebindUdpSocket() {
 	QMutexLocker qml(&qmUdp);
 
 	if (qusUdp) {
+#ifdef Q_OS_WIN
+		// bindUdpSocket() only adds a socket to the QoS flow while there is none, so the old
+		// socket has to leave it first or the new one would go without QoS.
+		if (hQoS && dwFlowUDP) {
+			QOSRemoveSocketFromFlow(hQoS, 0, dwFlowUDP, 0);
+			dwFlowUDP = 0;
+		}
+#endif
 		QObject::disconnect(qusUdp, nullptr, this, nullptr);
 		qusUdp->close();
 		qusUdp->deleteLater();
@@ -894,10 +945,10 @@ void ServerHandler::message(Mumble::Protocol::TCPMessageType type, const QByteAr
 			// connection is still OK.
 			iInFlightTCPPings = 0;
 
-			connection->csCrypt->m_statsRemote.good   = msg.good();
-			connection->csCrypt->m_statsRemote.late   = msg.late();
-			connection->csCrypt->m_statsRemote.lost   = msg.lost();
-			connection->csCrypt->m_statsRemote.resync = msg.resync();
+			csCrypt->m_statsRemote.good   = msg.good();
+			csCrypt->m_statsRemote.late   = msg.late();
+			csCrypt->m_statsRemote.lost   = msg.lost();
+			csCrypt->m_statsRemote.resync = msg.resync();
 			accTCP(static_cast< double >(static_cast< std::uint64_t >(tTimestamp.elapsed().count()) - msg.timestamp())
 				   / 1000.0);
 
@@ -913,7 +964,7 @@ void ServerHandler::message(Mumble::Protocol::TCPMessageType type, const QByteAr
 				}
 			}
 
-			updateVoiceLink(connection);
+			updateVoiceLink();
 		}
 	} else {
 		ServerHandlerMessageEvent *shme = new ServerHandlerMessageEvent(qbaMsg, type, false);
@@ -1054,11 +1105,12 @@ void ServerHandler::serverConnectionConnected() {
 		qhaRemote      = connection->peerAddress();
 		qhaLocal       = connection->localAddress();
 		usResolvedPort = connection->peerPort();
-		if (qhaLocal.isNull()) {
+		if (!qhaLocal.isValid()) {
 			qFatal("ServerHandler: qhaLocal is unexpectedly a null addr");
 		}
 
 		bindUdpSocket();
+		csCrypt = std::make_unique< CryptStateOCB2 >();
 	}
 
 	emit connected();

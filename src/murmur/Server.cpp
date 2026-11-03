@@ -31,6 +31,8 @@
 
 #include "Utils.h"
 
+#include "crypto/CryptState.h"
+
 #include "murmur/database/DBUserData.h"
 #include "murmur/database/UserProperty.h"
 
@@ -50,6 +52,7 @@
 #include <cassert>
 #include <chrono>
 #include <functional>
+#include <limits>
 #include <optional>
 #include <span>
 #include <vector>
@@ -195,11 +198,30 @@ Server::Server(unsigned int snum, const ::mumble::db::ConnectionParameter &conne
 #endif
 			} else {
 #ifdef Q_OS_UNIX
-				int val = 0xe0;
-				if (setsockopt(sock, IPPROTO_IP, IP_TOS, &val, sizeof(val))) {
+				int val     = 0xe0;
+				auto setTos = [&](const int level, const int optname) {
+					if (setsockopt(sock, level, optname, &val, sizeof(val)) == 0)
+						return true;
 					val = 0x80;
-					if (setsockopt(sock, IPPROTO_IP, IP_TOS, &val, sizeof(val)))
-						log("Server: Failed to set TOS for UDP Socket");
+					return setsockopt(sock, level, optname, &val, sizeof(val)) == 0;
+				};
+
+				bool ok = false;
+				if (addr.ss_family == AF_INET6) {
+					ok = setTos(IPPROTO_IPV6, IPV6_TCLASS);
+					// Dual-stack: IPv4-mapped datagrams still use IP_TOS on Linux.
+					int v6only    = 1;
+					socklen_t len = sizeof(v6only);
+					if (getsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY, &v6only, &len) == 0 && v6only == 0) {
+						val = 0xe0;
+						setTos(IPPROTO_IP, IP_TOS);
+					}
+				} else {
+					ok = setTos(IPPROTO_IP, IP_TOS);
+				}
+
+				if (!ok) {
+					log(QLatin1String("Failed to set TOS/TCLASS for UDP"));
 				}
 #	if defined(SO_PRIORITY)
 				socklen_t optlen = sizeof(val);
@@ -241,6 +263,7 @@ Server::Server(unsigned int snum, const ::mumble::db::ConnectionParameter &conne
 		qqIds.enqueue(i);
 
 	connect(qtTimeout, SIGNAL(timeout()), this, SLOT(checkTimeout()));
+	connect(&m_handshakeTimeoutTimer, &QTimer::timeout, this, &Server::checkHandshakeTimeout);
 
 	m_bans = m_dbWrapper.getBans(iServerNum);
 	m_dbWrapper.initializeChannels(*this);
@@ -339,6 +362,7 @@ void Server::readParams() {
 	qsPassword                         = Meta::mp->qsPassword;
 	usPort                             = static_cast< unsigned short >(Meta::mp->usPort + iServerNum);
 	iTimeout                           = Meta::mp->iTimeout;
+	handshakeTimeout                   = Meta::mp->handshakeTimeout;
 	iMaxBandwidth                      = Meta::mp->iMaxBandwidth;
 	iMaxUsers                          = Meta::mp->iMaxUsers;
 	iMaxUsersPerChannel                = Meta::mp->iMaxUsersPerChannel;
@@ -364,8 +388,8 @@ void Server::readParams() {
 	udpRehomeAcrossHosts               = Meta::mp->udpRehomeAcrossHosts;
 	bCertRequired                      = Meta::mp->bCertRequired;
 	bForceExternalAuth                 = Meta::mp->bForceExternalAuth;
-	qrUserName                         = Meta::mp->qrUserName;
-	qrChannelName                      = Meta::mp->qrChannelName;
+	qrUserName                         = QRegularExpression(Meta::mp->userNamePattern);
+	qrChannelName                      = QRegularExpression(Meta::mp->channelNamePattern);
 	iMessageLimit                      = Meta::mp->iMessageLimit;
 	iMessageBurst                      = Meta::mp->iMessageBurst;
 	iPluginMessageLimit                = Meta::mp->iPluginMessageLimit;
@@ -609,9 +633,11 @@ void Server::setLiveConf(const QString &key, const QString &value) {
 	else if (key == "udpRehomeAcrossHosts")
 		udpRehomeAcrossHosts = !v.isNull() ? QVariant(v).toBool() : Meta::mp->udpRehomeAcrossHosts;
 	else if (key == "username")
-		qrUserName = !v.isNull() ? QRegularExpression(v) : Meta::mp->qrUserName;
+		qrUserName =
+			QRegularExpression(QRegularExpression::anchoredPattern(!v.isNull() ? v : Meta::mp->userNamePattern));
 	else if (key == "channelname")
-		qrChannelName = !v.isNull() ? QRegularExpression(v) : Meta::mp->qrChannelName;
+		qrChannelName =
+			QRegularExpression(QRegularExpression::anchoredPattern(!v.isNull() ? v : Meta::mp->channelNamePattern));
 	else if (key == "suggestversion")
 		m_suggestVersion = !v.isNull() ? Version::fromConfig(v) : Meta::mp->m_suggestVersion;
 	else if (key == "suggestpositional")
@@ -1600,7 +1626,7 @@ void Server::log(const QString &msg) const {
 		const_cast< DBWrapper & >(m_dbWrapper).logMessage(iServerNum, msg.toStdString());
 	}
 
-	qWarning("%d => %s", iServerNum, msg.toUtf8().constData());
+	qWarning("%u => %s", iServerNum, msg.toUtf8().constData());
 }
 
 void Server::newClient() {
@@ -1645,7 +1671,7 @@ void Server::newClient() {
 			}
 		}
 
-#ifdef Q_OS_MAC
+#ifdef Q_OS_MACOS
 		// One unexpected behavior of Qt's SSL backend is: it will add the key pair
 		// it uses in a connection into the default keychain, and when access the private
 		// key afterwards, a pop up will show up asking for user's permission.
@@ -1708,6 +1734,18 @@ void Server::newClient() {
 		connect(u, &ServerUser::handleSslErrors, this, &Server::sslError);
 		connect(u, &ServerUser::encrypted, this, &Server::encrypted);
 
+		// Keep track of the connection until it authenticates, so that a connection that lingers
+		// without ever authenticating can be dropped instead of occupying memory indefinitely.
+		m_pendingConnections.insert(u);
+		if (handshakeTimeout > std::chrono::seconds(0) && !m_handshakeTimeoutTimer.isActive()) {
+			// Sweep a few times within the deadline, but don't busy-poll for very long deadlines.
+			const std::chrono::milliseconds interval =
+				std::max(std::chrono::milliseconds(1000),
+						 std::min(std::chrono::milliseconds(15000),
+								  std::chrono::duration_cast< std::chrono::milliseconds >(handshakeTimeout) / 2));
+			m_handshakeTimeoutTimer.start(interval);
+		}
+
 		log(u, QString("New connection: %1").arg(addressToString(sock->peerAddress(), sock->peerPort())));
 
 		u->setToS();
@@ -1735,12 +1773,9 @@ void Server::encrypted() {
 	}
 	sendMessage(uSource, mpv);
 
-	QList< QSslCertificate > certs = uSource->peerCertificateChain();
-	if (!certs.isEmpty()) {
-		// Get the client's immediate SSL certificate
-		const QSslCertificate &cert = certs.first();
-		uSource->qslEmail           = cert.subjectAlternativeNames().values(QSsl::EmailEntry);
-		uSource->qsHash             = QString::fromLatin1(cert.digest(QCryptographicHash::Sha1).toHex());
+	if (const QSslCertificate cert = uSource->peerCertificate(); !cert.isNull()) {
+		uSource->qslEmail = cert.subjectAlternativeNames().values(QSsl::EmailEntry);
+		uSource->qsHash   = QString::fromLatin1(cert.digest(QCryptographicHash::Sha1).toHex());
 		if (!uSource->qslEmail.isEmpty() && uSource->bVerified) {
 			QString subject;
 			QString issuer;
@@ -1750,7 +1785,7 @@ void Server::encrypted() {
 				subject = subjectList.first();
 			}
 
-			QStringList issuerList = certs.first().issuerInfo(QSslCertificate::CommonName);
+			QStringList issuerList = cert.issuerInfo(QSslCertificate::CommonName);
 			if (!issuerList.isEmpty()) {
 				issuer = issuerList.first();
 			}
@@ -1765,7 +1800,7 @@ void Server::encrypted() {
 			if (ban.qsHash == uSource->qsHash) {
 				log(uSource, QString("Certificate hash is banned: %1, Username: %2, Reason: %3.")
 								 .arg(ban.qsHash, ban.qsUsername, ban.qsReason));
-				uSource->disconnectSocket();
+				uSource->rejectConnection();
 			}
 		}
 	}
@@ -1834,7 +1869,7 @@ void Server::sslError(const QList< QSslError > &errors) {
 		// https://bugreports.qt.io/browse/QTBUG-53906
 		// https://github.com/mumble-voip/mumble/issues/2334
 
-		u->disconnectSocket();
+		u->rejectConnection();
 	}
 }
 
@@ -1867,13 +1902,15 @@ void Server::connectionClosed(QAbstractSocket::SocketError err, const QString &r
 		m_dbWrapper.updateLastDisconnect(iServerNum, static_cast< unsigned int >(u->iId));
 	}
 
-	if (u->sState == ServerUser::Authenticated) {
+	if (u->was_authenticated) {
 		if (m_channelListenerManager.isListeningToAny(u->uiSession)) {
 			for (unsigned int channelID : m_channelListenerManager.getListenedChannelsForUser(u->uiSession)) {
 				// Remove the client from the list on the server
 				m_channelListenerManager.removeListener(u->uiSession, channelID);
 			}
 		}
+
+		m_channelListenerManager.removeVolumeAdjustmentsOfUser(u->uiSession);
 
 		MumbleProto::UserRemove mpur;
 		mpur.set_session(u->uiSession);
@@ -1892,21 +1929,28 @@ void Server::connectionClosed(QAbstractSocket::SocketError err, const QString &r
 		QWriteLocker wl(&qrwlVoiceThread);
 
 		qhUsers.remove(u->uiSession);
+		m_pendingConnections.erase(u);
 		removeUdpPeer(u);
 
 		if (old)
 			old->removeUser(u);
+
+		for (ServerUser *user : qhUsers) {
+			for (WhisperTarget &target : user->qmTargets) {
+				std::erase(target.sessions, u->uiSession);
+			}
+		}
 	}
 
 	if (old && old->bTemporary && old->qlUsers.isEmpty()) {
-		auto func_ptr = std::mem_fn< void(unsigned int) >(&Server::removeChannel);
+		auto func_ptr = std::mem_fn(&Server::removeTemporaryChannelIfEmpty);
 		QCoreApplication::instance()->postEvent(this, new ExecEvent(std::bind(func_ptr, this, old->iId)));
 	}
 
 	if (u->uiSession > 0 && u->uiSession < iMaxUsers * 2)
 		qqIds.enqueue(u->uiSession); // Reinsert session id into pool
 
-	if (u->sState == ServerUser::Authenticated) {
+	if (u->was_authenticated) {
 		clearTempGroups(u);     // Also clears ACL cache
 		recheckCodecVersions(); // Maybe can choose a better codec now
 	}
@@ -1924,8 +1968,16 @@ void Server::message(Mumble::Protocol::TCPMessageType type, const QByteArray &qb
 		u = static_cast< ServerUser * >(sender());
 	}
 
-	if (u->sState == ServerUser::Authenticated) {
-		u->resetActivityTime();
+	switch (u->sState) {
+		case ServerUser::Rejected:
+			// Discard message
+			return;
+		case ServerUser::Connected:
+		case ServerUser::Authenticating:
+			break;
+		case ServerUser::Authenticated:
+			u->resetActivityTime();
+			break;
 	}
 
 	if (type == Mumble::Protocol::TCPMessageType::UDPTunnel) {
@@ -2000,7 +2052,7 @@ void Server::message(Mumble::Protocol::TCPMessageType type, const QByteArray &qb
 				mpr.set_reason("The server is currently in read-only mode and doesn't accept new connections");
 				mpr.set_type(MumbleProto::Reject_RejectType_NoNewConnections);
 				sendMessage(u, mpr);
-				u->disconnectSocket();
+				u->rejectConnection();
 			}
 				[[fallthrough]];
 			default:
@@ -2054,7 +2106,30 @@ void Server::checkTimeout() {
 	}
 	qrwlVoiceThread.unlock();
 	for (ServerUser *u : qlClose) {
-		u->disconnectSocket(true);
+		u->rejectConnection(true);
+	}
+}
+
+void Server::checkHandshakeTimeout() {
+	const std::int64_t deadline = std::chrono::duration_cast< std::chrono::milliseconds >(handshakeTimeout).count();
+
+	// Collect first and reject afterwards: rejectConnection() can synchronously trigger
+	// connectionClosed(), which erases from m_pendingConnections and would otherwise invalidate
+	// the iterator we are looping over.
+	std::vector< ServerUser * > toClose;
+	for (ServerUser *u : m_pendingConnections) {
+		if (u->sState != ServerUser::Authenticated && u->activityTime() > deadline) {
+			log(u, "Handshake timeout");
+			toClose.push_back(u);
+		}
+	}
+
+	for (ServerUser *u : toClose) {
+		u->rejectConnection(true);
+	}
+
+	if (m_pendingConnections.empty()) {
+		m_handshakeTimeoutTimer.stop();
 	}
 }
 
@@ -2085,12 +2160,6 @@ void Server::doSync(unsigned int id) {
 	}
 }
 
-void Server::sendProtoMessage(ServerUser *u, const ::google::protobuf::Message &msg,
-							  Mumble::Protocol::TCPMessageType msgType) {
-	QByteArray cache;
-	u->sendMessage(msg, msgType, cache);
-}
-
 void Server::sendProtoAll(const ::google::protobuf::Message &msg, Mumble::Protocol::TCPMessageType msgType,
 						  Version::full_t version, Version::CompareMode mode) {
 	sendProtoExcept(nullptr, msg, msgType, version, mode);
@@ -2114,9 +2183,20 @@ void Server::sendProtoExcept(ServerUser *u, const ::google::protobuf::Message &m
 	}
 }
 
-void Server::removeChannel(unsigned int id) {
+void Server::removeHostUser(ServerUser *u) {
+	auto it = qhHostUsers.find(u->haAddress);
+	if (it != qhHostUsers.end()) {
+		it->remove(u);
+		if (it->isEmpty()) {
+			qhHostUsers.erase(it);
+		}
+	}
+}
+
+void Server::removeTemporaryChannelIfEmpty(unsigned int id) {
+	// The removal is deferred, so the channel might have been refilled or replaced by a different one in the meantime
 	Channel *c = qhChannels.value(id);
-	if (c)
+	if (c && c->bTemporary && c->qlUsers.isEmpty())
 		removeChannel(c);
 }
 
@@ -2129,11 +2209,15 @@ void Server::removeChannel(Channel *chan, Channel *dest) {
 		chan->unlink(nullptr);
 	}
 
-	for (Channel *c : chan->qlChannels) {
+	// Note: we use a copy of qlChannels in order to avoid (indirect) concurrent modification of the list while we are
+	// iterating over it.
+	for (Channel *c : QList< Channel * >(chan->qlChannels)) {
 		removeChannel(c, dest);
 	}
 
-	for (User *p : chan->qlUsers) {
+	// Note: we use a copy of qlUsers in order to avoid (indirect) concurrent modification of the list while we are
+	// iterating over it.
+	for (User *p : QList< User * >(chan->qlUsers)) {
 		{
 			QWriteLocker wl(&qrwlVoiceThread);
 			chan->removeUser(p);
@@ -2169,6 +2253,8 @@ void Server::removeChannel(Channel *chan, Channel *dest) {
 		sendAll(mpus);
 	}
 
+	m_channelListenerManager.removeVolumeAdjustmentsOfChannel(chan->iId);
+
 	MumbleProto::ChannelRemove mpcr;
 	mpcr.set_channel_id(chan->iId);
 	sendAll(mpcr);
@@ -2187,6 +2273,24 @@ void Server::removeChannel(Channel *chan, Channel *dest) {
 		}
 
 		qhChannels.remove(chan->iId);
+
+		for (ServerUser *user : qhUsers) {
+			for (auto it = user->qmTargets.begin(); it != user->qmTargets.end(); ++it) {
+				if (std::erase_if(it->channels,
+								  [chan](const WhisperTarget::Channel &target) { return target.id == chan->iId; })
+					> 0) {
+					user->qmTargetCache.remove(it.key());
+				}
+			}
+		}
+	}
+
+	{
+		QMutexLocker qml(&qmCache);
+
+		for (ChanACL::ChanCache *cache : acCache) {
+			cache->remove(chan);
+		}
 	}
 
 	delete chan;
@@ -2285,7 +2389,7 @@ void Server::userEnterChannel(User *p, Channel *c, MumbleProto::UserState &mpus)
 	}
 
 	if (old && old->bTemporary && old->qlUsers.isEmpty()) {
-		auto func_ptr = std::mem_fn< void(unsigned int) >(&Server::removeChannel);
+		auto func_ptr = std::mem_fn(&Server::removeTemporaryChannelIfEmpty);
 		QCoreApplication::instance()->postEvent(this, new ExecEvent(std::bind(func_ptr, this, old->iId)));
 	}
 
@@ -2418,7 +2522,7 @@ void Server::clearACLCache(User *p) {
 
 				mpus.Clear();
 				mpus.set_session(user->uiSession);
-				mpus.set_suppress(true);
+				mpus.set_suppress(user->bSuppress);
 				sendAll(mpus);
 			}
 		};
@@ -2445,37 +2549,22 @@ void Server::clearWhisperTargetCache() {
 	}
 }
 
-QString Server::addressToString(const QHostAddress &adr, unsigned short port) {
-	HostAddress ha(adr);
-
-	if ((Meta::mp->iObfuscate != 0)) {
-		QCryptographicHash h(QCryptographicHash::Sha1);
-		QByteArrayView byteView(reinterpret_cast< const char * >(&Meta::mp->iObfuscate), sizeof(Meta::mp->iObfuscate));
-#if QT_VERSION >= QT_VERSION_CHECK(6, 3, 0)
-		h.addData(byteView);
-#else
-		h.addData(reinterpret_cast< const char * >(&Meta::mp->iObfuscate), sizeof(Meta::mp->iObfuscate));
-#endif
-		if (adr.protocol() == QAbstractSocket::IPv4Protocol) {
-			quint32 num = adr.toIPv4Address();
-			byteView    = { reinterpret_cast< const char * >(&num), sizeof(num) };
-#if QT_VERSION >= QT_VERSION_CHECK(6, 3, 0)
-			h.addData(byteView);
-#else
-			h.addData(reinterpret_cast< const char * >(&num), sizeof(num));
-#endif
-		} else if (adr.protocol() == QAbstractSocket::IPv6Protocol) {
-			Q_IPV6ADDR num = adr.toIPv6Address();
-			byteView       = { reinterpret_cast< const char * >(num.c), sizeof(num.c) };
-#if QT_VERSION >= QT_VERSION_CHECK(6, 3, 0)
-			h.addData(byteView);
-#else
-			h.addData(reinterpret_cast< const char * >(num.c), sizeof(num.c));
-#endif
-		}
-		return QString("<<%1:%2>>").arg(QString::fromLatin1(h.result().toHex()), QString::number(port));
+QString Server::addressToString(const HostAddress &adr, const unsigned short port) {
+	if (Meta::mp->iObfuscate == 0) {
+		return QString("%1:%2").arg(adr.toString(), QString::number(port));
 	}
-	return QString("%1:%2").arg(ha.toString(), QString::number(port));
+
+	QCryptographicHash h(QCryptographicHash::Sha1);
+#if QT_VERSION >= QT_VERSION_CHECK(6, 3, 0)
+	QByteArrayView byteView(reinterpret_cast< const char * >(&Meta::mp->iObfuscate), sizeof(Meta::mp->iObfuscate));
+	h.addData(byteView);
+	h.addData(adr.getByteRepresentation());
+#else
+	h.addData(reinterpret_cast< const char * >(&Meta::mp->iObfuscate), sizeof(Meta::mp->iObfuscate));
+	h.addData(adr.toByteArray());
+#endif
+
+	return QString("<<%1:%2>>").arg(QString::fromLatin1(h.result().toHex()), QString::number(port));
 }
 
 bool Server::validateUserName(const QString &name) {
@@ -2485,6 +2574,8 @@ bool Server::validateUserName(const QString &name) {
 		return false;
 	}
 
+	qrUserName.setPatternOptions(QRegularExpression::UseUnicodePropertiesOption);
+
 	return qrUserName.match(name).hasMatch();
 }
 
@@ -2492,6 +2583,8 @@ bool Server::validateChannelName(const QString &name) {
 	if (name.length() > 512) {
 		return false;
 	}
+
+	qrChannelName.setPatternOptions(QRegularExpression::UseUnicodePropertiesOption);
 
 	return qrChannelName.match(name).hasMatch();
 }
@@ -3294,8 +3387,8 @@ bool Server::setUserProperties(int userID, QMap< int, QString > properties) {
 			return false;
 		}
 
-		qhUserIDCache.remove(qhUserNameCache.value(id));
-		qhUserNameCache.remove(id);
+		qhUserIDCache.remove(qhUserNameCache.value(userID));
+		qhUserNameCache.remove(userID);
 		qhUserIDCache.remove(name);
 	}
 
@@ -3368,12 +3461,22 @@ QMap< int, QString > Server::getUserProperties(int userID) {
 
 Channel *Server::createNewChannel(Channel *parent, const QString &name, bool temporary, int position,
 								  unsigned int maxUsers) {
-	unsigned int id = m_dbWrapper.getNextAvailableChannelID(iServerNum);
+	unsigned int id = std::numeric_limits< unsigned int >::max();
 
 	if (temporary) {
-		// Make sure temporary channel IDs will not collide with regular channel IDs
-		id += iChannelCountLimit > 0 ? static_cast< unsigned int >(iChannelCountLimit) * 2 : 1'000'000u;
+		// Temporary channels are not stored in the DB, whose IDs grow upwards from 0. Hence, temporary channel IDs
+		// are allocated downwards from the largest possible ID. For backwards compatibility reasons, we can only
+		// use std::int32_t (which is what the client-side plugin interface uses; signedness is also required by our Ice
+		// interface)
+		id = static_cast< unsigned int >(std::numeric_limits< std::int32_t >::max());
+		while (qhChannels.contains(id)) {
+			--id;
+		}
+	} else {
+		id = m_dbWrapper.getNextAvailableChannelID(iServerNum);
 	}
+
+	assert(id != std::numeric_limits< unsigned int >::max());
 
 	Channel *c    = new Channel(id, name, parent);
 	c->bTemporary = temporary;

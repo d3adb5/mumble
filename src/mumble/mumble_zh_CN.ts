@@ -670,6 +670,14 @@ This value allows you to set the maximum number of users allowed in the channel.
         <translation>关于 Mumble</translation>
     </message>
     <message>
+        <source>Third-party Dependencies</source>
+        <translation>第三方依赖</translation>
+    </message>
+    <message>
+        <source>Depending on the build configuration, your version of Mumble might not depend on all of the listed entries</source>
+        <translation>取决于构建配置，您的 Mumble 版本可能不依赖所有条目</translation>
+    </message>
+    <message>
         <source>&amp;About Mumble</source>
         <translation>关于 Mumble(&amp;A)</translation>
     </message>
@@ -696,10 +704,6 @@ This value allows you to set the maximum number of users allowed in the channel.
     <message>
         <source>Authors</source>
         <translation>作者</translation>
-    </message>
-    <message>
-        <source>Third-party license agreements</source>
-        <translation>第三方许可</translation>
     </message>
     <message>
         <source>For a list of authors, please see &lt;a href=&quot;https://github.com/mumble-voip/mumble/graphs/contributors&quot;&gt;https://github.com/mumble-voip/mumble/graphs/contributors&lt;/a&gt;</source>
@@ -1260,7 +1264,7 @@ This value allows you to set the maximum number of users allowed in the channel.
     </message>
     <message>
         <source>Access to the microphone was denied. Please allow Mumble to use the microphone by changing the settings in System Settings -&gt; Privacy &amp; Security -&gt; Microphone.</source>
-        <translation type="unfinished"></translation>
+        <translation>麦克风访问被拒绝。请在系统设置 -&gt; 隐私与安全性 -&gt;麦克风中更改设置，允许 Mumble 使用麦克风。</translation>
     </message>
     <message>
         <source>%1 ms</source>
@@ -3694,6 +3698,18 @@ Label of the server. This is what the server will be named like in your server l
         <source>Cancel</source>
         <translation>取消</translation>
     </message>
+    <message>
+        <source>Save password on this device</source>
+        <translation>在此设备上保存密码</translation>
+    </message>
+    <message>
+        <source>Passwords can only be saved for servers in your favorites.</source>
+        <translation>只有收藏的服务器才能保存密码。</translation>
+    </message>
+    <message>
+        <source>Passwords can only be saved for servers in your favorites</source>
+        <translation>只有收藏的服务器才能保存密码</translation>
+    </message>
 </context>
 <context>
     <name>GlobalShortcut</name>
@@ -3890,7 +3906,7 @@ Without this option enabled, using Mumble&apos;s global shortcuts in privileged 
     </message>
     <message>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Mumble can currently only use mouse buttons and keyboard modifier keys (Alt, Ctrl, Cmd, etc.) for global shortcuts.&lt;/p&gt;&lt;p&gt;If you want more flexibility, you can add Mumble as a trusted accessibility program in the Privacy &amp; Security section of your Mac&apos;s System Settings.&lt;/p&gt;&lt;p&gt;In System Settings, open Privacy &amp; Security, then scroll to find Accessibility in the list. Finally, add Mumble to the list of trusted accessibility programs.&lt;/body&gt;&lt;/html&gt;</source>
-        <translation type="unfinished"></translation>
+        <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Mumble 的全局快捷键目前只能使用鼠标按钮和键盘修饰键（Alt、Ctrl、Cmd 等）。&lt;/p&gt;&lt;p&gt;如果您需要更灵活地配置，可以在 Mac 系统设置的“隐私与安全性”中把 Mumble 添加为受信任的辅助功能程序。&lt;/p&gt;&lt;p&gt;在系统设置中，打开隐私与安全性，在列表中滚动到辅助功能。最后，将 Mumble 添加到受信任的辅助功能程序列表中。&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
     <message>
         <source>Unassigned</source>
@@ -5208,6 +5224,14 @@ The setting only applies for new messages, the already shown ones will retain th
     <message>
         <source>Restore window geometry on startup</source>
         <translation>在启动时恢复窗口形状</translation>
+    </message>
+    <message>
+        <source>Whether to change the local volume adjustment for the selected user when scrolling the mouse wheel up (increase) or down (decrease) while Control is pressed.</source>
+        <translation>当 Control 键按下时， 鼠标滚轮向上（增大）或向下（减小）滚动是否更改已选用户的本地音量。</translation>
+    </message>
+    <message>
+        <source>CTRL + Scroll to change selected user&apos;s volume</source>
+        <translation>CTRL + 滚轮更改已选用户音量</translation>
     </message>
 </context>
 <context>
@@ -7456,14 +7480,6 @@ the channel&apos;s context menu.</source>
         <translation>不向服务器发送证书并且不保存密码。（此设置不会被保存）。</translation>
     </message>
     <message>
-        <source>&lt;b&gt;This will suppress identity information from the client.&lt;/b&gt;&lt;p&gt;The client will not identify itself with a certificate, even if defined, and will not cache passwords for connections. This is primarily a test-option and is not saved.&lt;/p&gt;</source>
-        <translation>&lt;b&gt;禁用客户端身份验证。&lt;/b&gt;&lt;p&gt;禁用后，客户端将无法通过证书认证自己，也不会保存连接的密码。该选项主要用于测试目的，不会被保存。&lt;/p&gt;</translation>
-    </message>
-    <message>
-        <source>Suppress certificate and password storage</source>
-        <translation>禁用证书和密码存储</translation>
-    </message>
-    <message>
         <source>&lt;b&gt;Type of proxy to connect through.&lt;/b&gt;&lt;br /&gt;This makes Mumble connect through a proxy for all outgoing connections. Note: Proxy tunneling forces Mumble into TCP compatibility mode, causing all voice data to be sent via the control channel.</source>
         <translation>&lt;b&gt;连接的代理的类型。&lt;/b&gt;&lt;br /&gt;Mumble 将为所有出站连接使用代理服务器。注意：代理隧道将强制 Mumble 使用 TCP 兼容模式，因此所有的语音数据将通过控制信道传输。</translation>
     </message>
@@ -7604,6 +7620,14 @@ Prevents the client from sending potentially identifying information about the o
     <message>
         <source>Proxy password</source>
         <translation>代理密码</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;This will suppress identity information from the client.&lt;/b&gt;&lt;p&gt;The client will not identify itself with a certificate, even if defined. This is primarily a test-option and is not saved.&lt;/p&gt;</source>
+        <translation>&lt;b&gt;这会隐藏来自客户端的身份信息。&lt;/b&gt;&lt;p&gt;客户端不会使用证书来标识自身，即使已定义证书也是如此。这主要是测试选项，不会被保存。&lt;/p&gt;</translation>
+    </message>
+    <message>
+        <source>Suppress certificate information</source>
+        <translation>隐藏证书信息</translation>
     </message>
 </context>
 <context>
@@ -8388,6 +8412,10 @@ To upgrade these files to their latest versions, click the button below.</source
         <translation>由于重定向过多，更新插件“%1”失败</translation>
     </message>
     <message>
+        <source>Update for plugin &quot;%1&quot; failed because it redirected to a non-HTTPS URL (%2)</source>
+        <translation>更新插件“%1”失败，因为被重定向到非 HTTPS URL（%2）</translation>
+    </message>
+    <message>
         <source>Unable to download plugin update for &quot;%1&quot; from &quot;%2&quot; (HTTP status code %3)</source>
         <translation>无法从“%2”下载插件“%1”的更新（HTTP 状态码 %3）</translation>
     </message>
@@ -8580,7 +8608,7 @@ To upgrade these files to their latest versions, click the button below.</source
     </message>
     <message>
         <source>Access to the microphone was denied. Please allow Mumble to use the microphone by changing the settings in System Settings -&gt; Privacy &amp; Security -&gt; Microphone.</source>
-        <translation type="unfinished"></translation>
+        <translation>麦克风访问被拒绝。请在系统设置 -&gt; 隐私与安全性 -&gt;麦克风中更改设置，允许 Mumble 使用麦克风。</translation>
     </message>
     <message>
         <source>If enabled this tries to cancel out echo from the audio stream.</source>

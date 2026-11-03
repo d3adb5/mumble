@@ -6,12 +6,6 @@ on:
   pull_request:
     branches: '*'
   workflow_dispatch:
-    inputs:
-      SIGN_WINDOWS_INSTALLER:
-        description: 'Sign Windows Installer'
-        required: true
-        type: boolean
-        default: false
 
 # Only keep the latest run per ref going: a newer push cancels the older,
 # still-running build instead of queueing behind it.
@@ -30,6 +24,10 @@ env:
   # included, via the Rust toolchain preinstalled on the GitHub-hosted runners;
   # TestDeepFilterModel then asserts it really ended up in the binary.
   CMAKE_OPTIONS: -Dtests=ON -Dserver=OFF -Dwebrtc-audio-processing=ON -Ddeepfilternet=ON -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_C_COMPILER_LAUNCHER=ccache
+  CCACHE_COMPRESSLEVEL: 10
+  # Build artifacts count against the repository's storage quota, which has run out before.
+  # They are superseded by the next push anyway, and the release keeps the packages for good.
+  ARTIFACT_RETENTION_DAYS: 7
 
 
 jobs:
@@ -67,13 +65,13 @@ jobs:
     strategy:
         fail-fast: false
         matrix:
-            # Ubuntu is not built here: the releases we target (25.10 and 26.04) have no
-            # GitHub runner image, so they are covered by the container-based job below,
-            # which also produces the .deb. What is left are the two platforms that ship
-            # a client installer: Windows (x86_64) and macOS on Apple Silicon (arm64).
+            # Ubuntu is not built here but in the container-based job below, which also
+            # produces the .deb. What is left is the platform that ships a client disk
+            # image: macOS on Apple Silicon (arm64). Windows is not built at all any more
+            # (the scripts still support it: add "{ os: windows-2025, type: static,
+            # arch: x86_64, compiler: cl }" back here to bring it back).
             include:
-              - { os: windows-2025-vs2026, type: static, arch: x86_64 }
-              - { os: macos-26, type: static, arch: arm64 }
+              - { os: macos-26, type: static, arch: arm64, compiler: clang }
 
 
     runs-on: ${{ matrix.os }}
@@ -91,7 +89,7 @@ jobs:
       run: brew install bash
 
     - name: Set environment variables
-      run: $GITHUB_WORKSPACE/.github/workflows/set_environment_variables.sh "${{ matrix.os }}" "${{ matrix.type }}" "${{ matrix.arch }}" "${{ github.workspace }}"
+      run: $GITHUB_WORKSPACE/.github/workflows/set_environment_variables.sh "${{ matrix.os }}" "${{ matrix.type }}" "${{ matrix.arch }}" "${{ matrix.compiler }}" "${{ github.workspace }}"
       shell: bash
 
     - uses: actions/cache/restore@v5
@@ -99,11 +97,12 @@ jobs:
           path: '${{ env.MUMBLE_ENVIRONMENT_DIR }}'
           key: ${{ env.MUMBLE_ENVIRONMENT_VERSION }}
 
-    - uses: hendrikmuhs/ccache-action@v1.2
+      # A new (timestamped) cache is saved on every push to master only, which every other
+      # branch then restores from: caches count against the same storage quota as artifacts.
+    - uses: hendrikmuhs/ccache-action@v1.2.24
       with:
-        key: ${{ github.base_ref || github.ref_name }}.${{ matrix.os }}.${{ matrix.type }}
-        save: ${{ github.event_name != 'pull_request' }}
-        append-timestamp: false
+        key: ${{ github.base_ref || github.ref_name }}_${{ matrix.os }}_${{ matrix.type }}.${{ matrix.compiler }}.${{ matrix.arch }}
+        save: ${{ github.event_name != 'pull_request' && github.ref_name == 'master' }}
 
     - uses: ./.github/actions/install-dependencies
       with:
@@ -150,38 +149,23 @@ jobs:
       name: Create disk image
       shell: bash
       run: |
-        ./macx/scripts/osxdist.py --source-dir . --binary-dir build --ad-hoc-sign \
+        ./macx/scripts/osxdist.py --source-dir . --binary-dir build \
           --min-macos-version "15.0.0" \
           --version "$( ./scripts/mumble-version.py ).${MUMBLE_BUILD_NUMBER}"
       env:
           MUMBLE_BUILD_NUMBER: ${{ needs.fetch_build_number.outputs.build_number }}
 
-    - if: ${{ inputs.SIGN_WINDOWS_INSTALLER && startsWith(matrix.os, 'windows') }}
-      uses: ./.github/actions/sign-binaries
-      with:
-          signpath-token: ${{ secrets.SIGNPATH_API_TOKEN }}
-          build-number: ${{ needs.fetch_build_number.outputs.build_number }}
-          type: ${{ matrix.type }}
-          os: ${{ matrix.os }}
-          arch: ${{ matrix.arch }}
-
-    - if: ${{ !inputs.SIGN_WINDOWS_INSTALLER && matrix.type == 'static' }}
+    - if: ${{ matrix.type == 'static' }}
       name: Publish
       uses: actions/upload-artifact@v7
       with:
         name: 'Mumble-${{ matrix.os }}'
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
         # Maximum compression costs far more time than it saves on an artifact that is
         # mostly already-compressed installers and disk images.
         compression-level: 1
         path: |
           build/*.dmg
-          build/**/mumble*.msi
-          build/**/mumble*.exe
-          build/**/plugins/*.pdb
-          build/**/mumble.pdb
-          build/**/mumble_ol*.pdb
-          build/**/rnnoise.pdb
-          build/**/speexdsp.pdb
 
       # We don't want to save the build env in a cache on a PR as caches are scoped
       # to branches and while PRs can access caches from the default branch, they
@@ -207,7 +191,6 @@ jobs:
         fail-fast: false
         matrix:
             include:
-              - { image: "ubuntu:25.10", label: "ubuntu-25.10" }
               - { image: "ubuntu:26.04", label: "ubuntu-26.04" }
 
     runs-on: ubuntu-latest
@@ -232,7 +215,8 @@ jobs:
           libcap-dev libxi-dev libpoco-dev \
           libasound2-dev libogg-dev libsndfile1-dev libopus-dev \
           libspeechd-dev libavahi-compat-libdnssd-dev \
-          libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev appstream
+          libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev appstream \
+          nlohmann-json3-dev libcli11-dev libutfcpp-dev
 
     - uses: actions/checkout@v6
       with:
@@ -248,11 +232,14 @@ jobs:
       # warnings-as-errors is left off here: these are bleeding-edge distributions whose
       # GCC keeps gaining new diagnostics, and the goal of this job is to produce a
       # package rather than to gate on them. The matrix above still builds warning-clean
-      # with MSVC and clang.
+      # with clang.
+      # Mumble's dependency provider takes what the distribution packages and fetches the
+      # rest (e.g. spdlog, which upstream deliberately does not take from the repositories).
     - name: Configure
       shell: bash
       run: |
         cmake -B build -G Ninja \
+          -DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=cmake/mumble_dependency_provider.cmake \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_INSTALL_PREFIX=/usr \
           -DCMAKE_UNITY_BUILD=ON \
@@ -290,13 +277,13 @@ jobs:
       uses: actions/upload-artifact@v7
       with:
         name: 'Mumble-${{ matrix.label }}-deb'
+        retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
         compression-level: 9
         path: build/*.deb
 
 
   # Every push to master becomes a GitHub release carrying the installable client
-  # packages: the macOS (arm64) disk image, the Windows installer and the Ubuntu .deb
-  # of each targeted release. The tag reuses the exact version the builds were stamped
+  # packages: the macOS (arm64) disk image and the Ubuntu .deb of each targeted release. The tag reuses the exact version the builds were stamped
   # with (mumble-version.py plus the monotonic build number), so it increments on every
   # push and always matches what the packages report about themselves.
   release:
@@ -315,17 +302,14 @@ jobs:
       with:
           path: artifacts
 
-      # Only the installable packages are published: the Windows artifact also carries
-      # the raw binaries (mumble.exe, the overlay helpers) and the debug symbols, which
-      # stay available through the build artifacts. The two .deb artifacts contain
-      # identically named packages (the distribution is not part of CPack's file name),
+      # Only the installable packages are published. The .deb artifacts contain packages
+      # whose name does not include the distribution (it is not part of CPack's file name),
       # so they are renamed after their artifact's label.
     - name: Collect release files
       shell: bash
       run: |
         mkdir release
         find artifacts -name '*.dmg' -exec cp {} release/ \;
-        find artifacts \( -name 'mumble_client-*.msi' -o -name 'mumble_client-*.exe' \) -exec cp {} release/ \;
         for deb in artifacts/Mumble-ubuntu-*-deb/*.deb; do
           label="$(basename "$(dirname "$deb")")"
           label="${label#Mumble-}"; label="${label%-deb}"

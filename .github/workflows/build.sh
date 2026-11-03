@@ -17,6 +17,10 @@ arch="${arch,,}"
 
 OS_SPECIFIC_CMAKE_OPTIONS=""
 
+if ! [[ "$build_type" = "static" ]]; then
+	OS_SPECIFIC_CMAKE_OPTIONS="$OS_SPECIFIC_CMAKE_OPTIONS -DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=cmake/mumble_dependency_provider.cmake"
+fi
+
 case "$os" in
 	"windows")
 		if ! [[ "$arch" = "x86_64" ]]; then
@@ -35,7 +39,7 @@ case "$os" in
 		rm -f /usr/bin/link /usr/bin/link.exe
 
 		PATH="$PATH:/C/WixSharp"
-		echo "PATH=$PATH" >> "$GITHUB_ENV"
+		echo "PATH=$(cygpath --windows --path "$PATH")" >> "$GITHUB_ENV"
 
 		OS_SPECIFIC_CMAKE_OPTIONS="$OS_SPECIFIC_CMAKE_OPTIONS -DCMAKE_C_COMPILER=cl"
 		OS_SPECIFIC_CMAKE_OPTIONS="$OS_SPECIFIC_CMAKE_OPTIONS -DCMAKE_CXX_COMPILER=cl"
@@ -75,6 +79,8 @@ cmake -G Ninja \
 	  -S "$GITHUB_WORKSPACE" \
 	  -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
 	  -DBUILD_NUMBER=$MUMBLE_BUILD_NUMBER \
+	  -DCMAKE_C_COMPILER=$MUMBLE_CC \
+	  -DCMAKE_CXX_COMPILER=$MUMBLE_CXX \
 	  $OS_SPECIFIC_CMAKE_OPTIONS \
 	  $CMAKE_OPTIONS \
       -DCMAKE_UNITY_BUILD=ON \
@@ -85,3 +91,5 @@ cmake -G Ninja \
 # Actually build
 cmake --build . --config $BUILD_TYPE
 
+# The macOS disk image is made by a later step of the workflow (build.yml), once the tests
+# have run and the intermediates are gone - the arm64 runners do not have the disk space for both.

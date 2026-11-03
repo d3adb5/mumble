@@ -50,9 +50,11 @@
 #	include <winsock2.h>
 #endif
 
+#include <chrono>
 #include <functional>
 #include <optional>
 #include <span>
+#include <unordered_set>
 #include <vector>
 
 class Zeroconf;
@@ -117,6 +119,7 @@ public:
 	QList< QHostAddress > qlBind;
 	unsigned short usPort;
 	int iTimeout;
+	std::chrono::seconds handshakeTimeout;
 	int iMaxBandwidth;
 	unsigned int iMaxUsers;
 	unsigned int iMaxUsersPerChannel;
@@ -243,6 +246,7 @@ public slots:
 	void sslError(const QList< QSslError > &);
 	void message(Mumble::Protocol::TCPMessageType, const QByteArray &, ServerUser *cCon = nullptr);
 	void checkTimeout();
+	void checkHandshakeTimeout();
 	void tcpTransmitData(QByteArray, unsigned int);
 	void doSync(unsigned int);
 	void encrypted();
@@ -256,6 +260,15 @@ public:
 	QQueue< unsigned int > qqIds;
 	QList< SslServer * > qlServer;
 	QTimer *qtTimeout;
+
+	/// Timer that periodically sweeps m_pendingConnections for connections that
+	/// have not authenticated within handshakeTimeout and drops them.
+	QTimer m_handshakeTimeoutTimer;
+
+	/// Connections that have been accepted but have not yet authenticated. Owned
+	/// by the main thread (never accessed from the voice thread), so access needs
+	/// no qrwlVoiceThread lock.
+	std::unordered_set< ServerUser * > m_pendingConnections;
 
 #ifdef Q_OS_UNIX
 	int aiNotify[2];
@@ -376,7 +389,6 @@ public:
 					  Version::full_t version, Version::CompareMode mode);
 	void sendProtoExcept(ServerUser *, const ::google::protobuf::Message &msg, Mumble::Protocol::TCPMessageType type,
 						 Version::full_t version, Version::CompareMode mode);
-	void sendProtoMessage(ServerUser *, const ::google::protobuf::Message &msg, Mumble::Protocol::TCPMessageType type);
 
 	// sendAll sends a protobuf message to all users on the server whose version is either bigger than v or
 	// lower than ~v. If v == 0 the message is sent to everyone.
@@ -390,7 +402,7 @@ public:
 		sendProtoExcept(u, msg, Mumble::Protocol::TCPMessageType::name, v, mode);                      \
 	}                                                                                                  \
 	void sendMessage(ServerUser *u, const MumbleProto::name &msg) {                                    \
-		sendProtoMessage(u, msg, Mumble::Protocol::TCPMessageType::name);                              \
+		u->sendMessage(msg, Mumble::Protocol::TCPMessageType::name);                                   \
 	}
 
 	MUMBLE_ALL_TCP_MESSAGES
@@ -402,13 +414,15 @@ public:
 
 	void setLiveConf(const QString &key, const QString &value);
 
-	QString addressToString(const QHostAddress &, unsigned short port);
+	QString addressToString(const HostAddress &, unsigned short port);
 
 	void log(const QString &) const;
 	void log(ServerUser *u, const QString &) const;
 
-	void removeChannel(unsigned int id);
+	void removeTemporaryChannelIfEmpty(unsigned int id);
 	void removeChannel(Channel *c, Channel *dest = nullptr);
+	/// Removes the user from qhHostUsers. Requires the write lock on qrwlVoiceThread to be held.
+	void removeHostUser(ServerUser *u);
 	void userEnterChannel(User *u, Channel *c, MumbleProto::UserState &mpus);
 	bool unregisterUser(int id);
 
@@ -437,6 +451,19 @@ public:
 
 	QString getRegisteredUserName(int userID);
 	int getRegisteredUserID(const QString &name);
+
+	/// Removes all invalid (non-existent) user IDs from the provided set
+	template< typename SetLike > void removeInvalidUserIDs(SetLike &set) {
+		auto it = set.begin();
+
+		while (it != set.end()) {
+			if (*it < 0 || getRegisteredUserName(*it).isEmpty()) {
+				it = set.erase(it);
+			} else {
+				++it;
+			}
+		}
+	}
 
 	bool registerUser(ServerUser &user);
 	int registerUser(const ServerUserInfo &userInfo);

@@ -670,6 +670,14 @@ Określa maksymalną dozwoloną liczbę użytkowników na tym kanale. Jeżeli wa
         <translation>O programie Mumble</translation>
     </message>
     <message>
+        <source>Third-party Dependencies</source>
+        <translation>Zależności od stron trzecich</translation>
+    </message>
+    <message>
+        <source>Depending on the build configuration, your version of Mumble might not depend on all of the listed entries</source>
+        <translation>W zależności od konfiguracji kompilacji ta wersja programu Mumble może nie być zależna od wszystkich wymienionych elementów</translation>
+    </message>
+    <message>
         <source>&amp;About Mumble</source>
         <translation>&amp;O programie Mumble</translation>
     </message>
@@ -696,10 +704,6 @@ Określa maksymalną dozwoloną liczbę użytkowników na tym kanale. Jeżeli wa
     <message>
         <source>Authors</source>
         <translation>Autorzy</translation>
-    </message>
-    <message>
-        <source>Third-party license agreements</source>
-        <translation>Umowy licencyjne stron trzecich</translation>
     </message>
     <message>
         <source>For a list of authors, please see &lt;a href=&quot;https://github.com/mumble-voip/mumble/graphs/contributors&quot;&gt;https://github.com/mumble-voip/mumble/graphs/contributors&lt;/a&gt;</source>
@@ -1260,7 +1264,7 @@ Określa maksymalną dozwoloną liczbę użytkowników na tym kanale. Jeżeli wa
     </message>
     <message>
         <source>Access to the microphone was denied. Please allow Mumble to use the microphone by changing the settings in System Settings -&gt; Privacy &amp; Security -&gt; Microphone.</source>
-        <translation type="unfinished"></translation>
+        <translation>Dostęp do mikrofonu został zablokowany. Zezwól aplikacji Mumble na korzystanie z mikrofonu, zmieniając ustawienia w Ustawienia systemowe -&gt; Prywatność i bezpieczeństwo -&gt; Mikrofon.</translation>
     </message>
     <message>
         <source>%1 ms</source>
@@ -3696,6 +3700,18 @@ Etykieta serwera. Określa, pod jaką nazwą twój serwer będzie wyświetlany n
         <source>Cancel</source>
         <translation>Anuluj</translation>
     </message>
+    <message>
+        <source>Save password on this device</source>
+        <translation>Zapisz hasło na tym urządzeniu</translation>
+    </message>
+    <message>
+        <source>Passwords can only be saved for servers in your favorites.</source>
+        <translation>Hasła można zapisywać tylko dla serwerów znajdujących się na liście ulubionych.</translation>
+    </message>
+    <message>
+        <source>Passwords can only be saved for servers in your favorites</source>
+        <translation>Hasła można zapisywać tylko dla serwerów znajdujących się na liście ulubionych</translation>
+    </message>
 </context>
 <context>
     <name>GlobalShortcut</name>
@@ -3892,7 +3908,7 @@ Bez tej opcji korzystanie z globalnych skrótów Mumble w aplikacjach uprzywilej
     </message>
     <message>
         <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Mumble can currently only use mouse buttons and keyboard modifier keys (Alt, Ctrl, Cmd, etc.) for global shortcuts.&lt;/p&gt;&lt;p&gt;If you want more flexibility, you can add Mumble as a trusted accessibility program in the Privacy &amp; Security section of your Mac&apos;s System Settings.&lt;/p&gt;&lt;p&gt;In System Settings, open Privacy &amp; Security, then scroll to find Accessibility in the list. Finally, add Mumble to the list of trusted accessibility programs.&lt;/body&gt;&lt;/html&gt;</source>
-        <translation type="unfinished"></translation>
+        <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Mumble może obecnie używać tylko przycisków myszy i klawiszy modyfikujących klawiatury (Alt, Ctrl, Cmd itp.) do skrótów globalnych.&lt;/p&gt;&lt;p&gt;Jeśli potrzebujesz większej elastyczności, możesz dodać Mumble jako zaufany program do obsługi ułatwień dostępu w sekcji Prywatność i bezpieczeństwo w Ustawieniach systemowych na komputerze Mac.&lt;/p&gt;&lt;p&gt;W Ustawieniach systemowych otwórz Prywatność i bezpieczeństwo, a następnie przewiń listę, aby znaleźć sekcję Ułatwienia dostępu. Na koniec dodaj Mumble do listy zaufanych programów do obsługi ułatwień dostępu.&lt;/body&gt;&lt;/html&gt;</translation>
     </message>
     <message>
         <source>Unassigned</source>
@@ -5210,6 +5226,14 @@ Ustawienie dotyczy tylko nowych wiadomości, te już pokazane zachowają poprzed
     <message>
         <source>Restore window geometry on startup</source>
         <translation>Przywróć geometrię okna podczas uruchamiania</translation>
+    </message>
+    <message>
+        <source>Whether to change the local volume adjustment for the selected user when scrolling the mouse wheel up (increase) or down (decrease) while Control is pressed.</source>
+        <translation>Określa, czy podczas przewijania kółkiem myszy w górę (zwiększanie) lub w dół (zmniejszanie) przy wciśniętym klawiszu Control należy zmieniać lokalną regulację głośności dla wybranego użytkownika.</translation>
+    </message>
+    <message>
+        <source>CTRL + Scroll to change selected user&apos;s volume</source>
+        <translation>CTRL + kółko myszy, aby zmienić głośność wybranego użytkownika</translation>
     </message>
 </context>
 <context>
@@ -7458,14 +7482,6 @@ kanały mają być filtrowane.</translation>
         <translation>Nie wysyłaj certyfikatu na serwer ani nie zapamiętuj haseł.</translation>
     </message>
     <message>
-        <source>&lt;b&gt;This will suppress identity information from the client.&lt;/b&gt;&lt;p&gt;The client will not identify itself with a certificate, even if defined, and will not cache passwords for connections. This is primarily a test-option and is not saved.&lt;/p&gt;</source>
-        <translation>&lt;b&gt;Blokuje wysyłanie informacji o tożsamości klienta.&lt;/b&gt;&lt;p&gt;Klient nie będzie identyfikował się za pomocą certyfikatu, nawet jeżeli wcześniej był tak skonfigurowany oraz nie będzie zapamiętywał haseł dla połączeń. Jest to opcja testowa i nie jest zapamiętywana.&lt;/p&gt;</translation>
-    </message>
-    <message>
-        <source>Suppress certificate and password storage</source>
-        <translation>Nie zachowuj haseł i certyfikatów</translation>
-    </message>
-    <message>
         <source>&lt;b&gt;Type of proxy to connect through.&lt;/b&gt;&lt;br /&gt;This makes Mumble connect through a proxy for all outgoing connections. Note: Proxy tunneling forces Mumble into TCP compatibility mode, causing all voice data to be sent via the control channel.</source>
         <translation>&lt;b&gt;Typ serwera pośredniczącego używanego do połączenia.&lt;/b&gt;&lt;br /&gt;Zmusza Mumble do połączenia przez serwer pośredniczący dla wszystkich wychodzących połączeń. Informacja: tunelowanie przez serwer pośredniczący zmusza Mumble do używania trybu TCP, sprawiając, że wszystkie dane będą przesyłane przez kanał kontrolny.</translation>
     </message>
@@ -7606,6 +7622,14 @@ Uniemożliwia klientowi wysyłanie potencjalnie identyfikujących informacji o s
     <message>
         <source>Proxy password</source>
         <translation>Hasło serwera pośredniczącego</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;This will suppress identity information from the client.&lt;/b&gt;&lt;p&gt;The client will not identify itself with a certificate, even if defined. This is primarily a test-option and is not saved.&lt;/p&gt;</source>
+        <translation>&lt;b&gt;Spowoduje to ukrycie informacji o tożsamości klienta.&lt;/b&gt;&lt;p&gt;Klient nie będzie uwierzytelniał się za pomocą certyfikatu, nawet jeśli został on zdefiniowany. Jest to opcja przeznaczona głównie do celów testowych i nie jest zapisywana.&lt;/p&gt;</translation>
+    </message>
+    <message>
+        <source>Suppress certificate information</source>
+        <translation>Ukryj informacje o certyfikacie</translation>
     </message>
 </context>
 <context>
@@ -8390,6 +8414,10 @@ Aby uaktualnić pliki do najnowszych wersji, kliknij przycisk poniżej.</transla
         <translation>Aktualizacja wtyczki &quot;%1&quot;” nie powiodła się z powodu zbyt wielu przekierowań</translation>
     </message>
     <message>
+        <source>Update for plugin &quot;%1&quot; failed because it redirected to a non-HTTPS URL (%2)</source>
+        <translation>Aktualizacja wtyczki „%1” nie powiodła się, ponieważ nastąpiło przekierowanie na adres URL inny niż HTTPS (%2)</translation>
+    </message>
+    <message>
         <source>Unable to download plugin update for &quot;%1&quot; from &quot;%2&quot; (HTTP status code %3)</source>
         <translation>Nie można pobrać aktualizacji wtyczki &quot;%1&quot; z &quot;%2&quot; (kod odpowiedzi HTTP %3)</translation>
     </message>
@@ -8582,7 +8610,7 @@ Aby uaktualnić pliki do najnowszych wersji, kliknij przycisk poniżej.</transla
     </message>
     <message>
         <source>Access to the microphone was denied. Please allow Mumble to use the microphone by changing the settings in System Settings -&gt; Privacy &amp; Security -&gt; Microphone.</source>
-        <translation type="unfinished"></translation>
+        <translation>Dostęp do mikrofonu został zablokowany. Zezwól aplikacji Mumble na korzystanie z mikrofonu, zmieniając ustawienia w Ustawienia systemowe -&gt; Prywatność i bezpieczeństwo -&gt; Mikrofon.</translation>
     </message>
     <message>
         <source>If enabled this tries to cancel out echo from the audio stream.</source>

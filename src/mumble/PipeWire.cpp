@@ -171,6 +171,7 @@ PipeWireSystem::PipeWireSystem() : m_ok(false), m_users(0) {
 		if (m_lib.load()) {
 			break;
 		}
+		m_lib.unload();
 	}
 
 	if (!m_lib.isLoaded()) {
