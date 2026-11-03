@@ -5,8 +5,10 @@ Start here to continue it.
 
 ## Status 2026-11-03 (read first)
 
-User test results (items 4, 5, 6, 9, 11, relayed by `retroid-a2`; Mumla side by `mumla-e1`),
-all on master, not pushed:
+User test results (items 4, 5, 6, 9, 11, relayed by `retroid-a2`; Mumla side by `mumla-e1`).
+All on master and **pushed by the user**. **Verified by the user, 2026-11-03:** they built and
+tested this version (through b1a27e753) on their own machine and reported that it works (relayed by
+`retroid-a2`; no per-item details were given).
 
 - **b64955eeb, the freeze (item 4):** sharing showed one frame, then froze, with two streaming
   threads at 100% CPU. A PipeWire camera (the C920 through `pipewiresrc`, which is what an empty
@@ -139,6 +141,8 @@ everything they agreed.
 | b64955eeb | `videorate` drop-only: a PipeWire camera froze on its first frame with threads at 100% CPU |
 | c267927e0 | `WebcamLayout.h` (grid, PiP, own hidden), `TestWebcamLayout` |
 | 923d4f51a | camera area dock (`WebcamArea`): multi-watch, watcher list, pop-out, layouts, pending asks |
+
+b64955eeb, c267927e0 and 923d4f51a: pushed by the user and verified by them on 2026-11-03 (their build works).
 
 Tests: `TestWebcamCrypto`, `TestWebcamProtocol`, `TestWebcamMode` and `TestWebcamGate`, all
 passing on 2026-10-27 (25, 28, 22, 20 cases). They include the RFC 7748, RFC 5869 and spec vectors, cross-checked against Python's
