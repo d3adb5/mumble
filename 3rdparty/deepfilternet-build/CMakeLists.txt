@@ -46,6 +46,15 @@ corrosion_import_crate(
 # so make sure it is position independent.
 corrosion_add_target_local_rustflags(mumble_deepfilter "-Crelocation-model=pic")
 
+if(APPLE)
+	# Corrosion (v0.5) hardcodes the Command Line Tools SDK's usr/lib as a link directory of the
+	# imported library. When that SDK is newer than the active Xcode toolchain (as on the macOS 26
+	# runners, which pair Xcode 26 with a macOS 27 CLT SDK), the linker picks up its libSystem/libc++
+	# stubs and fails with "tapi error: malformed file ... unknown architecture". The compiler
+	# already links against the right SDK (CMAKE_OSX_SYSROOT), so drop the stray directory.
+	set_property(TARGET mumble_deepfilter-static PROPERTY INTERFACE_LINK_DIRECTORIES "")
+endif()
+
 if(WIN32)
 	# A Rust static library carries no record of the native libraries its crate graph
 	# needs, so every consumer has to link them itself. The client gets away without
