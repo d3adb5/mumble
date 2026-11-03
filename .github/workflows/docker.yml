@@ -4,8 +4,8 @@ name: Docker
 # GitHub Container Registry (GHCR). To avoid duplicating the container plumbing,
 # this workflow checks out the upstream mumble-docker repository at build time
 # and reuses its Dockerfile, scripts and entrypoint verbatim. The only change is
-# repointing scripts/clone.sh at this fork so the image is built from our source
-# at the exact commit that triggered the run.
+# replacing scripts/clone.sh so the image is built from this fork's source at the
+# exact commit that triggered the run.
 
 on:
   push:
@@ -48,14 +48,26 @@ jobs:
           ref: ${{ env.MUMBLE_DOCKER_REF }}
 
       - name: Build this fork instead of upstream Mumble
-        # clone.sh hardcodes the upstream repository URL. Repoint it at this fork
-        # so the image is built from our source. MUMBLE_VERSION (the pushed
-        # commit) is then checked out by the unmodified checkout logic below it.
+        # clone.sh hardcodes the upstream repository URL and selects the version with
+        # "git clone --branch", which takes branches and tags but not the commit SHA we
+        # build. Replace it with one that fetches exactly MUMBLE_VERSION (the pushed
+        # commit) from this fork, submodules at the commits it pins.
         run: |
-          sed -i \
-            -e 's#https://github.com/mumble-voip/mumble/#${{ github.server_url }}/${{ github.repository }}/#' \
-            scripts/clone.sh
-          echo "::group::patched clone.sh"
+          cat > scripts/clone.sh <<'EOS'
+          #!/usr/bin/env bash
+
+          set -e
+          set -x
+
+          git init /mumble/repo
+          cd /mumble/repo
+          git remote add origin "${{ github.server_url }}/${{ github.repository }}.git"
+          git fetch --depth 1 origin "$MUMBLE_VERSION"
+          git -c advice.detachedHead=false checkout FETCH_HEAD
+          git submodule update --init --recursive --depth 1
+          EOS
+          chmod +x scripts/clone.sh
+          echo "::group::replaced clone.sh"
           cat scripts/clone.sh
           echo "::endgroup::"
 
