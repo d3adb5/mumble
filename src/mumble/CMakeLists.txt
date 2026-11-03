@@ -1169,6 +1169,11 @@ if(webcam)
 			"WebcamWindow.h"
 	)
 
+	# GLib's headers declare struct members named "signals", which Qt defines as a keyword macro.
+	# WebcamStream.cpp includes them before any Qt header, but a unity batch would prepend other
+	# translation units (and with them Qt) to it, so keep it out of unity builds.
+	set_source_files_properties("WebcamStream.cpp" PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE)
+
 	target_compile_definitions(mumble_client_lib PUBLIC "USE_WEBCAM")
 	target_link_libraries(mumble_client_lib PUBLIC PkgConfig::GSTREAMER)
 endif()

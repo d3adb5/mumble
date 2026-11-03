@@ -203,15 +203,22 @@ std::vector< GstElement * > cameraChain(const QString &device, const Quality &qu
 		*error = QCoreApplication::translate("WebcamPublisher", "The camera could not be opened.");
 		return {};
 	}
-	std::vector< GstElement * > chain = { source, capsFilter("srccaps", mode->caps()) };
+	// Built element by element: GCC 16 reports a bogus -Wstringop-overflow for inserting an
+	// initializer list at the end of this vector.
+	std::vector< GstElement * > chain;
+	chain.reserve(7);
+	chain.push_back(source);
+	chain.push_back(capsFilter("srccaps", mode->caps()));
 	if (mode->jpeg) {
 		chain.push_back(makeElement("jpegdec", nullptr));
 	}
 	const std::string rawCaps = "video/x-raw,format=I420,width=" + std::to_string(size.first)
 								+ ",height=" + std::to_string(size.second) + ",framerate=" + std::to_string(fps)
 								+ "/1,pixel-aspect-ratio=1/1";
-	chain.insert(chain.end(), { makeElement("videoconvert", nullptr), makeElement("videoscale", nullptr),
-								makeElement("videorate", nullptr), capsFilter("rawcaps", rawCaps) });
+	for (const char *factory : { "videoconvert", "videoscale", "videorate" }) {
+		chain.push_back(makeElement(factory, nullptr));
+	}
+	chain.push_back(capsFilter("rawcaps", rawCaps));
 	if (std::find(chain.begin(), chain.end(), nullptr) != chain.end()) {
 		for (GstElement *e : chain) {
 			if (e) {
