@@ -50,6 +50,10 @@ if(client)
 		add_subdirectory("TestSettingsResilience")
 	endif()
 	add_subdirectory("OverlayTest")
+	if(UNIX AND NOT APPLE)
+		# Exercises the $XDG_RUNTIME_DIR handling, which macOS does not have.
+		add_subdirectory("TestIPCUtils")
+	endif()
 endif()
 
 if(server)

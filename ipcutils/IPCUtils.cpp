@@ -8,7 +8,9 @@
 #ifndef _WIN32
 #	include <format>
 #	include <cstdlib>
+#	include <system_error>
 
+#	include <sys/stat.h>
 #	include <unistd.h>
 #endif
 
@@ -32,6 +34,24 @@ std::filesystem::path getRuntimeDirectory() {
 #	endif
 
 	std::filesystem::create_directories(runtimeDir);
+
+	// Outside of $XDG_RUNTIME_DIR the directory lives in a world-writable location under a
+	// predictable name, so another user could have created it first and would then control the
+	// sockets placed in it (e.g. replace the RPC socket to receive the mumble:// URLs a second
+	// instance forwards). Only use a real directory that we own, and keep others out of it.
+	struct stat info;
+	if (lstat(runtimeDir.c_str(), &info) != 0) {
+		throw std::filesystem::filesystem_error("Unable to inspect the runtime directory", runtimeDir,
+												std::error_code(errno, std::generic_category()));
+	}
+	if (!S_ISDIR(info.st_mode) || info.st_uid != getuid()) {
+		throw std::filesystem::filesystem_error("The runtime directory is not a directory owned by the current user",
+												runtimeDir, std::make_error_code(std::errc::permission_denied));
+	}
+	if ((info.st_mode & (S_IRWXG | S_IRWXO)) != 0) {
+		std::filesystem::permissions(runtimeDir, std::filesystem::perms::owner_all,
+									 std::filesystem::perm_options::replace);
+	}
 
 	return runtimeDir;
 #endif

@@ -17,6 +17,8 @@
 #include <QtNetwork/QLocalServer>
 #include <QtXml/QDomDocument>
 
+#include <filesystem>
+
 SocketRPCClient::SocketRPCClient(QLocalSocket *s, QObject *p) : QObject(p), qlsSocket(s), qbBuffer(nullptr) {
 	qlsSocket->setParent(this);
 
@@ -231,10 +233,25 @@ void SocketRPCClient::processXml() {
 	}
 }
 
-SocketRPC::SocketRPC(const QString &basename, QObject *p) : QObject(p) {
-	qlsServer = new QLocalServer(this);
+/// The path of the socket identified by \p basename, or an empty string if there is no usable
+/// runtime directory to put it in.
+static QString socketPath(const QString &basename) {
+	try {
+		return QString::fromStdString(Mumble::getSocketPath(basename.toStdString()).string());
+	} catch (const std::filesystem::filesystem_error &e) {
+		qWarning() << "SocketRPC: No usable runtime directory:" << e.what();
+		return QString();
+	}
+}
 
-	const QString pipepath = QString::fromStdString(Mumble::getSocketPath(basename.toStdString()).string());
+SocketRPC::SocketRPC(const QString &basename, QObject *p) : QObject(p) {
+	const QString pipepath = socketPath(basename);
+	if (pipepath.isEmpty()) {
+		qlsServer = nullptr;
+		return;
+	}
+
+	qlsServer = new QLocalServer(this);
 
 #ifndef Q_OS_WIN
 	{
@@ -265,7 +282,10 @@ void SocketRPC::newConnection() {
 }
 
 bool SocketRPC::send(const QString &basename, const QString &request, const QMap< QString, QVariant > &param) {
-	const QString pipepath = QString::fromStdString(Mumble::getSocketPath(basename.toStdString()).string());
+	const QString pipepath = socketPath(basename);
+	if (pipepath.isEmpty()) {
+		return false;
+	}
 
 	QLocalSocket qls;
 	qls.connectToServer(pipepath);
