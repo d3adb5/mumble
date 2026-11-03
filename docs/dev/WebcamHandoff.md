@@ -3,7 +3,39 @@
 Written 2026-10-26 when the session that built the desktop side ("mumble-9f") ran out of room.
 Start here to continue it.
 
-## Status 2026-10-27 (read first)
+## Status 2026-11-03 (read first)
+
+User test results (items 4, 5, 6, 9, 11, relayed by `retroid-a2`; Mumla side by `mumla-e1`),
+all on master, not pushed:
+
+- **b64955eeb, the freeze (item 4):** sharing showed one frame, then froze, with two streaming
+  threads at 100% CPU. A PipeWire camera (the C920 through `pipewiresrc`, which is what an empty
+  device setting picks) stamps buffers with its own clock, ~174 h ahead of the segment, and
+  `videorate` filled the gap with copies of the first frame (~3700 fps measured). `videorate` is
+  now `drop-only`. The PipeWire test camera stamps from zero, so tests never hit it.
+- **c267927e0, `WebcamLayout.h`:** grid / picture-in-picture / own-hidden geometry, `TestWebcamLayout`.
+- **923d4f51a, the camera area (items 5, 6, 9, 11):** a "Cameras" dock (`WebcamArea`) replaces
+  the per-camera windows and the sender's preview window. It holds Share/Stop Sharing, the own
+  camera, "Watching you:" with a ✕ per viewer (= revoke), "Wants to watch:" with Allow/Deny, and a
+  tile per watched camera (any number, also while sharing). Tiles pop out into `WebcamWindow`
+  (button, context menu, double click); closing the pop-out docks the tile again. Closing a
+  pop-out or the dock never ends a watch (Mumla's rule); a tile's Stop, or "Stop Watching Their
+  Camera" in the user menu, does. Layout setting `webcam_layout` (0 grid, 1 own as PiP, 2 hide
+  own), in the area and on the settings page; "Show my camera" now means "open the area when I
+  share". Self's entry reads "Stop Sharing Camera" while sharing; "Show Cameras" opens the area.
+  Watch requests (policy "ask") stay pending: the prompt has Later, the request is listed in the
+  area, and it runs out after 60 s (the asker's own deadline), as in Mumla 0cb7c54. Stopping the
+  share denies pending asks with `not-sharing`. No protocol change (agreed with `mumla-e1`).
+- **Tested 2026-11-03** with three isolated clients on the local MediaMTX (test patterns):
+  two senders and a viewer watching both, a sender watching while sharing, all three layouts,
+  pop-out and back, stop from the tile's ✕ and context menu, revoke from the watcher list (the
+  stream move is followed), Stop Sharing from the area, Later → Allow from the area, and expiry
+  on both sides. A double free found on the way (a tile deleted from inside its own context menu)
+  is fixed: tiles, windows and list buttons are removed with `deleteLater`.
+- **Not tested:** the settings page's new layout box through the UI; a floated dock across
+  restarts (restored with `restoreDockWidget`).
+
+## Status 2026-10-27
 
 - **Unpushed on master:** 4cc882209, ddf38bd77, 6a9d6b027, 5775871a7 (table below). **The user
   pushes master and rebuilds mumble-git.** The PKGBUILD in `~/projects/packages/mumble-git` is
@@ -104,6 +136,9 @@ everything they agreed.
 | ddf38bd77 | the own login goes only to a grant URL on the viewer's own relay (host:port) |
 | 6a9d6b027 | protocol v1.1: gate tickets (`WebcamGate*`, `TestWebcamGate`), "Relay gate" setting |
 | 5775871a7 | portless relay means 8322 (the 554 production bug); clearer publish errors; sender preview |
+| b64955eeb | `videorate` drop-only: a PipeWire camera froze on its first frame with threads at 100% CPU |
+| c267927e0 | `WebcamLayout.h` (grid, PiP, own hidden), `TestWebcamLayout` |
+| 923d4f51a | camera area dock (`WebcamArea`): multi-watch, watcher list, pop-out, layouts, pending asks |
 
 Tests: `TestWebcamCrypto`, `TestWebcamProtocol`, `TestWebcamMode` and `TestWebcamGate`, all
 passing on 2026-10-27 (25, 28, 22, 20 cases). They include the RFC 7748, RFC 5869 and spec vectors, cross-checked against Python's
@@ -162,7 +197,7 @@ passing on 2026-10-27 (25, 28, 22, 20 cases). They include the RFC 7748, RFC 586
 6. **Optional:** a WHEP read path (`pickUrl()` only takes `rtsps://` today); a global shortcut to
    toggle sharing.
 
-## Preview (2026-10-27)
+## Preview (2026-10-27; since 2026-11-03 shown in the camera area, not a window)
 
 The sender sees its own camera, locally only. The publish pipeline tees the scaled picture
 before the encoder into a leaky queue and a small RGBx appsink (`addPreviewBranch`, at most
@@ -216,6 +251,25 @@ the user or the coordinator, not by agents.)
 4. Unpublish as soon as a test ends. Leave nothing running on production. Keep tests short.
 
 ## Gotchas found on the way
+
+- **PipeWire camera timestamps:** buffers carry the camera clock (time since boot), far ahead of
+  the segment. Anything that fills gaps (`videorate` without `drop-only`) spins on it. Measure
+  with the real camera through `pipewiresrc` (fps and CPU only, never images); the test camera
+  doesn't show it.
+- **Test profiles and the real camera:** a test client saves its settings when it exits (also
+  on SIGTERM), over anything written to its JSON meanwhile. On 2026-11-03 that put an empty
+  device back into a sharing profile, and the real C920 was shared to the test clients. Edit a
+  profile only while its client is stopped, give non-sharing profiles a device that doesn't
+  exist, and check every sharing profile's `webcam_device` is a test camera right before starting
+  (a guard script did this). The crash-recovery prompt ("Potentially broken settings") can also
+  move a profile's JSON to `.back`.
+- **The PipeWire test camera stalls** once a consumer reconnects (the sender's on-demand camera
+  closing and reopening is enough): tiles stay at "Connecting…" and the sender's own picture
+  freezes. Restart the test camera (and the share) between scenarios.
+- **Without the user's MediaMTX:** a publish-only RTSPS relay can be built from gst-rtsp-server
+  in Python (RECORD factory per path added on `pre-options-request`, TLS from the test CA's
+  server cert, an RTSPAuth subclass that defers only `auth.check.connect` to the parent so TLS is
+  set up). It shows the publisher end to end, not viewing.
 
 - **A relay URL without a port:** GStreamer's RTSP client dials 554 for `rtsps://host`, where
   MediaMTX does not listen (it uses 8322). That broke production sharing on 2026-10-27: the
