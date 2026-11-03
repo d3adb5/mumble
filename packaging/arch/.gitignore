@@ -1,0 +1,7 @@
+# makepkg's working files: the source mirror, build trees and packages
+/mumble/
+/src/
+/pkg/
+/*.pkg.tar*
+/*.log
+/.SRCINFO
