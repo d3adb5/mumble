@@ -23,6 +23,7 @@ private slots:
 	void checksOnlyFirstOfDuplicateValues();
 	void noChoicesAtAll();
 	void escapesAmpersands();
+	void escapesUnderscoresForExportedMenus();
 
 	void keepsConfiguredSectionOrder();
 	void appendsUnmentionedSections();
@@ -40,6 +41,12 @@ private slots:
 	void listenerIconWinsOverEverything();
 	void spotsTheSameUsers();
 	void spotsChangedUsers();
+
+	void mirrorsPlainEntries();
+	void mirrorsSeparatorsBetweenEntries();
+	void dropsSeparatorsAtTheEnds();
+	void collapsesSeparatorsAroundSkippedEntries();
+	void mirrorsNothingWithoutEntries();
 };
 
 static ChoiceList someModes() {
@@ -104,6 +111,12 @@ void TestTrayMenuModel::escapesAmpersands() {
 	QCOMPARE(escapeMenuText(QStringLiteral("&&")), QStringLiteral("&&&&"));
 	QCOMPARE(escapeMenuText(QStringLiteral("Speex & RNNoise")), QStringLiteral("Speex && RNNoise"));
 	QCOMPARE(escapeMenuText(QStringLiteral("no ampersand")), QStringLiteral("no ampersand"));
+}
+
+void TestTrayMenuModel::escapesUnderscoresForExportedMenus() {
+	QCOMPARE(escapeMenuText(QStringLiteral("a_b & c"), true), QStringLiteral("a__b && c"));
+	// Qt's own menus show underscores as they are
+	QCOMPARE(escapeMenuText(QStringLiteral("a_b & c"), false), QStringLiteral("a_b && c"));
 }
 
 void TestTrayMenuModel::keepsConfiguredSectionOrder() {
@@ -291,6 +304,32 @@ void TestTrayMenuModel::spotsChangedUsers() {
 	QVERIFY(!sameUsers({ alice, bob }, { bob, alice }));
 	QVERIFY(!sameUsers({ alice }, { listener(QStringLiteral("Alice")) }));
 	QVERIFY(sameUsers({}, {}));
+}
+
+void TestTrayMenuModel::mirrorsPlainEntries() {
+	QCOMPARE(mirroredEntries({ MirrorKind::Action, MirrorKind::Skipped, MirrorKind::Action }), QList< int >({ 0, 2 }));
+}
+
+void TestTrayMenuModel::mirrorsSeparatorsBetweenEntries() {
+	QCOMPARE(mirroredEntries({ MirrorKind::Action, MirrorKind::Separator, MirrorKind::Action }),
+			 QList< int >({ 0, 1, 2 }));
+}
+
+void TestTrayMenuModel::dropsSeparatorsAtTheEnds() {
+	QCOMPARE(mirroredEntries({ MirrorKind::Separator, MirrorKind::Action, MirrorKind::Separator }),
+			 QList< int >({ 1 }));
+}
+
+void TestTrayMenuModel::collapsesSeparatorsAroundSkippedEntries() {
+	// The volume slider of a user's menu sits between two separators of its own
+	QCOMPARE(mirroredEntries({ MirrorKind::Action, MirrorKind::Separator, MirrorKind::Skipped, MirrorKind::Separator,
+							   MirrorKind::Action, MirrorKind::Separator, MirrorKind::Skipped }),
+			 QList< int >({ 0, 1, 4 }));
+}
+
+void TestTrayMenuModel::mirrorsNothingWithoutEntries() {
+	QVERIFY(mirroredEntries({}).isEmpty());
+	QVERIFY(mirroredEntries({ MirrorKind::Separator, MirrorKind::Skipped, MirrorKind::Separator }).isEmpty());
 }
 
 QTEST_MAIN(TestTrayMenuModel)

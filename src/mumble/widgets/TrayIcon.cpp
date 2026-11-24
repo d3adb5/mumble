@@ -104,11 +104,12 @@ const QIcon &iconOf(Mumble::TrayMenu::UserIcon icon) {
 	return talkingOff;
 }
 
-Mumble::TrayMenu::UserEntry entryFor(const ClientUser &user, bool isListener, const Channel &channel) {
+Mumble::TrayMenu::UserEntry entryFor(const ClientUser &user, bool isListener, const Channel &channel, bool exported) {
 	Mumble::TrayMenu::UserEntry entry;
 
-	entry.name    = user.qsName;
-	entry.label   = Mumble::TrayMenu::escapeMenuText(UserModel::createDisplayString(user, isListener, &channel));
+	entry.name = user.qsName;
+	entry.label =
+		Mumble::TrayMenu::escapeMenuText(UserModel::createDisplayString(user, isListener, &channel), exported);
 	entry.session = user.uiSession;
 	entry.self    = user.uiSession == Global::get().uiSession;
 
@@ -147,8 +148,8 @@ const QIcon &channelIconOf(Channel &channel) {
 }
 
 /// The name a channel's menu goes by, which is the one the user list shows for it.
-QString channelTitle(const Channel &channel, int userCount) {
-	const QString name = Mumble::TrayMenu::escapeMenuText(channel.qsName);
+QString channelTitle(const Channel &channel, int userCount, bool exported) {
+	const QString name = Mumble::TrayMenu::escapeMenuText(channel.qsName, exported);
 
 	if (!Global::get().s.bShowUserCount || userCount == 0) {
 		return name;
@@ -237,6 +238,9 @@ TrayIcon::TrayIcon() : QSystemTrayIcon(Global::get().mw), m_statusIcon(Global::g
 	m_controlsAction = new QWidgetAction(this);
 	m_controlsAction->setDefaultWidget(controls);
 
+	m_muteEntry = createToggleEntry(Global::get().mw->qaAudioMute);
+	m_deafEntry = createToggleEntry(Global::get().mw->qaAudioDeaf);
+
 	QObject::connect(Global::get().mw->qaTalkingUIToggle, &QAction::triggered, this, &TrayIcon::updateContextMenu);
 
 	// A view of the channel the local user is in, which is kept up to date for as
@@ -270,6 +274,10 @@ TrayIcon::TrayIcon() : QSystemTrayIcon(Global::get().mw), m_statusIcon(Global::g
 	updateContextMenu();
 
 	setContextMenu(m_contextMenu);
+
+	// Only now is it known whether the menu is exported, which changes what it is
+	// made of
+	updateContextMenu();
 
 	show();
 }
@@ -368,6 +376,11 @@ void TrayIcon::updateContextMenu() {
 	m_contextMenu->addAction(Global::get().mw->qaQuit);
 }
 
+bool TrayIcon::menuIsExported() {
+	// Qt hands a menu a platform counterpart exactly when it is not the one drawing it
+	return m_contextMenu->platformMenu() != nullptr;
+}
+
 bool TrayIcon::addWindowVisibilitySection() {
 	if (Global::get().mw->isVisible() && !Global::get().mw->isMinimized()) {
 		m_hideAction->setEnabled(QSystemTrayIcon::isSystemTrayAvailable());
@@ -421,16 +434,111 @@ bool TrayIcon::addAudioDeviceSection() {
 }
 
 bool TrayIcon::addControlsSection() {
-	m_recordButton->setVisible(Global::get().s.bTrayShowRecording);
 	updateRecordAction();
 
-	m_contextMenu->addAction(m_controlsAction);
+	if (menuIsExported()) {
+		// A widget would come out as a blank entry, so the toggles get one each
+		m_contextMenu->addAction(m_muteEntry);
+		m_contextMenu->addAction(m_deafEntry);
+		if (Global::get().s.bTrayShowRecording) {
+			m_contextMenu->addAction(m_recordAction);
+		}
+	} else {
+		m_recordButton->setVisible(Global::get().s.bTrayShowRecording);
+		m_contextMenu->addAction(m_controlsAction);
+	}
 
 	if (Global::get().s.bTrayShowTalkingUI) {
 		m_contextMenu->addAction(Global::get().mw->qaTalkingUIToggle);
 	}
 
 	return true;
+}
+
+QAction *TrayIcon::createToggleEntry(QAction *toggle) {
+	QAction *entry = new QAction(this);
+
+	const auto follow = [entry, toggle]() {
+		entry->setText(toggle->text());
+		entry->setEnabled(toggle->isEnabled());
+		entry->setCheckable(toggle->isCheckable());
+		entry->setChecked(toggle->isChecked());
+
+		// The main window's toggles keep their icons out of menus, as their entries are
+		// checked instead - but here the icon is the cue the button row would give
+		const QIcon::State state = toggle->isChecked() ? QIcon::On : QIcon::Off;
+		QIcon icon;
+		for (int size : { 16, 22, 32, 48 }) {
+			icon.addPixmap(toggle->icon().pixmap(QSize(size, size), QIcon::Normal, state));
+		}
+		entry->setIcon(icon);
+	};
+
+	follow();
+	QObject::connect(toggle, &QAction::changed, entry, follow);
+	// Checking the entry toggles it already, which the toggle then confirms (or not)
+	QObject::connect(entry, &QAction::triggered, toggle, [toggle, follow]() {
+		toggle->trigger();
+		follow();
+	});
+
+	return entry;
+}
+
+QAction *TrayIcon::addContextMenuCopy(QMenu *menu, ChannelMenu &record, const QIcon &icon, const QString &label,
+									  QMenu *source, std::function< void() > select, std::function< void() > populate) {
+	QMenu *copy = new QMenu(label, menu);
+	copy->setIcon(icon);
+
+	QObject::connect(copy, &QMenu::aboutToShow, this, [this, copy, source, select, populate]() {
+		select();
+		populate();
+		copyMenu(copy, source);
+
+		m_shownContextMenu = copy;
+	});
+	QObject::connect(copy, &QMenu::aboutToHide, this, [this, copy]() {
+		if (m_shownContextMenu == copy) {
+			m_shownContextMenu.clear();
+		}
+	});
+
+	record.contextMenus.append(copy);
+
+	return menu->addMenu(copy);
+}
+
+void TrayIcon::copyMenu(QMenu *target, const QMenu *source) {
+	target->clear();
+
+	const QList< QAction * > actions = source->actions();
+
+	QList< Mumble::TrayMenu::MirrorKind > kinds;
+	for (const QAction *action : actions) {
+		if (action->isSeparator()) {
+			kinds.append(Mumble::TrayMenu::MirrorKind::Separator);
+		} else if (qobject_cast< const QWidgetAction * >(action) || action->menu() || !action->isVisible()) {
+			// Widgets do not survive being exported, and a submenu of the main window
+			// would have to be shared, which exported menus cannot do
+			kinds.append(Mumble::TrayMenu::MirrorKind::Skipped);
+		} else {
+			kinds.append(Mumble::TrayMenu::MirrorKind::Action);
+		}
+	}
+
+	for (int index : Mumble::TrayMenu::mirroredEntries(kinds)) {
+		if (kinds.at(index) == Mumble::TrayMenu::MirrorKind::Separator) {
+			target->addSeparator();
+		} else {
+			// The very same action, which acts on whatever the main window's menus are
+			// pointed at - the copy's target, as it was pointed there on opening
+			target->addAction(actions.at(index));
+		}
+	}
+
+	if (target->isEmpty()) {
+		target->addAction(Global::get().mw->qaEmpty);
+	}
 }
 
 void TrayIcon::updateRecordAction() {
@@ -453,6 +561,10 @@ void TrayIcon::on_contextMenu_aboutToShow() {
 
 void TrayIcon::on_contextMenu_aboutToHide() {
 	m_channelViewTimer->stop();
+
+	// Whatever was still open went away along with the menu
+	m_shownChannels.clear();
+	m_shownContextMenu.clear();
 
 	QMetaObject::invokeMethod(this, [this]() { disarmUserContextMenu(); }, Qt::QueuedConnection);
 }
@@ -497,7 +609,12 @@ QMenu *TrayIcon::channelMenu(unsigned int channelId) {
 	record.menu = channelId == Mumble::ROOT_CHANNEL_ID ? m_channelMenu : new QMenu(m_channelMenu);
 
 	// Only the branches the user actually walks into are built
-	QObject::connect(record.menu, &QMenu::aboutToShow, this, [this, channelId]() { fillChannelMenu(channelId); });
+	QObject::connect(record.menu, &QMenu::aboutToShow, this, [this, channelId]() {
+		m_shownChannels.insert(channelId);
+		fillChannelMenu(channelId);
+	});
+	QObject::connect(record.menu, &QMenu::aboutToHide, this,
+					 [this, channelId]() { m_shownChannels.remove(channelId); });
 
 	record.menu->installEventFilter(this);
 
@@ -512,16 +629,18 @@ void TrayIcon::fillChannelMenu(unsigned int channelId, bool allowRebuild) {
 		return;
 	}
 
+	const bool exported = menuIsExported();
+
 	QList< Mumble::TrayMenu::UserEntry > users;
 	for (const User *user : channel->qlUsers) {
-		users.append(entryFor(*static_cast< const ClientUser * >(user), false, *channel));
+		users.append(entryFor(*static_cast< const ClientUser * >(user), false, *channel, exported));
 	}
 
 	if (Global::get().channelListenerManager) {
 		for (unsigned int session : Global::get().channelListenerManager->getListenersForChannel(channelId)) {
 			const ClientUser *listener = ClientUser::get(session);
 			if (listener) {
-				users.append(entryFor(*listener, true, *channel));
+				users.append(entryFor(*listener, true, *channel, exported));
 			}
 		}
 	}
@@ -550,7 +669,7 @@ void TrayIcon::fillChannelMenu(unsigned int channelId, bool allowRebuild) {
 	const bool contents =
 		record.filled && record.subChannels == subChannelIds && Mumble::TrayMenu::sameUsers(users, record.users);
 
-	menu->setTitle(channelTitle(*channel, static_cast< int >(users.size())));
+	menu->setTitle(channelTitle(*channel, static_cast< int >(users.size()), exported));
 	menu->setIcon(channelIconOf(*channel));
 
 	if (contents) {
@@ -581,6 +700,14 @@ void TrayIcon::fillChannelMenu(unsigned int channelId, bool allowRebuild) {
 	menu->clear();
 	record.userActions.clear();
 
+	// Not deleted right away, as Qt may still be busy with one of them
+	for (const QPointer< QMenu > &copy : record.contextMenus) {
+		if (copy) {
+			copy->deleteLater();
+		}
+	}
+	record.contextMenus.clear();
+
 	const ClientUser *self = ClientUser::get(Global::get().uiSession);
 
 	if (self && self->cChannel != channel) {
@@ -592,17 +719,46 @@ void TrayIcon::fillChannelMenu(unsigned int channelId, bool allowRebuild) {
 		});
 	}
 
-	QAction *channelActions = menu->addAction(tr("Channel Actions"));
-	// The main window's own channel menu, which reads what it acts on from the user
-	// list - hence pointing that at this channel as soon as the entry is highlighted
-	channelActions->setMenu(Global::get().mw->qmChannel);
-	QObject::connect(channelActions, &QAction::hovered, this, [this, channelId]() { selectChannel(channelId); });
+	if (exported) {
+		MainWindow *mw = Global::get().mw;
+		addContextMenuCopy(
+			menu, record, QIcon(), tr("Channel Actions"), mw->qmChannel,
+			[this, channelId]() { selectChannel(channelId); }, [mw]() { mw->qmChannel_aboutToShow(); });
+	} else {
+		QAction *channelActions = menu->addAction(tr("Channel Actions"));
+		// The main window's own channel menu, which reads what it acts on from the user
+		// list - hence pointing that at this channel as soon as the entry is highlighted
+		channelActions->setMenu(Global::get().mw->qmChannel);
+		QObject::connect(channelActions, &QAction::hovered, this, [this, channelId]() { selectChannel(channelId); });
+	}
 
 	menu->addSeparator();
 
-	const auto addUsers = [this, menu, &record, &users, channelId]() {
+	const auto addUsers = [this, menu, &record, &users, channelId, exported]() {
 		for (const Mumble::TrayMenu::UserEntry &entry : users) {
-			QAction *action = menu->addAction(iconOf(Mumble::TrayMenu::iconFor(entry.state)), entry.label);
+			const QIcon &icon          = iconOf(Mumble::TrayMenu::iconFor(entry.state));
+			const unsigned int session = entry.session;
+
+			if (exported) {
+				// No click reaches an exported entry, so it carries its menu all along
+				MainWindow *mw = Global::get().mw;
+				QAction *action;
+				if (entry.state.listener) {
+					action = addContextMenuCopy(
+						menu, record, icon, entry.label, mw->qmListener,
+						[this, session, channelId]() { selectListener(session, channelId); },
+						[mw]() { mw->qmListener_aboutToShow(); });
+				} else {
+					action = addContextMenuCopy(
+						menu, record, icon, entry.label, mw->qmUser, [this, session]() { selectUser(session); },
+						[mw]() { mw->qmUser_aboutToShow(); });
+				}
+
+				record.userActions.append(action);
+				continue;
+			}
+
+			QAction *action = menu->addAction(icon, entry.label);
 
 			if (entry.self || entry.state.listener) {
 				// Emphasise the local user and set listeners apart, like the user list does
@@ -614,7 +770,6 @@ void TrayIcon::fillChannelMenu(unsigned int channelId, bool allowRebuild) {
 
 			// The entry is handed its context menu when it is clicked, not before, so
 			// that pointing at a user does not open one
-			const unsigned int session = entry.session;
 			if (entry.state.listener) {
 				m_userContextMenus.insert(action, Global::get().mw->qmListener);
 				QObject::connect(action, &QAction::hovered, this,
@@ -659,8 +814,9 @@ void TrayIcon::refreshChannelMenus() {
 
 	// Rebuilding a menu deletes the entries the shared context menus hang off of, so
 	// while one of those is open the tree only gets its states refreshed
-	const MainWindow *mw       = Global::get().mw;
-	const bool contextMenuOpen = mw->qmUser->isVisible() || mw->qmChannel->isVisible() || mw->qmListener->isVisible();
+	const MainWindow *mw = Global::get().mw;
+	const bool contextMenuOpen =
+		mw->qmUser->isVisible() || mw->qmChannel->isVisible() || mw->qmListener->isVisible() || m_shownContextMenu;
 
 	// The root menu is refreshed even when it is not on screen, as its title is what
 	// the tray menu shows for the whole tree
@@ -668,7 +824,7 @@ void TrayIcon::refreshChannelMenus() {
 
 	for (unsigned int channelId : m_channelMenus.keys()) {
 		const auto it = m_channelMenus.constFind(channelId);
-		if (it != m_channelMenus.constEnd() && it->menu->isVisible()) {
+		if (it != m_channelMenus.constEnd() && (it->menu->isVisible() || m_shownChannels.contains(channelId))) {
 			fillChannelMenu(channelId, !contextMenuOpen);
 		}
 	}
@@ -681,12 +837,20 @@ void TrayIcon::clearChannelMenus() {
 	for (auto it = m_channelMenus.begin(); it != m_channelMenus.end(); ++it) {
 		if (it.key() == Mumble::ROOT_CHANNEL_ID) {
 			it->menu->clear();
+			// The root menu stays, and so would the copies hanging off of it
+			for (const QPointer< QMenu > &copy : it->contextMenus) {
+				if (copy) {
+					copy->deleteLater();
+				}
+			}
 		} else {
 			delete it->menu;
 		}
 	}
 
 	m_channelMenus.clear();
+	m_shownChannels.clear();
+	m_shownContextMenu.clear();
 }
 
 bool TrayIcon::eventFilter(QObject *object, QEvent *event) {
@@ -766,7 +930,7 @@ void TrayIcon::populateChoiceMenu(QMenu *menu, const QList< QPair< QString, QVar
 	menu->clear();
 
 	for (const Mumble::TrayMenu::Choice &choice : Mumble::TrayMenu::buildChoices(choices, current)) {
-		QAction *action = menu->addAction(Mumble::TrayMenu::escapeMenuText(choice.label));
+		QAction *action = menu->addAction(Mumble::TrayMenu::escapeMenuText(choice.label, menuIsExported()));
 		action->setCheckable(true);
 		action->setChecked(choice.checked);
 

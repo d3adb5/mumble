@@ -50,6 +50,16 @@ namespace TrayMenu {
 		return escaped.replace(QLatin1String("&"), QLatin1String("&&"));
 	}
 
+	/// Escapes text that is used as a label in a menu exported to the desktop as well.
+	/// Such a menu (D-Bus menu) marks mnemonics with underscores, which Qt passes
+	/// through as they are - so a name like "a_b" would lose its underscore to the
+	/// mnemonic of the "b". A doubled underscore stands for a literal one.
+	inline QString escapeMenuText(const QString &text, bool exported) {
+		QString escaped = escapeMenuText(text);
+
+		return exported ? escaped.replace(QLatin1String("_"), QLatin1String("__")) : escaped;
+	}
+
 	/// A section of the tray icon's context menu that the user can move around. The
 	/// entry showing or hiding the main window stays at the top and the one quitting
 	/// at the bottom, where a tray menu is expected to have them.
@@ -247,6 +257,48 @@ namespace TrayMenu {
 		}
 
 		return true;
+	}
+
+	/// What an entry of one of the main window's context menus is, as far as copying
+	/// it into a menu exported to the desktop (StatusNotifierItem) is concerned.
+	enum class MirrorKind {
+		/// A plain entry, which is copied
+		Action,
+		Separator,
+		/// An entry that cannot be exported - a widget or a submenu shared with the
+		/// main window - and is left out
+		Skipped,
+	};
+
+	/// Picks the entries of a context menu to copy into an exported one: every plain
+	/// entry, and a separator wherever one separated two of them in the original. As
+	/// entries are left out, a separator never ends up at either end of the copy, nor
+	/// next to another one.
+	/// @returns The indices of the entries to copy, in order
+	inline QList< int > mirroredEntries(const QList< MirrorKind > &kinds) {
+		QList< int > picked;
+		int pendingSeparator = -1;
+
+		for (int i = 0; i < kinds.size(); ++i) {
+			switch (kinds.at(i)) {
+				case MirrorKind::Action:
+					if (pendingSeparator >= 0) {
+						picked.append(pendingSeparator);
+						pendingSeparator = -1;
+					}
+					picked.append(i);
+					break;
+				case MirrorKind::Separator:
+					if (!picked.isEmpty() && pendingSeparator < 0) {
+						pendingSeparator = i;
+					}
+					break;
+				case MirrorKind::Skipped:
+					break;
+			}
+		}
+
+		return picked;
 	}
 
 } // namespace TrayMenu

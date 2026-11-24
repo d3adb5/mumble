@@ -14,6 +14,7 @@
 #include <QtCore/QList>
 #include <QtCore/QPair>
 #include <QtCore/QPointer>
+#include <QtCore/QSet>
 #include <QtCore/QVariant>
 #include <QtWidgets/QMenu>
 #include <QtWidgets/QSystemTrayIcon>
@@ -53,6 +54,9 @@ private:
 		QList< QAction * > userActions;
 		/// The channels the menu lists, in the order they are shown
 		QList< unsigned int > subChannels;
+		/// The copies of the main window's context menus the entries carry when the
+		/// menu is exported to the desktop, which go along with those entries
+		QList< QPointer< QMenu > > contextMenus;
 		/// False until the menu has been filled for the first time
 		bool filled = false;
 	};
@@ -72,7 +76,11 @@ private:
 	/// entry each, laid out like the main window's toolbar
 	QWidgetAction *m_controlsAction = nullptr;
 	QToolButton *m_recordButton     = nullptr;
-	QTimer *m_highlightTimer        = nullptr;
+	/// Entries standing in for the row of buttons in a menu exported to the desktop,
+	/// which can carry no widgets
+	QAction *m_muteEntry     = nullptr;
+	QAction *m_deafEntry     = nullptr;
+	QTimer *m_highlightTimer = nullptr;
 	/// Keeps the channel tree up to date for as long as the context menu is open
 	QTimer *m_channelViewTimer = nullptr;
 	/// The menus of the channel tree, by the ID of the channel they show
@@ -81,6 +89,11 @@ private:
 	QHash< QAction *, QMenu * > m_userContextMenus;
 	/// The user entry that is currently carrying its context menu, if any
 	QPointer< QAction > m_armedUserAction;
+	/// The channels whose menus are on screen. An exported menu is drawn by the
+	/// desktop rather than by Qt, so this is the only way of telling.
+	QSet< unsigned int > m_shownChannels;
+	/// The copy of one of the main window's context menus that is on screen, if any
+	QPointer< QMenu > m_shownContextMenu;
 #ifdef USE_DBUS
 	/// ID of the last notification posted via org.freedesktop.Notifications, so that
 	/// a new notification replaces the previous one instead of stacking up
@@ -88,6 +101,12 @@ private:
 #endif
 
 	void updateContextMenu();
+
+	/// Whether the context menu is exported to the desktop (as it is for a
+	/// StatusNotifierItem over D-Bus, or on macOS) instead of being drawn by Qt. An
+	/// exported menu carries plain entries only: no widgets, no fonts, and no mouse
+	/// events reach it, so it is built from different parts.
+	bool menuIsExported();
 
 	/// Adds the entry showing or hiding the main window.
 	/// @returns Whether anything was added
@@ -134,6 +153,22 @@ private:
 	void selectUser(unsigned int session);
 	void selectChannel(unsigned int channelId);
 	void selectListener(unsigned int session, unsigned int channelId);
+
+	/// Creates a menu entry that mirrors a toggle of the main window, wearing the
+	/// icon of the state the toggle is in: an exported entry carries a single picture.
+	QAction *createToggleEntry(QAction *toggle);
+
+	/// Adds an entry to the given channel menu that opens a copy of one of the main
+	/// window's context menus, for a menu exported to the desktop. The main window's
+	/// own menus cannot be shared between entries there, and no entry tells when it is
+	/// pointed at, so the copy points the main window at its target when it opens.
+	/// @param select Points the main window's context menus at the entry's target
+	/// @param populate Fills the main window's menu for that target
+	/// @returns The entry
+	QAction *addContextMenuCopy(QMenu *menu, ChannelMenu &record, const QIcon &icon, const QString &label,
+								QMenu *source, std::function< void() > select, std::function< void() > populate);
+	/// Fills a menu with the entries of the given one that can be exported.
+	void copyMenu(QMenu *target, const QMenu *source);
 
 	/// Labels the recording entry after what triggering it would do and disables it
 	/// while recording is not possible.
